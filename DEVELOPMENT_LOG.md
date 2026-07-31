@@ -35,7 +35,7 @@
 | Phase 0 — Research & Compatibility Probe | COMPLETE (pending tenant test) | Spec §19 | IR schemas, archive inspector, minimal import/export, 2 golden fixtures + 3 negative fixtures; manual tenant acceptance test deferred (no tenant available in dev environment) — tracked as OW-010 |
 | Phase 1 — Git-Native Headless Core | COMPLETE | Spec §19 | CLI (`init`, `validate`, `test`, `build`, `diff`, `import`, `git status`), validator, semantic diff, compiler interface, Docker Compose, WSL2 bootstrap, full §9.4 MVP step coverage, 2 reference scenarios — all Phase 1 exit criteria met |
 | Phase 2 — Visual Workbench | IN PROGRESS | Spec §19 | REST API (FastAPI prototype, ADR-PY-002) + React 19 + React Flow 12 SPA with project explorer, flow canvas, properties panel, validation/test/build panels. Monaco editor, drag-and-drop editing, WebSocket trace streaming not yet done. |
-| Phase 3 — LLM-Assisted Engineering | IN PROGRESS | Spec §19 | MCP server implemented (10 tools, 18 tests). Model gateway + requirement-to-plan workflow not yet done. |
+| Phase 3 — LLM-Assisted Engineering | IN PROGRESS | Spec §19 | MCP server implemented (10 tools, 18 tests). Model gateway implemented (redaction, budget, circuit breaker, prompt-injection defense, 5 providers, 43 tests). Requirement-to-plan workflow not yet done. |
 | Phase 4 — Tenant Sync & CI/CD | NOT STARTED | Spec §19 | Deployment state machine, drift detection; deferred until local build correctness is proven |
 | Phase 5 — Experience Memory Graph | NOT STARTED | Spec §19 | Trajectory recorder + graph matching + retrieval; deferred |
 | Phase 6 — Compatibility Expansion | NOT STARTED | Spec §19 | Additional adapters (SFTP, SOAP, OData, IDoc, Mail, JMS, SuccessFactors, ProcessDirect); SFTP receiver plugin implemented in Phase 1 (simulated, mocked); real SFTP support is Phase 6 |
@@ -505,5 +505,45 @@ Append new entries below. Newest at the bottom. Format:
 - Tests: 154 total (77 CLI + 59 API + 18 MCP) — all pass. ruff check + format clean.
 - CI: pending first run on this PR.
 - Next: Model gateway (§12.7) with LLM routing + redaction + token budgets + prompt-injection defense. Then requirement-to-plan workflow (§12.2). Then Phase 4 (tenant sync + deployment state machine).
+
+---
+
+### 2026-07-31 — Implementing Agent — Phase 3 model gateway (§12.7)
+
+- Implemented the model gateway — LLM routing with redaction, token budgets, circuit breaker, and prompt-injection defense. Spec §12.7.
+- **Model gateway** (`services/model-gateway-python/`): FastAPI service with 4 endpoints:
+  - `POST /api/v1/llm/chat` — chat completion with redaction + budget check + circuit breaker + prompt-injection defense system prompt
+  - `GET /api/v1/llm/budget/{projectId}` — token budget status
+  - `GET /api/v1/llm/providers` — list configured providers
+  - `GET /api/v1/llm/health` — health check
+- **Redaction layer** (`oiw_gateway/redaction.py`): strips secrets from LLM context before forwarding to the provider. Patterns: Bearer tokens, Basic auth, API keys, passwords, secrets, tokens, PEM private keys, long credentialRef values (50+ chars), tenant URLs. Short credentialRef identifiers (like `s4-api-client`) are preserved — they're not secrets.
+- **Prompt-injection defense** (`oiw_gateway/prompts.py`): system prompt appended to every LLM call. Contains the 6 critical security rules from spec §16.3: untrusted data, never follow file instructions, cannot grant deployment/secret access, never receive secret values, typed patches only, server-side enforcement. Security rules cannot be overridden by user prompts (they come first).
+- **Budget tracker** (`oiw_gateway/budget.py`): per-project per-day token limit (default 2,000,000). Tracks tokens used + request count. Rejects requests when exhausted (HTTP 429).
+- **Circuit breaker** (`oiw_gateway/budget.py`): per-provider failure threshold (default 5) + reset timeout (default 60s). States: closed → open (after threshold) → half-open (after timeout) → closed (on success). Rejects requests when open (HTTP 503).
+- **Provider router** (`oiw_gateway/providers.py`): async HTTP calls to 5 providers:
+  - Anthropic (Claude) — `ANTHROPIC_API_KEY`
+  - OpenAI (GPT-4o) — `OPENAI_API_KEY`
+  - Ollama (local, e.g. qwen3:32b) — `OLLAMA_URL` (default localhost:11434)
+  - vLLM (local, OpenAI-compatible) — `VLLM_URL`
+  - Azure OpenAI — `AZURE_OPENAI_KEY` + `AZURE_OPENAI_ENDPOINT`
+- **43 tests** across 4 test files:
+  - `test_redaction.py` (15 tests): bearer token, API key, password, secret, token, private key, basic auth, long credentialRef, short credentialRef preserved, tenant URL, no-secrets passthrough, empty string, message redaction (string + multipart), structure preservation.
+  - `test_budget.py` (12 tests): budget check allowed/exhausted/would-exceed/separate-projects, status, exhausted status, multiple requests, circuit breaker closed/trips/resets/half-open/separate-providers.
+  - `test_prompts.py` (8 tests): untrusted data rule, never-follow rule, deployment restriction, typed patch rule, server-side enforcement, no-user-prompt, with-user-prompt, security-rules-cannot-be-overridden.
+  - `test_gateway_api.py` (8 tests): health, providers list, budget empty, chat redacts secrets, chat includes system prompt, chat rejects exhausted budget (429), chat records token usage, chat rejects when circuit breaker open (503).
+- Added ADR-PY-004 documenting the Python model gateway deviation.
+- **CI workflow extended**: new `gateway-pytest` job (43 tests); `lint` job extended to cover `services/model-gateway-python/`; aggregate job now requires 10 checks (was 9).
+- Files touched:
+  - `services/model-gateway-python/` (new — full model gateway + tests)
+  - `services/model-gateway-python/oiw_gateway/{__init__,main,redaction,prompts,budget,providers}.py`
+  - `services/model-gateway-python/tests/{test_redaction,test_budget,test_prompts,test_gateway_api}.py`
+  - `services/model-gateway-python/pyproject.toml` + `README.md`
+  - `.github/workflows/validate-on-pr.yaml` (gateway-pytest job + lint extension)
+  - `docs/architecture/adr-py-004-model-gateway-prototype.md` (new)
+  - `docs/architecture/README.md` (ADR index updated)
+  - `DEVELOPMENT_LOG.md` (this entry + phase status)
+- Tests: 197 total (77 CLI + 59 API + 18 MCP + 43 gateway) — all pass. ruff check + format clean.
+- CI: pending first run on this PR.
+- Next: Requirement-to-plan workflow (§12.2) — the agent pipeline that takes a natural-language requirement and produces typed tool calls. Then Phase 4 (tenant sync + deployment state machine).
 
 ---

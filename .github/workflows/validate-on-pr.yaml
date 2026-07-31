@@ -264,7 +264,35 @@ jobs:
           path: pytest-mcp.xml
 
   # -------------------------------------------------------------------
-  # Job 4: Ruff lint (CLI + server + MCP code quality).
+  # Job 3d: Pytest (model gateway tests).
+  # -------------------------------------------------------------------
+  gateway-pytest:
+    name: Pytest (model gateway tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          pip install --upgrade pip
+          pip install -e services/model-gateway-python
+          pip install pytest
+      - name: Run pytest
+        run: pytest services/model-gateway-python/tests/ -v --import-mode=importlib --junitxml=pytest-gateway.xml
+      - name: Upload pytest results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-gateway-results
+          path: pytest-gateway.xml
+
+  # -------------------------------------------------------------------
+  # Job 4: Ruff lint (CLI + server + MCP + gateway code quality).
   # -------------------------------------------------------------------
   lint:
     name: Ruff lint
@@ -290,6 +318,10 @@ jobs:
         run: ruff check apps/mcp-server/
       - name: Run ruff format check (MCP server)
         run: ruff format --check apps/mcp-server/
+      - name: Run ruff check (model gateway)
+        run: ruff check services/model-gateway-python/
+      - name: Run ruff format check (model gateway)
+        run: ruff format --check services/model-gateway-python/
 
   # -------------------------------------------------------------------
   # Job 4b: SPA build (React + Vite + TypeScript).
@@ -345,7 +377,7 @@ jobs:
   validate-pr-aggregate:
     name: validate-pr (aggregate)
     runs-on: ubuntu-latest
-    needs: [oiw-validate, schema-self-check, pytest, api-pytest, mcp-pytest, lint, spa-build, log-check]
+    needs: [oiw-validate, schema-self-check, pytest, api-pytest, mcp-pytest, gateway-pytest, lint, spa-build, log-check]
     if: always()
     steps:
       - name: Aggregate
@@ -355,6 +387,7 @@ jobs:
           echo "pytest:             ${{ needs.pytest.result }}"
           echo "api-pytest:         ${{ needs.api-pytest.result }}"
           echo "mcp-pytest:         ${{ needs.mcp-pytest.result }}"
+          echo "gateway-pytest:     ${{ needs.gateway-pytest.result }}"
           echo "lint:               ${{ needs.lint.result }}"
           echo "spa-build:          ${{ needs.spa-build.result }}"
           echo "log-check:          ${{ needs.log-check.result }}"
@@ -363,6 +396,7 @@ jobs:
                 "${{ needs.pytest.result }}" != "success" || \
                 "${{ needs.api-pytest.result }}" != "success" || \
                 "${{ needs.mcp-pytest.result }}" != "success" || \
+                "${{ needs.gateway-pytest.result }}" != "success" || \
                 "${{ needs.lint.result }}" != "success" || \
                 "${{ needs.spa-build.result }}" != "success" || \
                 "${{ needs.log-check.result }}" != "success" ]]; then
