@@ -375,3 +375,28 @@ Append new entries below. Newest at the bottom. Format:
 - Next: Monaco editor for Groovy/XSLT resources (OW-016 continued), WebSocket trace streaming (§9.2 step 8, §21.2), then Phase 3 (MCP server + model gateway).
 
 ---
+
+### 2026-07-31 — Implementing Agent — Phase 2 simulation trace streaming (§9.2 step 8, §21.2)
+
+- Implemented simulation trace streaming — a consultant can now run a flow from the UI and see the per-node execution trace.
+- **Runtime engine extended** (`apps/cli/oiw/runtime/engine.py`): added `trace_callback` parameter to `execute_flow()`. When provided, the callback fires on every trace event (enter/exit/error/complete) as it's produced, enabling real-time streaming. The callback receives the `TraceEntry` and the current `MessageContext`. A final `complete` event is emitted after the flow finishes.
+- **POST /api/v1/projects/{id}/flows/{flowId}/simulate** endpoint (`apps/server-python-prototype/oiw_server/routes/simulate.py`): runs a flow synchronously with given input body, headers, and mocks. Returns the final status, duration, full trace, outbound calls, and final headers/properties. Spec §21.1.
+- **WebSocket /ws/trace** endpoint: a client connects, sends a JSON simulate request, and receives trace events as JSON messages (`{type: "trace", ...}`) followed by a final `{type: "complete", status, duration_ms, trace_count}`. Spec §21.2, §9.2 step 8. Runs the flow in a thread pool to avoid blocking the event loop.
+- **7 simulate API tests** (`apps/server-python-prototype/tests/test_simulate.py`): happy path, invalid payload (FAILED status), outbound call recording, body_file loading, 404s, trace completeness (all nodes appear). WebSocket tests deferred to Playwright E2E (OW-012) due to Starlette TestClient WebSocket compatibility issues.
+- **SPA Simulate button + trace panel**: added a "Simulate" button to the actions sidebar. Clicking it runs the flow with a default EU-region test payload and displays the trace in a new "Simulation Trace" panel in the right sidebar. Each trace entry shows node_id, direction (enter/exit/error/complete), and summary, color-coded by direction. Outbound calls are listed below the trace.
+- **OpenAPI spec** updated: added `POST /flows/{flowId}/simulate` with `SimulateRequest`, `SimulationResult`, and `TraceEntry` schemas.
+- Files touched:
+  - `apps/cli/oiw/runtime/engine.py` (added `trace_callback` parameter + streaming logic)
+  - `apps/server-python-prototype/oiw_server/routes/simulate.py` (new — POST simulate + WebSocket /ws/trace)
+  - `apps/server-python-prototype/oiw_server/main.py` (register simulate router)
+  - `apps/server-python-prototype/tests/test_simulate.py` (new — 7 tests)
+  - `apps/web/src/App.tsx` (Simulate button + trace panel)
+  - `apps/web/src/App.css` (trace list + outbound call styles)
+  - `apps/web/src/api.ts` (added `simulate` method + `SimulationResult` / `TraceEntry` types)
+  - `packages/api-spec/openapi.yaml` (simulate endpoint + schemas)
+  - `DEVELOPMENT_LOG.md` (this entry)
+- Tests: 117 total (77 CLI + 33 API + 7 simulate) — all pass. SPA type-check + build clean (350 KB JS / 22 KB CSS). ruff check + format clean.
+- CI: pending first run on this PR.
+- Next: Monaco editor for Groovy/XSLT resources (OW-016), then Phase 3 (MCP server + model gateway + LLM-assisted engineering).
+
+---

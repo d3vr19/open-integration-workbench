@@ -15,7 +15,7 @@ import 'reactflow/dist/style.css';
 import './App.css';
 
 import { api } from './api';
-import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus } from './api';
+import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus, SimulationResult, TraceEntry } from './api';
 import { toReactFlowNodes, toReactFlowEdges, fidelityColor } from './flow-utils';
 
 // Available step types for the palette (spec §9.4)
@@ -60,6 +60,8 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [pendingOps, setPendingOps] = useState<unknown[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [simulation, setSimulation] = useState<SimulationResult | null>(null);
+  const [simulating, setSimulating] = useState(false);
   const dragType = useRef<string | null>(null);
 
   // Load project list on mount
@@ -303,6 +305,27 @@ function App() {
     }
   };
 
+  const runSimulation = async () => {
+    if (!selectedProject || !selectedFlow) return;
+    setSimulating(true);
+    setError(null);
+    setSimulation(null);
+    try {
+      const result = await api.simulate(selectedProject, selectedFlow, {
+        body_inline: '{"orderId":"ORD-001","customerId":"CUST-42","region":"EU","items":[{"sku":"SKU-A","quantity":2}]}',
+        headers: { 'Content-Type': 'application/json' },
+        mocks: [
+          { target: 'receiver-s4-eu', respond: { status: 201, body: '{"id":"4711"}' } },
+        ],
+      });
+      setSimulation(result);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSimulating(false);
+    }
+  };
+
   return (
     <div className="app">
       <header className="app__header">
@@ -409,6 +432,9 @@ function App() {
                 </button>
                 <button onClick={runBuild} disabled={loading} className="btn btn--primary">
                   Build
+                </button>
+                <button onClick={runSimulation} disabled={simulating || !selectedFlow} className="btn btn--primary">
+                  {simulating ? 'Simulating…' : 'Simulate'}
                 </button>
                 <button onClick={loadGitStatus} disabled={loading} className="btn btn--secondary">
                   Git Status
@@ -572,6 +598,39 @@ function App() {
                   <span className="properties__value">{build.entry_count}</span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {simulation && (
+            <div className="sidebar__section">
+              <h3 className="sidebar__title">
+                Simulation Trace
+                <span className={`badge ${simulation.status === 'COMPLETED' ? 'badge--success' : 'badge--error'}`}>
+                  {simulation.status}
+                </span>
+                <span className="badge badge--mono">{simulation.duration_ms}ms</span>
+              </h3>
+              <div className="trace-list">
+                {simulation.trace.map((t: TraceEntry, i: number) => (
+                  <div key={i} className={`trace-item trace-item--${t.direction}`}>
+                    <span className="trace-item__node">{t.node_id}</span>
+                    <span className="trace-item__direction">{t.direction}</span>
+                    <span className="trace-item__summary">{t.summary}</span>
+                  </div>
+                ))}
+              </div>
+              {simulation.outbound_calls.length > 0 && (
+                <div className="outbound-calls">
+                  <span className="properties__label">Outbound calls</span>
+                  {simulation.outbound_calls.map((c, i) => (
+                    <div key={i} className="outbound-call">
+                      <span className="outbound-call__target">{c.target}</span>
+                      <span className="outbound-call__method">{c.method}</span>
+                      <span className="outbound-call__url">{c.url}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </aside>

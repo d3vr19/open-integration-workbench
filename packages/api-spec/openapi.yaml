@@ -201,6 +201,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/ValidationResult"
 
+  /api/v1/projects/{projectId}/flows/{flowId}/simulate:
+    post:
+      tags: [Simulation]
+      summary: Run a flow with given input and return the trace
+      description: |
+        Spec ref: §9.2 (Execution Engine), §9.2 step 8 (stream trace).
+
+        Runs the flow synchronously with the provided input body, headers,
+        and mocks. Returns the final exchange status, duration, full trace
+        (per-node enter/exit/error events), outbound calls, and final
+        headers/properties.
+
+        For real-time streaming, use the WebSocket endpoint at /ws/trace.
+      operationId: simulateFlow
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FlowId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulateRequest"
+      responses:
+        "200":
+          description: Simulation result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationResult"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/projects/{projectId}/tests:run:
     post:
       tags: [Tests]
@@ -546,6 +579,83 @@ components:
           nullable: true
           description: The current HEAD revision (unchanged until a git commit is made).
         flow_id:
+          type: string
+
+    SimulateRequest:
+      type: object
+      description: Simulation request. Spec §9.2, §7.4 (FlowTest input shape).
+      properties:
+        entrypoint:
+          type: string
+          description: Entrypoint node ID (optional; defaults to the first entrypoint).
+        body_file:
+          type: string
+          description: Relative path to a fixture file for the input body.
+        body_inline:
+          type: string
+          description: Inline input body (alternative to body_file).
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        mocks:
+          type: array
+          items:
+            type: object
+            properties:
+              target:
+                type: string
+                description: Node ID to mock.
+              respond:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                  body:
+                    type: string
+
+    SimulationResult:
+      type: object
+      description: Result of a simulation run. Spec §9.2 step 8.
+      properties:
+        status:
+          type: string
+          enum: [COMPLETED, FAILED, RUNNING]
+        duration_ms:
+          type: integer
+        trace:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraceEntry"
+        outbound_calls:
+          type: array
+          items:
+            type: object
+            properties:
+              target:
+                type: string
+              method:
+                type: string
+              url:
+                type: string
+        headers:
+          type: object
+          additionalProperties: true
+        properties:
+          type: object
+          additionalProperties: true
+
+    TraceEntry:
+      type: object
+      properties:
+        node_id:
+          type: string
+        timestamp:
+          type: number
+        direction:
+          type: string
+          enum: [enter, exit, error, complete]
+        summary:
           type: string
 
     ValidationResult:

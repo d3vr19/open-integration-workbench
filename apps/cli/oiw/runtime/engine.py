@@ -7,15 +7,21 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 from typing import Any
 
 from ..project import FlowNode, IntegrationFlow
-from .context import ExchangeStatus, MessageContext
+from .context import ExchangeStatus, MessageContext, TraceEntry
 from .steps.base import get_plugin
 
 
 class ExecutionError(Exception):
     """Raised when a flow cannot be executed."""
+
+
+# A trace callback receives each TraceEntry as it's produced.
+# Spec §9.2 step 8: "Capture structured trace and stream via WebSocket to UI."
+TraceCallback = Callable[[TraceEntry, MessageContext], None]
 
 
 class ExecutionPlan:
@@ -67,6 +73,7 @@ def execute_flow(
     input_properties: dict[str, Any] | None = None,
     resources: dict[str, bytes] | None = None,
     mocks: dict[str, dict[str, Any]] | None = None,
+    trace_callback: TraceCallback | None = None,
 ) -> MessageContext:
     """Execute a flow against the given input. Returns the final MessageContext.
 
@@ -74,6 +81,12 @@ def execute_flow(
     Spec §9.2 step 2: validate graph before execution.
     Spec §9.2 step 4: record input/output snapshot per node.
     Spec §9.2 step 7: enforce timeouts (TODO) and memory quotas (TODO).
+    Spec §9.2 step 8: capture structured trace and stream via WebSocket to UI.
+
+    Args:
+        trace_callback: If provided, called with each TraceEntry as it's
+            produced (before the entry is appended to ctx.trace). This
+            enables real-time streaming to WebSocket clients.
     """
     plan = ExecutionPlan(flow)
     node_map: dict[str, FlowNode] = {n.id: n for n in flow.nodes}
@@ -94,6 +107,24 @@ def execute_flow(
         properties=dict(input_properties or {}),
         variables={"__resources__": resources or {}},
     )
+
+    # Wrap add_trace so the callback fires on every trace event (spec §9.2 step 8)
+    if trace_callback is not None:
+        _original_add_trace = ctx.add_trace
+
+        def _streaming_add_trace(node_id: str, direction: str, summary: str, **extra: Any) -> None:
+            entry = TraceEntry(
+                node_id=node_id,
+                timestamp=time.time(),
+                direction=direction,
+                summary=summary,
+                body_preview=extra.get("body_preview"),
+                headers=extra.get("headers"),
+            )
+            trace_callback(entry, ctx)
+            _original_add_trace(node_id, direction, summary, **extra)
+
+        ctx.add_trace = _streaming_add_trace  # type: ignore[method-assign]
 
     mocks = mocks or {}
     start_time = time.monotonic()
@@ -159,4 +190,15 @@ def execute_flow(
         ctx.exchange_status = ExchangeStatus.COMPLETED
 
     ctx.properties["__duration_ms__"] = int((time.monotonic() - start_time) * 1000)
+
+    # Emit a final completion event for streaming clients (spec §9.2 step 8)
+    if trace_callback is not None:
+        final_entry = TraceEntry(
+            node_id="__flow__",
+            timestamp=time.time(),
+            direction="complete",
+            summary=f"flow {ctx.exchange_status} in {ctx.properties['__duration_ms__']}ms",
+        )
+        trace_callback(final_entry, ctx)
+
     return ctx

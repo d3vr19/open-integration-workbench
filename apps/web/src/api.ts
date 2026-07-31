@@ -114,6 +114,22 @@ export interface GitStatus {
   last_build_target: string | null;
 }
 
+export interface TraceEntry {
+  node_id: string;
+  timestamp: number;
+  direction: 'enter' | 'exit' | 'error' | 'complete';
+  summary: string;
+}
+
+export interface SimulationResult {
+  status: 'COMPLETED' | 'FAILED' | 'RUNNING';
+  duration_ms: number;
+  trace: TraceEntry[];
+  outbound_calls: Array<{ target: string; method: string; url: string }>;
+  headers: Record<string, unknown>;
+  properties: Record<string, unknown>;
+}
+
 export const api = {
   health: () => fetchJSON<{ status: string; version: string }>('/health'),
   listProjects: () => fetchJSON<ProjectSummary[]>('/projects'),
@@ -148,4 +164,14 @@ export const api = {
     }),
   gitStatus: (projectId: string) =>
     fetchJSON<GitStatus>(`/projects/${projectId}/git/status`),
+  simulate: (projectId: string, flowId: string, req: {
+    body_inline?: string;
+    body_file?: string;
+    headers?: Record<string, string>;
+    mocks?: Array<{ target: string; respond: { status: number; body?: string } }>;
+  }) =>
+    fetchJSON<SimulationResult>(`/projects/${projectId}/flows/${flowId}/simulate`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
 };
