@@ -264,6 +264,99 @@ paths:
                 items:
                   $ref: "#/components/schemas/TestResult"
 
+  /api/v1/projects/{projectId}/resources:
+    get:
+      tags: [Resources]
+      summary: List all resource files in a project
+      description: |
+        Spec ref: §11.1 (resources/ directory), §6.1 (Monaco Editor),
+        §10.3 (editors/ component architecture).
+
+        Enumerates all resource files under flows/<flow>/resources/.
+        Returns path, name, resource_type, language (for Monaco), and size.
+      operationId: listResources
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: List of resources.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResourceSummary"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/resources/{resourcePath}:
+    get:
+      tags: [Resources]
+      summary: Read a resource file
+      description: |
+        Spec ref: §6.1 (Monaco Editor), §12.4 (resource.read).
+        Path traversal is prevented.
+      operationId: getResource
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: resourcePath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Resource path (e.g. flows/order-to-s4/resources/scripts/normalizeOrder.groovy).
+      responses:
+        "200":
+          description: Resource content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceContent"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Resources]
+      summary: Write (create or update) a resource file
+      description: |
+        Spec ref: §6.1 (Monaco Editor), §12.4 (resource.write MCP tool),
+        §11.1 (resources/ directory).
+
+        Path traversal is prevented. Only paths under flows/<flow>/resources/
+        are allowed. Parent directories are created automatically.
+      operationId: writeResource
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: resourcePath
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+      responses:
+        "200":
+          description: Written resource content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceContent"
+        "400":
+          description: Invalid path (outside resources/, path traversal).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/projects/{projectId}/builds:
     post:
       tags: [Builds]
@@ -657,6 +750,41 @@ components:
           enum: [enter, exit, error, complete]
         summary:
           type: string
+
+    ResourceSummary:
+      type: object
+      description: Resource file summary for the explorer. Spec §11.1, §6.1.
+      properties:
+        path:
+          type: string
+          description: Project-relative path (e.g. flows/order-to-s4/resources/scripts/normalizeOrder.groovy).
+        name:
+          type: string
+          description: File name only.
+        resource_type:
+          type: string
+          enum: [groovy, xslt, xsd, json-schema, wsdl, properties, unknown]
+        language:
+          type: string
+          description: Monaco language ID (groovy, xml, json, yaml, ini, python, shell, plaintext).
+        size:
+          type: integer
+          description: File size in bytes.
+
+    ResourceContent:
+      type: object
+      description: Full resource file content. Spec §6.1, §12.4.
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+        language:
+          type: string
+        resource_type:
+          type: string
+        size:
+          type: integer
 
     ValidationResult:
       type: object

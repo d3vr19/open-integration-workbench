@@ -400,3 +400,45 @@ Append new entries below. Newest at the bottom. Format:
 - Next: Monaco editor for Groovy/XSLT resources (OW-016), then Phase 3 (MCP server + model gateway + LLM-assisted engineering).
 
 ---
+
+### 2026-07-31 — Implementing Agent — Phase 2 Monaco resource editor (§6.1, §10.3)
+
+- Implemented Monaco-based resource editor — a consultant can now edit Groovy/XSLT/JSON Schema files inline without leaving the visual designer. Spec §6.1, §10.3.
+- **Resource API endpoints** (`apps/server-python-prototype/oiw_server/routes/resources.py`):
+  - `GET /api/v1/projects/{id}/resources` — list all resource files with path, name, resource_type, Monaco language, and size.
+  - `GET /api/v1/projects/{id}/resources/{path}` — read a resource file's content. Path traversal prevented (rejects `..`, absolute paths, resolves and verifies within project root).
+  - `PUT /api/v1/projects/{id}/resources/{path}` — write (create or update) a resource file. Only paths under `flows/<flow>/resources/` are allowed. Parent directories created automatically. Path traversal prevented.
+  - Language mapping: `.groovy`→groovy, `.xsl`/`.xslt`/`.xsd`/`.xml`→xml, `.json`→json, `.yaml`/`.yml`→yaml, `.properties`→ini, etc.
+  - Resource type classification (spec §12.4): `.groovy`→groovy, `.xsl`→xslt, `.xsd`→xsd, `.json`→json-schema, etc.
+- **13 resource API tests** (`apps/server-python-prototype/tests/test_resources.py`): list resources, get Groovy/JSON-Schema/XSLT resources, 404 not found, path traversal rejected, create new file, overwrite existing, reject path outside resources/, reject path traversal, create parent dirs.
+- **SPA Monaco editor** (`apps/web/src/ResourceEditor.tsx`):
+  - Uses `@monaco-editor/react` with `vs-dark` theme.
+  - Language auto-detected from file extension.
+  - Inline Save button — PUTs content to server, shows dirty state.
+  - Close button returns to canvas view.
+  - Monaco options: minimap disabled, word wrap on, font size 13, tab size 2, automatic layout.
+- **SPA tabbed canvas** (`apps/web/src/App.tsx`):
+  - Canvas area now has a tab bar: "Flow Canvas" tab + a tab for the currently selected resource.
+  - Clicking a resource in the resource explorer switches to the resource editor view.
+  - Clicking "Flow Canvas" returns to the React Flow canvas.
+- **SPA resource explorer** (left sidebar):
+  - New "Resources" section below the palette.
+  - Lists all resource files in the project with name, language badge, and size.
+  - Click a resource to open it in the Monaco editor.
+- **OpenAPI spec** updated: added `GET /resources`, `GET /resources/{path}`, `PUT /resources/{path}` with `ResourceSummary` and `ResourceContent` schemas.
+- Files touched:
+  - `apps/server-python-prototype/oiw_server/routes/resources.py` (new — 3 endpoints)
+  - `apps/server-python-prototype/oiw_server/main.py` (register resources router)
+  - `apps/server-python-prototype/tests/test_resources.py` (new — 13 tests)
+  - `apps/web/src/ResourceEditor.tsx` (new — Monaco editor component)
+  - `apps/web/src/App.tsx` (tabbed canvas + resource explorer)
+  - `apps/web/src/App.css` (resource list, canvas toolbar, resource editor styles)
+  - `apps/web/src/api.ts` (added `listResources` / `getResource` / `writeResource` + types)
+  - `apps/web/package.json` (added `@monaco-editor/react` dependency)
+  - `packages/api-spec/openapi.yaml` (resource endpoints + schemas)
+  - `DEVELOPMENT_LOG.md` (this entry)
+- Tests: 130 total (77 CLI + 40 API + 13 resources) — all pass. SPA type-check + build clean (367 KB JS / 24 KB CSS). ruff check + format clean.
+- CI: pending first run on this PR.
+- Next: Semantic diff viewer (§10.5), then Phase 3 (MCP server + model gateway + LLM-assisted engineering with typed patches).
+
+---

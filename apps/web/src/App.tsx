@@ -15,8 +15,9 @@ import 'reactflow/dist/style.css';
 import './App.css';
 
 import { api } from './api';
-import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus, SimulationResult, TraceEntry } from './api';
+import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus, SimulationResult, TraceEntry, ResourceSummary } from './api';
 import { toReactFlowNodes, toReactFlowEdges, fidelityColor } from './flow-utils';
+import { ResourceEditor } from './ResourceEditor';
 
 // Available step types for the palette (spec §9.4)
 const PALETTE_STEPS = [
@@ -62,6 +63,9 @@ function App() {
   const [dirty, setDirty] = useState(false);
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [simulating, setSimulating] = useState(false);
+  const [resources, setResources] = useState<ResourceSummary[]>([]);
+  const [selectedResource, setSelectedResource] = useState<ResourceSummary | null>(null);
+  const [viewMode, setViewMode] = useState<'canvas' | 'resource'>('canvas');
   const dragType = useRef<string | null>(null);
 
   // Load project list on mount
@@ -77,7 +81,11 @@ function App() {
     setFlow(null);
     setPendingOps([]);
     setDirty(false);
+    setResources([]);
+    setSelectedResource(null);
+    setViewMode('canvas');
     api.listFlows(selectedProject).then(setFlows).catch((e) => setError(String(e)));
+    api.listResources(selectedProject).then(setResources).catch((e) => setError(String(e)));
   }, [selectedProject]);
 
   // Load flow when selected — sync RF nodes/edges
@@ -420,6 +428,30 @@ function App() {
             </div>
           )}
 
+          {resources.length > 0 && (
+            <div className="sidebar__section">
+              <h3 className="sidebar__title">Resources</h3>
+              <ul className="resource-list">
+                {resources.map((res) => (
+                  <li
+                    key={res.path}
+                    className={`resource-list__item ${selectedResource?.path === res.path ? 'resource-list__item--active' : ''}`}
+                    onClick={() => {
+                      setSelectedResource(res);
+                      setViewMode('resource');
+                    }}
+                  >
+                    <div className="resource-list__name">{res.name}</div>
+                    <div className="resource-list__meta">
+                      <span className="badge badge--mono">{res.language}</span>
+                      <span className="resource-list__size">{res.size}B</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {selectedProject && (
             <div className="sidebar__section">
               <h3 className="sidebar__title">Actions</h3>
@@ -444,7 +476,7 @@ function App() {
           )}
         </aside>
 
-        <main className="canvas-area" onDragOver={onDragOver} onDrop={onDrop}>
+        <main className="canvas-area">
           {error && (
             <div className="error-banner">
               {error}
@@ -452,26 +484,55 @@ function App() {
             </div>
           )}
           {loading && <div className="loading-overlay">Loading…</div>}
-          {flow ? (
-            <ReactFlow
-              nodes={rfNodes}
-              edges={rfEdges}
-              onNodeClick={onNodeClick}
-              onNodeDragStop={onNodeDragStop}
-              onConnect={onConnect}
-              onNodesDelete={onNodesDelete}
-              onEdgesDelete={onEdgesDelete}
-              deleteKeyCode={['Delete', 'Backspace']}
-              fitView
-              attributionPosition="bottom-left"
-            >
-              <Background color="#2e3344" gap={20} />
-              <Controls />
-              <MiniMap
-                nodeColor={(n) => fidelityColor((n.data as { fidelity?: string })?.fidelity ?? '')}
-                maskColor="rgba(15, 17, 23, 0.8)"
-              />
-            </ReactFlow>
+          {viewMode === 'resource' && selectedResource && selectedProject ? (
+            <ResourceEditor
+              projectId={selectedProject}
+              resource={selectedResource}
+              onClose={() => {
+                setSelectedResource(null);
+                setViewMode('canvas');
+              }}
+            />
+          ) : flow ? (
+            <>
+              <div className="canvas-toolbar">
+                <button
+                  className={`canvas-tab ${viewMode === 'canvas' ? 'canvas-tab--active' : ''}`}
+                  onClick={() => setViewMode('canvas')}
+                >
+                  Flow Canvas
+                </button>
+                {selectedResource && (
+                  <button
+                    className={`canvas-tab ${viewMode === 'resource' ? 'canvas-tab--active' : ''}`}
+                    onClick={() => setViewMode('resource')}
+                  >
+                    {selectedResource.name}
+                  </button>
+                )}
+              </div>
+              <div className="canvas-container" onDragOver={onDragOver} onDrop={onDrop}>
+                <ReactFlow
+                  nodes={rfNodes}
+                  edges={rfEdges}
+                  onNodeClick={onNodeClick}
+                  onNodeDragStop={onNodeDragStop}
+                  onConnect={onConnect}
+                  onNodesDelete={onNodesDelete}
+                  onEdgesDelete={onEdgesDelete}
+                  deleteKeyCode={['Delete', 'Backspace']}
+                  fitView
+                  attributionPosition="bottom-left"
+                >
+                  <Background color="#2e3344" gap={20} />
+                  <Controls />
+                  <MiniMap
+                    nodeColor={(n) => fidelityColor((n.data as { fidelity?: string })?.fidelity ?? '')}
+                    maskColor="rgba(15, 17, 23, 0.8)"
+                  />
+                </ReactFlow>
+              </div>
+            </>
           ) : (
             <div className="canvas-placeholder">
               <p>Select a project and flow to view the integration graph.</p>

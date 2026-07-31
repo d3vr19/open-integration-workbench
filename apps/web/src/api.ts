@@ -130,6 +130,22 @@ export interface SimulationResult {
   properties: Record<string, unknown>;
 }
 
+export interface ResourceSummary {
+  path: string;
+  name: string;
+  resource_type: string;
+  language: string;
+  size: number;
+}
+
+export interface ResourceContent {
+  path: string;
+  content: string;
+  language: string;
+  resource_type: string;
+  size: number;
+}
+
 export const api = {
   health: () => fetchJSON<{ status: string; version: string }>('/health'),
   listProjects: () => fetchJSON<ProjectSummary[]>('/projects'),
@@ -173,5 +189,14 @@ export const api = {
     fetchJSON<SimulationResult>(`/projects/${projectId}/flows/${flowId}/simulate`, {
       method: 'POST',
       body: JSON.stringify(req),
+    }),
+  listResources: (projectId: string) =>
+    fetchJSON<ResourceSummary[]>(`/projects/${projectId}/resources`),
+  getResource: (projectId: string, resourcePath: string) =>
+    fetchJSON<ResourceContent>(`/projects/${projectId}/resources/${resourcePath}`),
+  writeResource: (projectId: string, resourcePath: string, content: string) =>
+    fetchJSON<ResourceContent>(`/projects/${projectId}/resources/${resourcePath}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
     }),
 };
