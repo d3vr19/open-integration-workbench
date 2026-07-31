@@ -262,6 +262,7 @@ Append new entries below. Newest at the bottom. Format:
 - Updated Phase Status: Phase 0 marked COMPLETE (pending tenant test, OW-010); Phase 1 marked COMPLETE (all exit criteria met).
 - Updated Open Work: OW-009 partially done (soap-groovy-sftp complete; odata-pagination-aggregation deferred to OW-014 — needs Phase 6 OData plugin); added OW-013 (remaining §9.4 step plugins) and OW-014 (odata fixture).
 - Updated `docs/compatibility/matrix.md` to reflect the new step coverage.
+- Housekeeping: fixed `.gitignore` (`**/.oiw/compiler.lock` matches at any depth); removed `examples/order-to-s4/.oiw/compiler.lock` from tracking (was accidentally committed in the initial bootstrap).
 - Files touched:
   - `apps/cli/oiw/runtime/steps/{splitter,gather,encoder_base64,filter,xml_to_json,sftp_receiver}.py` (new)
   - `apps/cli/oiw/runtime/steps/__init__.py` (register new plugins)
@@ -273,12 +274,13 @@ Append new entries below. Newest at the bottom. Format:
   - `scripts/generate_soap_groovy_sftp_fixture.py` (new)
   - `deploy/wsl/{bootstrap.sh,README.md}` (new — Phase 1 exit criterion)
   - `.github/workflows/validate-on-pr.yaml` (extended for new example + fixture)
+  - `.gitignore` (fixed compiler.lock pattern)
   - `docs/compatibility/matrix.md` (updated)
   - `DEVELOPMENT_LOG.md` (this entry + phase status + open work updates)
 - Tests: 55/55 passed locally (29 original + 18 new step tests + 8 new scenario tests).
 - Lint: ruff check + format clean.
 - Validation: `oiw validate --strict` passes on both `examples/order-to-s4` and `examples/sftp-order-drop`. `oiw test --all` passes 2/2 + 2/2. `oiw build` produces deterministic digests for both examples (verified).
-- CI: pending first run on this PR.
+- CI: PR #1 (https://github.com/hehenaice/open-integration-workbench/pull/1) — all 6 checks passed (run [#30627024663](https://github.com/hehenaice/open-integration-workbench/actions/runs/30627024663)). PR merged via squash-merge. Post-merge CI on `main` also green (validate-on-pr run [#30627194055](https://github.com/hehenaice/open-integration-workbench/actions/runs/30627194055), security-scan run [#30627194035](https://github.com/hehenaice/open-integration-workbench/actions/runs/30627194035)).
 - Next: OW-001 (Kotlin migration) is the highest-priority remaining work; OW-013 (remaining §9.4 steps) is low priority and can wait until Phase 2.
 
 ---
