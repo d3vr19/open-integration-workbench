@@ -122,6 +122,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install jsonschema
+        run: pip install jsonschema
       - name: Validate each schema is a valid JSON Schema
         run: |
           python - <<'PY'

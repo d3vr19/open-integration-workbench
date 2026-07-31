@@ -210,22 +210,31 @@ Append new entries below. Newest at the bottom. Format:
 - Implemented safe archive inspector with: max archive size (256 MB), max uncompressed size (1 GB), max entry count (10 000), zip-bomb detection (compression ratio > 100), path-traversal defense (rejects `..` and absolute paths), symlink rejection per spec §8.2.
 - Implemented deterministic export compiler: produces a manifest JSON + content files in `dist/`, records `sha256` digest in `.oiw/compiler.lock`. Same input + compiler version + target profile → byte-identical output.
 - Implemented import report generator with `FULL | PARTIAL | FAILED` status, `recognized`, `preservedOpaque`, `unsupported`, `warnings` sections per spec §8.3.
-- Implemented local simulation runtime MVP: `MessageContext` (body, headers, properties, attachments, variables, exchangeStatus, trace, securityContext), `ExecutionPlan` (topological sort), step registry, trace streaming. Core step plugins: `sender.http`, `modifier.content`, `script.groovy` (stubbed; sandbox enforced via static allowlist, NOT process-isolated — see DEV-003), `transform.xslt` (lxml-based, XSLT 1.0; Saxon-HE XSLT 2.0 subset deferred to JVM worker), `router.content-based`, `receiver.http` (mocked via in-process stub), `validator.json-schema`, `log.message`.
-- Implemented test runner for `FlowTest` IR with assertions: `node.executed`, `outbound.request` (body + headers + status), `exchange.status`.
+- Implemented local simulation runtime MVP: `MessageContext` (body, headers, properties, attachments, variables, exchangeStatus, trace, securityContext), `ExecutionPlan` (topological sort), step registry, trace streaming. Core step plugins: `sender.http`, `modifier.content`, `script.groovy` (stubbed; sandbox enforced via static allowlist, NOT process-isolated — see DEV-003), `transform.xslt` (lxml-based, XSLT 1.0; Saxon-HE XSLT 2.0 subset deferred to JVM worker), `router.content-based`, `receiver.http` (mocked via in-process stub), `validator.json-schema`, `converter.json-to-xml`, `log.message`.
+- Implemented test runner for `FlowTest` IR with assertions: `node.executed`, `node.not-executed`, `outbound.request` (body + headers + status + bodyMatchesXml/Json/contains), `exchange.status`, `header.equals`, `property.equals`, `body.contains`.
 - Implemented semantic diff engine producing human-readable output per spec §10.5: added/removed/changed nodes, edges, resources, tests; validation/test/security/compatibility summary.
-- Built reference scenario `examples/order-to-s4/`: inbound JSON order → JSON Schema validation → Groovy normalization → XSLT mapping → content-based router → mocked S/4 HTTP receiver → error subprocess. Includes `flow.yaml`, `diagram.json`, `tests/happy-path.yaml`, `tests/invalid-payload.yaml`, fixtures, scripts, XSLT, JSON schema.
+- Built reference scenario `examples/order-to-s4/`: inbound JSON order → JSON Schema validation → Groovy normalization → JSON-to-XML conversion → XSLT mapping → content-based router → mocked S/4 HTTP receiver → error subprocess. Includes `flow.yaml`, `diagram.json`, `tests/happy-path.yaml`, `tests/invalid-payload.yaml`, fixtures, scripts, XSLT, JSON schema, `dev.yaml` + `prod.yaml` environment profiles.
 - Built golden fixture `packages/test-fixtures/minimal/https-content-modifier-http/`: synthetic source.zip + expected-ir.yaml + expected-export.zip + import-report.yaml. All synthetic — no customer artifacts.
+- Built negative fixtures `packages/test-fixtures/negative/`: `zip-bomb.zip` (100 MB payload, ~1000:1 ratio), `path-traversal.zip` (../ entries), `corrupt-manifest.zip` (invalid zip).
 - Authored GitHub Actions workflows:
-  - `.github/workflows/validate-on-pr.yaml`: schema validation, `oiw validate --strict`, `oiw test --all`, `oiw build --target sap-cloud-integration-2026-07`, Semgrep, gitleaks, Trivy, SBOM (syft).
-  - `.github/workflows/security-scan.yaml`: scheduled (daily) + on-push-to-main Semgrep + gitleaks + Trivy.
+  - `.github/workflows/validate-on-pr.yaml`: schema validation, `oiw validate --strict`, `oiw test --all`, `oiw build --target sap-cloud-integration-2026-07` + determinism re-check, Semgrep, gitleaks, Trivy, SBOM (syft), safe-archive inspector on negative + golden fixtures, semantic diff.
+  - `.github/workflows/security-scan.yaml`: scheduled (daily) + on-push-to-main Semgrep + gitleaks + Trivy + SBOM.
   - `.github/workflows/release.yaml`: on tag push `v*`, build artifact, generate SBOM, attach to GitHub Release.
 - Authored initial ADRs (001–020 per spec §25) + ADR-PY-001 (Python deviation) + ADR-CI-001 (GitHub Actions gate).
 - Authored compatibility matrix, security threat model, contributor guide.
-- Authored Docker Compose distribution matching spec §18.1 (services defined; build contexts point at stub Dockerfiles pending Kotlin migration).
-- Created GitHub repo `hehenaice/open-integration-workbench`, pushed initial commit, triggered `validate-on-pr` workflow on the initial commit (run on `main` because no PR exists yet — workflow is configured to also run on push to `main` for bootstrap).
+- Authored Docker Compose distribution matching spec §18.1 (services defined; build contexts point at stub Dockerfiles pending Kotlin migration). Added `.env.example` per spec §18.5.
+- Authored issue template + PR template enforcing spec §22 Definition of Done.
+- Created GitHub repo `hehenaice/open-integration-workbench`, pushed initial commit.
 - Files touched: full repo tree; see `git log` for the per-file breakdown.
-- Tests: local `oiw validate --strict` on `examples/order-to-s4` passes; `oiw test --all` passes 2/2 tests; `oiw build` produces deterministic artifact with sha256 digest; archive inspector rejects `zip-bomb.zip` and `path-traversal.zip` negative fixtures.
-- CI: pending first workflow run after push.
+- Tests: local `oiw validate --strict` on `examples/order-to-s4` passes; `oiw test --all` passes 2/2 tests; `oiw build` produces deterministic artifact with sha256 digest (verified across two builds); archive inspector rejects `zip-bomb.zip` and `path-traversal.zip` negative fixtures. Pytest: 29/29 passed locally.
+- CI: first `validate-on-pr` workflow run (https://github.com/hehenaice/open-integration-workbench/actions/runs/30625601562) — 5/6 jobs passed; `schema-self-check` failed due to missing `pip install jsonschema` step (fixed in this commit). `security-scan` workflow run passed (https://github.com/hehenaice/open-integration-workbench/actions/runs/30625601553).
 - Next: OW-009 (expand golden fixtures), OW-008 (wire OPA into CLI), OW-001 (Kotlin migration) — in priority order.
+
+### 2026-07-31 — Implementing Agent — CI fix: install jsonschema for schema self-check
+
+- Fix: `.github/workflows/validate-on-pr.yaml` schema-self-check job was missing `pip install jsonschema` step. Added.
+- Files touched: `.github/workflows/validate-on-pr.yaml`
+- Tests: local schema self-check passes (4/4 schemas valid against Draft 2020-12 meta-schema).
+- CI: re-running after push.
 
 ---
