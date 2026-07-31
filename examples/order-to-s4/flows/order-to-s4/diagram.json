@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    {"id": "sender-http", "position": {"x": 0, "y": 200}, "lane": "sender"},
+    {"id": "validate-json", "position": {"x": 250, "y": 200}, "lane": "process"},
+    {"id": "normalize", "position": {"x": 500, "y": 200}, "lane": "process"},
+    {"id": "transform", "position": {"x": 750, "y": 200}, "lane": "process"},
+    {"id": "route-by-region", "position": {"x": 1000, "y": 200}, "lane": "process"},
+    {"id": "receiver-s4-eu", "position": {"x": 1250, "y": 120}, "lane": "receiver"},
+    {"id": "receiver-s4-global", "position": {"x": 1250, "y": 280}, "lane": "receiver"}
+  ],
+  "edges": [
+    {"from": "sender-http", "to": "validate-json"},
+    {"from": "validate-json", "to": "normalize"},
+    {"from": "normalize", "to": "transform"},
+    {"from": "transform", "to": "route-by-region"},
+    {"from": "route-by-region", "to": "receiver-s4-eu", "condition": "eu"},
+    {"from": "route-by-region", "to": "receiver-s4-global", "condition": "default"}
+  ]
+}

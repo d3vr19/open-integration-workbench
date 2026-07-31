@@ -1,0 +1,20 @@
+apiVersion: oiw.dev/v1alpha1
+kind: EnvironmentProfile
+metadata:
+  name: dev
+spec:
+  target: sap-cloud-integration-2026-07
+  tenantUrl: ${DEV_TENANT_URL}
+  auth:
+    method: oauth2-client-credentials
+    tokenUrl: ${DEV_TOKEN_URL}
+    clientId: ${DEV_CLIENT_ID}
+    credentialRef: sap-dev-api-client
+  externalizedParameters:
+    S4_BASE_URL: https://s4-dev.example.com
+    S4_EU_BASE_URL: https://s4-eu-dev.example.com
+    S4_GLOBAL_BASE_URL: https://s4-global-dev.example.com
+  deploymentPolicy:
+    requiresApproval: false
+    approvers: []
+    autoVerify: true

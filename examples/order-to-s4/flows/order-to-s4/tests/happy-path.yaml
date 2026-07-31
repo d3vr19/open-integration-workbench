@@ -1,0 +1,24 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  name: happy-path
+  description: Valid EU-region order flows through to the EU receiver.
+spec:
+  flow: order-to-s4
+  input:
+    entrypoint: sender-http
+    bodyFile: flows/order-to-s4/tests/fixtures/order.json
+    headers:
+      Content-Type: application/json
+  mocks:
+    - target: receiver-s4-eu
+      respond:
+        status: 201
+        body: '{"id":"4711"}'
+  assertions:
+    - type: node.executed
+      node: normalize
+    - type: outbound.request
+      target: receiver-s4-eu
+    - type: exchange.status
+      equals: COMPLETED

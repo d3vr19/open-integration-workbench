@@ -1,0 +1,102 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: order-to-s4
+  name: Order to S/4HANA
+  version: 3
+  labels:
+    archetype: api-to-erp
+    sourceProtocol: https
+    targetProtocol: https
+spec:
+  entrypoints:
+    - id: sender-http
+      type: sender.http
+      config:
+        path: /orders
+        methods: [POST]
+        credentialRef: inbound-oauth
+      fidelity: simulated
+  nodes:
+    - id: validate-json
+      type: validator.json-schema
+      config:
+        schema: flows/order-to-s4/resources/schemas/order.schema.json
+      fidelity: compatible-subset
+    - id: normalize
+      type: script.groovy
+      config:
+        resource: flows/order-to-s4/resources/scripts/normalizeOrder.groovy
+      fidelity: simulated
+    - id: convert-to-xml
+      type: converter.json-to-xml
+      config:
+        rootElement: Order
+      fidelity: compatible-subset
+    - id: transform
+      type: transform.xslt
+      config:
+        resource: flows/order-to-s4/resources/mappings/order.xsl
+      fidelity: compatible-subset
+    - id: route-by-region
+      type: router.content-based
+      config:
+        conditions:
+          - id: eu
+            expression: "${property.region} == 'EU'"
+            target: receiver-s4-eu
+          - id: default
+            expression: "true"
+            target: receiver-s4-global
+      fidelity: compatible-subset
+    - id: receiver-s4-eu
+      type: receiver.http
+      config:
+        url: https://s4-eu.example.invalid/api/orders
+        method: POST
+        credentialRef: s4-api-client
+        timeoutSeconds: 30
+      fidelity: simulated
+    - id: receiver-s4-global
+      type: receiver.http
+      config:
+        url: https://s4-global.example.invalid/api/orders
+        method: POST
+        credentialRef: s4-api-client
+        timeoutSeconds: 30
+      fidelity: simulated
+  edges:
+    - from: sender-http
+      to: validate-json
+    - from: validate-json
+      to: normalize
+    - from: normalize
+      to: convert-to-xml
+    - from: convert-to-xml
+      to: transform
+    - from: transform
+      to: route-by-region
+    - from: route-by-region
+      to: receiver-s4-eu
+      condition: eu
+    - from: route-by-region
+      to: receiver-s4-global
+      condition: default
+  errorHandling:
+    defaultExceptionSubprocess:
+      steps:
+        - id: log-error
+          type: log.message
+          config:
+            level: ERROR
+            message: "Order processing failed"
+          fidelity: compatible-subset
+        - id: set-500
+          type: modifier.content
+          config:
+            headers:
+              - name: HTTP_Status
+                value: "500"
+            body: '{"error": "Internal processing failure"}'
+          fidelity: compatible-subset
+  extensions: {}

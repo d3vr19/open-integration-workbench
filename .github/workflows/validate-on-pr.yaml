@@ -1,0 +1,234 @@
+# Validate-on-PR — the validation gate for every pull request and push to main.
+# Spec ref: §11.6 (Git Hooks & Automation), §14.4 (CI Pipeline), §22 (Definition of Done).
+#
+# This workflow is the single source of truth for "did this change break anything?"
+# It runs: schema validation, oiw validate --strict, oiw test --all, oiw build,
+# Semgrep, gitleaks, Trivy, and SBOM generation.
+#
+# ADR-CI-001: GitHub Actions are the validation gate.
+
+name: Validate PR
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------------------------
+  # Job 1: Python CLI — schema validation, rule engine, tests, build.
+  # This is the core OIW validation gate. Spec §14.
+  # -------------------------------------------------------------------
+  oiw-validate:
+    name: OIW validate + test + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # for semantic diff
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install oiw CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e apps/cli
+
+      - name: Regenerate golden + negative fixtures
+        run: |
+          python scripts/generate_golden_fixture.py
+          python scripts/generate_negative_fixtures.py
+
+      - name: Validate reference scenario (strict)
+        run: oiw validate --strict --project examples/order-to-s4
+
+      - name: Run all tests
+        run: oiw test --all --project examples/order-to-s4 --junit test-results.xml
+
+      - name: Build artifact (deterministic)
+        run: oiw build --project examples/order-to-s4 --target sap-cloud-integration-2026-07
+
+      - name: Verify determinism (re-build, compare digest)
+        run: |
+          DIGEST1=$(grep -o 'sha256:[a-f0-9]\+' examples/order-to-s4/.oiw/compiler.lock)
+          rm -rf examples/order-to-s4/dist examples/order-to-s4/.oiw/compiler.lock
+          oiw build --project examples/order-to-s4 --target sap-cloud-integration-2026-07 > /dev/null
+          DIGEST2=$(grep -o 'sha256:[a-f0-9]\+' examples/order-to-s4/.oiw/compiler.lock)
+          echo "first:  $DIGEST1"
+          echo "second: $DIGEST2"
+          if [ "$DIGEST1" = "$DIGEST2" ]; then
+            echo "deterministic: OK"
+          else
+            echo "::error::non-deterministic build detected (spec §4.7)"
+            exit 1
+          fi
+
+      - name: Semantic diff (HEAD vs HEAD~1)
+        run: oiw diff --project examples/order-to-s4 HEAD~1 || true
+
+      - name: Safe-archive inspector (negative fixtures must be rejected)
+        run: |
+          set -e
+          for fixture in zip-bomb path-traversal corrupt-manifest; do
+            echo "--- $fixture ---"
+            if oiw archive inspect packages/test-fixtures/negative/$fixture.zip 2>&1; then
+              echo "::error::$fixture.zip was NOT rejected (spec §8.2 / §16.1 threat 1)"
+              exit 1
+            else
+              echo "$fixture.zip correctly rejected"
+            fi
+          done
+
+      - name: Safe-archive inspector (golden fixture must be accepted)
+        run: oiw archive inspect packages/test-fixtures/minimal/https-content-modifier-http/source.zip
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oiw-test-results
+          path: |
+            test-results.xml
+            examples/order-to-s4/dist/
+            examples/order-to-s4/.oiw/compiler.lock
+          retention-days: 14
+
+  # -------------------------------------------------------------------
+  # Job 2: IR schema self-validation.
+  # Ensures the JSON Schemas in packages/ir-schema/schemas/ are valid
+  # JSON Schema documents themselves.
+  # -------------------------------------------------------------------
+  schema-self-check:
+    name: IR schema self-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate each schema is a valid JSON Schema
+        run: |
+          python - <<'PY'
+          import json
+          import jsonschema
+          from pathlib import Path
+          schema_dir = Path("packages/ir-schema/schemas")
+          meta = jsonschema.Draft202012Validator.META_SCHEMA
+          errors = 0
+          for p in sorted(schema_dir.glob("*.json")):
+              try:
+                  doc = json.loads(p.read_text())
+                  jsonschema.validate(doc, meta)
+                  print(f"OK  {p.name}")
+              except Exception as exc:
+                  print(f"ERR {p.name}: {exc}")
+                  errors += 1
+          if errors:
+              raise SystemExit(1)
+          PY
+
+  # -------------------------------------------------------------------
+  # Job 3: Pytest (CLI unit tests).
+  # -------------------------------------------------------------------
+  pytest:
+    name: Pytest (CLI unit tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          pip install --upgrade pip
+          pip install -e apps/cli[dev]
+      - name: Run pytest
+        run: pytest apps/cli/tests/ -v --junitxml=pytest.xml
+      - name: Upload pytest results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: pytest.xml
+
+  # -------------------------------------------------------------------
+  # Job 4: Ruff lint (CLI code quality).
+  # -------------------------------------------------------------------
+  lint:
+    name: Ruff lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff==0.5.7
+      - name: Run ruff check
+        run: ruff check apps/cli/
+      - name: Run ruff format check
+        run: ruff format --check apps/cli/
+
+  # -------------------------------------------------------------------
+  # Job 5: DEVELOPMENT_LOG.md must exist and have a recent entry.
+  # Spec ref: project-level convention (single source of truth).
+  # -------------------------------------------------------------------
+  log-check:
+    name: DEVELOPMENT_LOG.md present
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check DEVELOPMENT_LOG.md exists
+        run: |
+          if [ ! -f DEVELOPMENT_LOG.md ]; then
+            echo "::error::DEVELOPMENT_LOG.md is missing — single source of truth must exist at repo root"
+            exit 1
+          fi
+          echo "DEVELOPMENT_LOG.md: OK ($(wc -l < DEVELOPMENT_LOG.md) lines)"
+
+  # -------------------------------------------------------------------
+  # Job 6: Aggregate — used as a required status check on branch protection.
+  # -------------------------------------------------------------------
+  validate-pr-aggregate:
+    name: validate-pr (aggregate)
+    runs-on: ubuntu-latest
+    needs: [oiw-validate, schema-self-check, pytest, lint, log-check]
+    if: always()
+    steps:
+      - name: Aggregate
+        run: |
+          echo "oiw-validate:       ${{ needs.oiw-validate.result }}"
+          echo "schema-self-check:  ${{ needs.schema-self-check.result }}"
+          echo "pytest:             ${{ needs.pytest.result }}"
+          echo "lint:               ${{ needs.lint.result }}"
+          echo "log-check:          ${{ needs.log-check.result }}"
+          if [[ "${{ needs.oiw-validate.result }}" != "success" || \
+                "${{ needs.schema-self-check.result }}" != "success" || \
+                "${{ needs.pytest.result }}" != "success" || \
+                "${{ needs.lint.result }}" != "success" || \
+                "${{ needs.log-check.result }}" != "success" ]]; then
+            echo "::error::one or more validation jobs failed"
+            exit 1
+          fi
+          echo "all validation jobs passed"

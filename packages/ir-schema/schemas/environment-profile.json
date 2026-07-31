@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schema.oiw.dev/environment-profile/v1alpha1.json",
+  "title": "EnvironmentProfile",
+  "description": "Environment profile IR. Spec §7.5.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "type": "string", "const": "oiw.dev/v1alpha1" },
+    "kind": { "type": "string", "const": "EnvironmentProfile" },
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": ["dev", "test", "stage", "prod"],
+          "description": "Conventional environment tier."
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "required": ["target", "auth", "deploymentPolicy"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "type": "string" },
+        "tenantUrl": { "type": "string" },
+        "auth": {
+          "type": "object",
+          "required": ["method", "credentialRef"],
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": ["oauth2-client-credentials", "oauth2-password", "basic", "mtls"]
+            },
+            "tokenUrl": { "type": "string" },
+            "clientId": { "type": "string" },
+            "credentialRef": {
+              "type": "string",
+              "description": "Identifier only — never a secret value. Spec §4.6."
+            }
+          }
+        },
+        "externalizedParameters": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "deploymentPolicy": {
+          "type": "object",
+          "required": ["requiresApproval"],
+          "additionalProperties": false,
+          "properties": {
+            "requiresApproval": { "type": "boolean" },
+            "approvers": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "autoVerify": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

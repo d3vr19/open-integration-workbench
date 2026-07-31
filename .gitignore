@@ -1,0 +1,81 @@
+# Build outputs
+dist/
+build/
+target/
+*.class
+*.jar
+*.war
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+.tox/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Node
+node_modules/
+.next/
+out/
+.npm
+.pnpm-store/
+.yarn/cache
+.yarn/install-state.gz
+.eslintcache
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Generated artifacts
+.oiw/compiler.lock
+.oiw/import-manifest.json
+sbom.json
+*.sbom.json
+coverage/
+test-results/
+playwright-report/
+trace.zip
+
+# Local environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+!**/test-fixtures/**/fixtures/*.pem
+secrets/
+credentials/
+.local/
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+.directory
+
+# Temporary
+tmp/
+temp/
+*.log
+!docs/**/*.log

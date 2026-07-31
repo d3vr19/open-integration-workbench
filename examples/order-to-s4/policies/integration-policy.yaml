@@ -1,0 +1,9 @@
+# Project policy overrides (spec §14)
+
+# Default policy applies OIW-E001..E007 (errors) and OIW-W001..W012 (warnings).
+# Project-specific overrides live here.
+
+# Example: treat OIW-W002 (missing error handling) as error in prod
+# overrides:
+#   warning-as-error:
+#     - OIW-W002

@@ -1,0 +1,18 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationProject
+metadata:
+  id: customer-order-integration
+  name: Customer Order Integration
+  created: "2026-07-31T10:00:00Z"
+  description: Reference scenario for Open Integration Workbench (spec §26.3).
+  labels:
+    archetype: api-to-erp
+spec:
+  package: package/package.yaml
+  targetProfiles:
+    - sap-cloud-integration-2026-07
+  minimumCompilerVersion: 0.1.0
+  secretProvider: local-keyring
+  emg:
+    enabled: false
+    confidentialityScope: project-private

@@ -1,0 +1,20 @@
+apiVersion: oiw.dev/v1alpha1
+kind: EnvironmentProfile
+metadata:
+  name: prod
+spec:
+  target: sap-cloud-integration-2026-07
+  tenantUrl: ${PROD_TENANT_URL}
+  auth:
+    method: oauth2-client-credentials
+    tokenUrl: ${PROD_TOKEN_URL}
+    clientId: ${PROD_CLIENT_ID}
+    credentialRef: sap-prod-api-client
+  externalizedParameters:
+    S4_BASE_URL: https://s4-prod.example.com
+    S4_EU_BASE_URL: https://s4-eu-prod.example.com
+    S4_GLOBAL_BASE_URL: https://s4-global-prod.example.com
+  deploymentPolicy:
+    requiresApproval: true
+    approvers: [integration-lead]
+    autoVerify: true

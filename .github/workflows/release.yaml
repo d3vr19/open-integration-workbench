@@ -1,0 +1,75 @@
+# Release — runs on tag push (v*.*.*) and produces a signed release artifact.
+# Spec ref: §14.5 (Supply-Chain Security — signed releases via cosign / Sigstore).
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (must already exist)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build release artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install oiw CLI
+        run: |
+          pip install --upgrade pip
+          pip install -e apps/cli
+
+      - name: Regenerate fixtures
+        run: |
+          python scripts/generate_golden_fixture.py
+          python scripts/generate_negative_fixtures.py
+
+      - name: Validate + test + build reference scenario
+        run: |
+          oiw validate --strict --project examples/order-to-s4
+          oiw test --all --project examples/order-to-s4
+          oiw build --project examples/order-to-s4 --target sap-cloud-integration-2026-07
+
+      - name: Package artifact
+        run: |
+          mkdir -p release
+          tar -czf release/oiw-${{ github.ref_name }}.tar.gz \
+            -C examples/order-to-s4/dist \
+            customer-order-integration-sap-cloud-integration-2026-07
+          cp examples/order-to-s4/.oiw/compiler.lock release/compiler.lock
+          sha256sum release/oiw-${{ github.ref_name }}.tar.gz > release/oiw-${{ github.ref_name }}.tar.gz.sha256
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: release/sbom.json
+
+      - name: Upload artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/oiw-${{ github.ref_name }}.tar.gz
+            release/oiw-${{ github.ref_name }}.tar.gz.sha256
+            release/compiler.lock
+            release/sbom.json
+          generate_release_notes: true
+          fail_on_unmatched_files: true

@@ -1,0 +1,73 @@
+# Custom Semgrep rules for SAP Cloud Integration content authored in OIW.
+# Spec ref: §14.3 (Custom SAST Rules), §9.6 (Groovy Sandbox).
+
+rules:
+  - id: cpi-hardcoded-credential
+    pattern-either:
+      - pattern: password = "..."
+      - pattern: apiKey = "..."
+      - pattern: secret = "..."
+      - pattern: token = "..."
+    message: "Hardcoded credential detected (OIW-E002). Use credentialRef."
+    severity: ERROR
+    languages: [groovy, java, python, yaml]
+
+  - id: cpi-sql-injection-groovy
+    patterns:
+      - pattern-inside: |
+          def $VAR = "..."
+          ...
+      - pattern: |
+          "... ${...} ..." + $SQL
+    message: "Potential SQL injection in Groovy script. Use parameterized queries."
+    severity: ERROR
+    languages: [groovy]
+
+  - id: cpi-unrestricted-script-runtime
+    patterns:
+      - pattern-either:
+          - pattern: Runtime.getRuntime().exec(...)
+          - pattern: new ProcessBuilder(...)
+          - pattern: new GroovyShell(...)
+          - pattern: GroovyClassLoader.newInstance(...)
+    message: "Forbidden execution mechanism in integration script (OIW-E004)."
+    severity: ERROR
+    languages: [groovy, java]
+
+  - id: cpi-network-access-in-script
+    patterns:
+      - pattern-either:
+          - pattern: new URL(...)
+          - pattern: new Socket(...)
+          - pattern: HttpURLConnection.openConnection()
+    message: "Forbidden network access in integration script (OIW-E004)."
+    severity: ERROR
+    languages: [groovy, java]
+
+  - id: cpi-filesystem-write-in-script
+    patterns:
+      - pattern-either:
+          - pattern: new FileWriter(...)
+          - pattern: new FileOutputStream(...)
+          - pattern: Files.write(...)
+    message: "Forbidden filesystem write in integration script (OIW-E004)."
+    severity: ERROR
+    languages: [groovy, java]
+
+  - id: cpi-insecure-http
+    pattern-regex: 'https?://(?!localhost|127\.0\.0\.1|example\.(com|net|org|invalid|test|localhost)|.*\.example\.(com|net|org|invalid|test|localhost))'
+    message: "Non-placeholder HTTP/HTTPS URL found. Use https:// with allowlisted host or example.invalid for fixtures (OIW-E005)."
+    severity: WARNING
+    languages: [yaml, json, groovy]
+
+  - id: oiw-yaml-inline-secret
+    pattern-regex: '(?i)(password|passwd|secret|api[_-]?key|token)\s*[:=]\s*["'']?[A-Za-z0-9+/=_-]{16,}["'']?'
+    message: "Inline secret in YAML/JSON. Use credentialRef identifier only (OIW-E002)."
+    severity: ERROR
+    languages: [yaml, json]
+
+  - id: oiw-yaml-private-key
+    pattern-regex: '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+    message: "Private key material detected in source file. Move to secret provider (OIW-E002)."
+    severity: ERROR
+    languages: [yaml, json, groovy, python]

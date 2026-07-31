@@ -1,0 +1,121 @@
+# Open Integration Workbench — Docker Compose distribution (Phase 0/1 scaffold).
+#
+# Spec ref: §18.1 (Docker Compose).
+#
+# NOTE: Most services are stubs pending the Kotlin/Spring Boot migration (Phase 2+).
+# The currently-runnable service is `oiw-cli` (Python prototype).
+#
+# Bring up the full stack:
+#   docker compose -f deploy/docker-compose/docker-compose.yaml up -d
+#
+# Run a one-off CLI command:
+#   docker compose -f deploy/docker-compose/docker-compose.yaml run --rm oiw-cli validate --project /workspace/examples/order-to-s4 --strict
+
+services:
+  oiw-cli:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.cli
+    volumes:
+      - ../..:/workspace
+    working_dir: /workspace
+    environment:
+      - PYTHONUNBUFFERED=1
+    entrypoint: ["oiw"]
+
+  # The services below are placeholders for Phase 2+.
+  # Their build contexts point at stub Dockerfiles; do not rely on them yet.
+
+  oiw-web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.stub
+    profiles: ["phase2"]
+
+  oiw-server:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.stub
+    profiles: ["phase2"]
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - DATABASE_URL=jdbc:postgresql://postgres:5432/oiw
+      - MINIO_ENDPOINT=http://minio:9000
+      - REDIS_URL=redis://redis:6379
+    depends_on: [postgres, minio, redis]
+
+  oiw-runtime-worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.stub
+    profiles: ["phase2"]
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2G }
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp"]
+
+  oiw-mcp-server:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.stub
+    profiles: ["phase3"]
+
+  model-gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.stub
+    profiles: ["phase3"]
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OLLAMA_URL=http://host.docker.internal:11434
+
+  emg-worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.stub
+    profiles: ["phase5"]
+    depends_on: [postgres, redis]
+
+  gitea:
+    image: gitea/gitea:1.23
+    profiles: ["team"]
+    volumes: ["gitea-data:/data"]
+    ports: ["3000:3000", "2222:22"]
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["phase2", "phase5", "team"]
+    environment:
+      POSTGRES_DB: oiw
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-oiw-dev}
+    volumes: ["pg-data:/var/lib/postgresql/data"]
+    ports: ["5432:5432"]
+
+  minio:
+    image: minio/minio:latest
+    profiles: ["phase2", "team"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-oiw}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-oiw-dev}
+    volumes: ["minio-data:/data"]
+    ports: ["9000:9000", "9001:9001"]
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["phase2", "phase5", "team"]
+    ports: ["6379:6379"]
+
+  traefik:
+    image: traefik:v3.1
+    profiles: ["team"]
+    ports: ["80:80", "443:443"]
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+
+volumes:
+  pg-data:
+  minio-data:
+  gitea-data:

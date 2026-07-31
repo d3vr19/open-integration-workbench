@@ -1,0 +1,7 @@
+apiVersion: oiw.dev/v1alpha1
+kind: Package
+metadata:
+  id: customer-order-integration
+  name: Customer Order Integration
+spec:
+  version: 0.1.0

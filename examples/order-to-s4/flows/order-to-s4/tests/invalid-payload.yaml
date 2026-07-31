@@ -1,0 +1,20 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  name: invalid-payload
+  description: Invalid payload (missing required fields) fails validation.
+spec:
+  flow: order-to-s4
+  input:
+    entrypoint: sender-http
+    bodyInline: '{"orderId":"ORD-002"}'
+    headers:
+      Content-Type: application/json
+  mocks: []
+  assertions:
+    - type: node.executed
+      node: validate-json
+    - type: node.not-executed
+      node: receiver-s4-eu
+    - type: exchange.status
+      equals: FAILED

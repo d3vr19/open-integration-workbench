@@ -1,0 +1,7 @@
+{
+  "builtAt": "1970-01-01T00:00:00Z",
+  "compilerVersion": "0.1.0",
+  "digest": "sha256:060252d2a243f67dd0bacf66d0e7ce2f3089398af3bb01b4d7d8b324bbb7ecc7",
+  "projectId": "customer-order-integration",
+  "targetProfile": "sap-cloud-integration-2026-07"
+}

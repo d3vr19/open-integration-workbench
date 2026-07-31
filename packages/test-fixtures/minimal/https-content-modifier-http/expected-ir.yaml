@@ -1,0 +1,39 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: https-content-modifier-http
+  labels:
+    archetype: api-to-api
+  name: HTTPS Content Modifier to HTTP Receiver
+  version: 1
+spec:
+  edges:
+  - from: sender-https
+    to: modifier
+  - from: modifier
+    to: receiver-https
+  entrypoints:
+  - config:
+      methods:
+      - POST
+      path: /in
+    fidelity: simulated
+    id: sender-https
+    type: sender.http
+  extensions: {}
+  nodes:
+  - config:
+      body: '{"status":"ok"}'
+      headers:
+      - name: X-Processed-By
+        value: oiw
+    fidelity: compatible-subset
+    id: modifier
+    type: modifier.content
+  - config:
+      method: POST
+      timeoutSeconds: 30
+      url: https://example.invalid/out
+    fidelity: simulated
+    id: receiver-https
+    type: receiver.http

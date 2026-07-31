@@ -1,0 +1,25 @@
+Open Integration Workbench
+Copyright 2026 Open Integration Workbench Contributors
+
+This product includes software developed by the Open Integration Workbench
+project (https://github.com/hehenaice/open-integration-workbench).
+
+This product includes third-party software components distributed under their
+own licenses. See THIRD_PARTY_NOTICES.md (generated at build time from the
+SBOM) for details.
+
+================================================================================
+TRADEMARK NOTICE
+================================================================================
+
+SAP and other SAP products and services mentioned herein as well as their
+respective logos are trademarks or registered trademarks of SAP SE in Germany
+and in several other countries all over the world.
+
+"Open Integration Workbench" is not affiliated with, endorsed by, or sponsored
+by SAP SE. "Open Integration Workbench" is an independent open-source
+engineering toolchain that is compatible with selected SAP Cloud Integration
+artifact formats.
+
+All other product and service names mentioned are the trademarks of their
+respective companies.

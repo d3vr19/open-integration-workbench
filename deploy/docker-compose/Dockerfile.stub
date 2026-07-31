@@ -1,0 +1,6 @@
+# Stub Dockerfile for services not yet implemented.
+# Spec ref: §18.1, DEVELOPMENT_LOG.md → Deviation Registry.
+# Real Dockerfiles will replace this per phase (see DEVELOPMENT_LOG.md → Open Work).
+FROM busybox:1.36
+RUN echo "This service is not yet implemented. See DEVELOPMENT_LOG.md." > /NOT_IMPLEMENTED.txt
+CMD ["sh", "-c", "echo 'Not implemented — see DEVELOPMENT_LOG.md' && sleep 3600"]
