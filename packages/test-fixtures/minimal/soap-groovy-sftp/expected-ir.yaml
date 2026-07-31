@@ -1,0 +1,56 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: soap-groovy-sftp
+  labels:
+    archetype: api-to-file
+    sourceProtocol: https
+    targetProtocol: sftp
+  name: SOAP to Groovy to SFTP
+  version: 1
+spec:
+  edges:
+  - from: sender-soap
+    to: extract-payload
+  - from: extract-payload
+    to: encode-base64
+  - from: encode-base64
+    to: receiver-sftp
+  entrypoints:
+  - config:
+      methods:
+      - POST
+      path: /soap
+    fidelity: simulated
+    id: sender-soap
+    type: sender.http
+  errorHandling:
+    defaultExceptionSubprocess:
+      steps:
+      - config:
+          level: ERROR
+          message: SFTP drop failed
+        fidelity: compatible-subset
+        id: error-log
+        type: log.message
+  extensions: {}
+  nodes:
+  - config:
+      resource: flows/soap-groovy-sftp/resources/scripts/extractPayload.groovy
+    fidelity: simulated
+    id: extract-payload
+    type: script.groovy
+  - config:
+      operation: encode
+    fidelity: compatible-subset
+    id: encode-base64
+    type: encoder.base64
+  - config:
+      credentialRef: sftp-write-client
+      fileName: payload.b64
+      host: sftp.example.invalid
+      path: /upload
+      port: 22
+    fidelity: simulated
+    id: receiver-sftp
+    type: receiver.sftp

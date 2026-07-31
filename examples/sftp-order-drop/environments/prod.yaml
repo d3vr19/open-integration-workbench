@@ -1,0 +1,19 @@
+apiVersion: oiw.dev/v1alpha1
+kind: EnvironmentProfile
+metadata:
+  name: prod
+spec:
+  target: sap-cloud-integration-2026-07
+  tenantUrl: ${PROD_TENANT_URL}
+  auth:
+    method: oauth2-client-credentials
+    tokenUrl: ${PROD_TOKEN_URL}
+    clientId: ${PROD_CLIENT_ID}
+    credentialRef: sap-prod-api-client
+  externalizedParameters:
+    SFTP_HOST: sftp-prod.example.invalid
+    SFTP_PORT: "22"
+  deploymentPolicy:
+    requiresApproval: true
+    approvers: [integration-lead]
+    autoVerify: true

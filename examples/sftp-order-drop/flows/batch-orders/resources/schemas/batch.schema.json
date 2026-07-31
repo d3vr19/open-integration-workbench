@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.oiw.dev/batch.schema.json",
+  "title": "Batch Order",
+  "type": "object",
+  "required": ["runId", "orders"],
+  "properties": {
+    "runId": {"type": "string", "minLength": 1},
+    "orders": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "required": ["orderId", "customerId"],
+        "properties": {
+          "orderId": {"type": "string"},
+          "customerId": {"type": "string"}
+        }
+      }
+    }
+  }
+}

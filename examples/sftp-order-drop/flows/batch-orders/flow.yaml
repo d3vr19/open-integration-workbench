@@ -1,0 +1,90 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: batch-orders
+  name: Batch Orders → SFTP Drop
+  version: 1
+  labels:
+    archetype: api-to-file
+    sourceProtocol: https
+    targetProtocol: sftp
+spec:
+  entrypoints:
+    - id: sender-http
+      type: sender.http
+      config:
+        path: /batch
+        methods: [POST]
+      fidelity: simulated
+  nodes:
+    - id: validate-json
+      type: validator.json-schema
+      config:
+        schema: flows/batch-orders/resources/schemas/batch.schema.json
+      fidelity: compatible-subset
+    - id: split-orders
+      type: splitter.general
+      config:
+        encoding: json
+        maxItems: 100
+      fidelity: simulated
+    - id: filter-valid
+      type: filter
+      config:
+        # Always true in this prototype — the splitter doesn't actually drop items.
+        # In Phase 2 (JVM runtime worker with iterator semantics) this would
+        # inspect each split item and drop invalid ones.
+        expression: "true"
+      fidelity: compatible-subset
+    - id: gather-orders
+      type: gather
+      config:
+        encoding: json
+        maxItems: 100
+        combineStrategy: concat
+      fidelity: simulated
+    - id: encode-base64
+      type: encoder.base64
+      config:
+        operation: encode
+      fidelity: compatible-subset
+    - id: receiver-sftp
+      type: receiver.sftp
+      config:
+        host: sftp.example.invalid
+        port: 22
+        path: /upload/orders
+        fileName: batch-${property.runId}.b64
+        credentialRef: sftp-write-client
+      fidelity: simulated
+  edges:
+    - from: sender-http
+      to: validate-json
+    - from: validate-json
+      to: split-orders
+    - from: split-orders
+      to: filter-valid
+    - from: filter-valid
+      to: gather-orders
+    - from: gather-orders
+      to: encode-base64
+    - from: encode-base64
+      to: receiver-sftp
+  errorHandling:
+    defaultExceptionSubprocess:
+      steps:
+        - id: error-log
+          type: log.message
+          config:
+            level: ERROR
+            message: "Batch order processing failed"
+          fidelity: compatible-subset
+        - id: set-500
+          type: modifier.content
+          config:
+            headers:
+              - name: HTTP_Status
+                value: "500"
+            body: '{"error": "Internal processing failure"}'
+          fidelity: compatible-subset
+  extensions: {}

@@ -1,0 +1,27 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  name: happy-path
+  description: Valid batch flows through splitter → filter → gather → encoder → SFTP.
+spec:
+  flow: batch-orders
+  input:
+    entrypoint: sender-http
+    bodyFile: flows/batch-orders/tests/fixtures/batch.json
+    headers:
+      Content-Type: application/json
+  mocks:
+    - target: receiver-sftp
+      respond:
+        status: 200
+  assertions:
+    - type: node.executed
+      node: split-orders
+    - type: node.executed
+      node: gather-orders
+    - type: node.executed
+      node: encode-base64
+    - type: outbound.request
+      target: receiver-sftp
+    - type: exchange.status
+      equals: COMPLETED

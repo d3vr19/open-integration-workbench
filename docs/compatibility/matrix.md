@@ -33,16 +33,16 @@ Every entry MUST link to a fixture (spec §8.5) and a test that proves the claim
 | `script.groovy` | Simulated | **DEV-003**: stub interpreter supports `message.setHeader/setProperty/setBody` only. Full Groovy execution deferred to Phase 2 (services/runtime-worker with seccomp isolation). |
 | `transform.xslt` | Compatible-subset | **DEV-003**: Python prototype uses XSLT 1.0 (lxml). XSLT 2.0 subset via Saxon-HE is Phase 2. |
 | `converter.json-to-xml` | Compatible-subset | Simple JSON→XML with configurable root element. |
-| `converter.xml-to-json` | Compatible-subset | Planned. |
+| `converter.xml-to-json` | Compatible-subset | Simple XML→JSON; optional `rootElement` wrapper. |
 | `router.content-based` | Compatible-subset | Simple `${property.X} == 'value'` and `true`/`false` expressions. |
-| `filter` | Compatible-subset | Planned. |
-| `encoder.base64` | Compatible-subset | Planned. |
-| `splitter.general` | Simulated | Planned; bounded payloads only (OIW-E003 enforces maxIterations). |
-| `gather` | Simulated | Planned. |
+| `filter` | Compatible-subset | Drops message if expression evaluates false; supports same expression language as router. |
+| `encoder.base64` | Compatible-subset | Encode + decode. |
+| `splitter.general` | Simulated | **DEV-003**: prototype stores split items as attachments; full iterator semantics (per-item sub-flow execution) is Phase 2. Bounded via `maxItems`/`maxIterations` (OIW-E003 enforces). |
+| `gather` | Simulated | Bounded via `maxItems`. Supports `concat` and `merge` strategies for JSON; concat for XML. |
 | `subprocess.exception` | Compatible-subset | Implemented via `errorHandling.defaultExceptionSubprocess`. |
-| `subprocess.local` | Simulated | Planned. |
-| `request-reply` | Simulated | Planned. |
-| `datastore.write` / `datastore.read` | Simulated | Planned. |
+| `subprocess.local` | Simulated | Planned (OW-013). |
+| `request-reply` | Simulated | Planned (OW-013). |
+| `datastore.write` / `datastore.read` | Simulated | Planned (OW-013). |
 | `log.message` | Compatible-subset | Structured log entry; sensitive headers redacted per spec §9.2 step 9. |
 
 ## Receivers
@@ -50,8 +50,8 @@ Every entry MUST link to a fixture (spec §8.5) and a test that proves the claim
 | Step | Fidelity | Notes |
 |------|----------|-------|
 | `receiver.http` | Simulated | Mocked via FlowTest `mocks` block. WireMock backing in Phase 2. |
-| `receiver.odata-v4` | Unsupported | Planned for Phase 6. |
-| `receiver.sftp` | Unsupported | Planned for Phase 6. |
+| `receiver.sftp` | Simulated | Mocked via FlowTest `mocks` block. Records outbound SFTP "call" (sftp:// URL + body) for assertions. Real SFTP support is Phase 6. |
+| `receiver.odata-v4` | Unsupported | Planned for Phase 6 (OW-014 depends on this). |
 | `receiver.jdbc` | Unsupported | Planned for Phase 6. |
 
 ## Target profiles

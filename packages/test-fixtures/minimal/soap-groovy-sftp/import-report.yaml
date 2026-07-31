@@ -1,0 +1,20 @@
+importResult:
+  digest: sha256:<computed at runtime>
+  preservedOpaque: []
+  recognized:
+  - component: oiw-flow-ir
+    fidelity: compatible-subset
+  - component: https_sender
+    fidelity: simulated
+  - component: groovy_script
+    fidelity: simulated
+  - component: base64_encoder
+    fidelity: compatible-subset
+  - component: sftp_receiver
+    fidelity: simulated
+  sourceArchive: source.zip
+  status: FULL
+  targetProfile: sap-cloud-integration-2026-07
+  unsupported: []
+  warnings:
+  - native OIW archive recognized — full round-trip

@@ -52,17 +52,27 @@ jobs:
         run: |
           python scripts/generate_golden_fixture.py
           python scripts/generate_negative_fixtures.py
+          python scripts/generate_soap_groovy_sftp_fixture.py
 
-      - name: Validate reference scenario (strict)
+      - name: Validate reference scenario (strict) — order-to-s4
         run: oiw validate --strict --project examples/order-to-s4
 
-      - name: Run all tests
-        run: oiw test --all --project examples/order-to-s4 --junit test-results.xml
+      - name: Run all tests — order-to-s4
+        run: oiw test --all --project examples/order-to-s4 --junit test-results-order-to-s4.xml
 
-      - name: Build artifact (deterministic)
+      - name: Build artifact (deterministic) — order-to-s4
         run: oiw build --project examples/order-to-s4 --target sap-cloud-integration-2026-07
 
-      - name: Verify determinism (re-build, compare digest)
+      - name: Validate reference scenario (strict) — sftp-order-drop
+        run: oiw validate --strict --project examples/sftp-order-drop
+
+      - name: Run all tests — sftp-order-drop
+        run: oiw test --all --project examples/sftp-order-drop --junit test-results-sftp-order-drop.xml
+
+      - name: Build artifact (deterministic) — sftp-order-drop
+        run: oiw build --project examples/sftp-order-drop --target sap-cloud-integration-2026-07
+
+      - name: Verify determinism (re-build, compare digest) — order-to-s4
         run: |
           DIGEST1=$(grep -o 'sha256:[a-f0-9]\+' examples/order-to-s4/.oiw/compiler.lock)
           rm -rf examples/order-to-s4/dist examples/order-to-s4/.oiw/compiler.lock
@@ -77,8 +87,20 @@ jobs:
             exit 1
           fi
 
-      - name: Semantic diff (HEAD vs HEAD~1)
-        run: oiw diff --project examples/order-to-s4 HEAD~1 || true
+      - name: Verify determinism (re-build, compare digest) — sftp-order-drop
+        run: |
+          DIGEST1=$(grep -o 'sha256:[a-f0-9]\+' examples/sftp-order-drop/.oiw/compiler.lock)
+          rm -rf examples/sftp-order-drop/dist examples/sftp-order-drop/.oiw/compiler.lock
+          oiw build --project examples/sftp-order-drop --target sap-cloud-integration-2026-07 > /dev/null
+          DIGEST2=$(grep -o 'sha256:[a-f0-9]\+' examples/sftp-order-drop/.oiw/compiler.lock)
+          echo "first:  $DIGEST1"
+          echo "second: $DIGEST2"
+          if [ "$DIGEST1" = "$DIGEST2" ]; then
+            echo "deterministic: OK"
+          else
+            echo "::error::non-deterministic build detected (spec §4.7)"
+            exit 1
+          fi
 
       - name: Safe-archive inspector (negative fixtures must be rejected)
         run: |
@@ -93,8 +115,13 @@ jobs:
             fi
           done
 
-      - name: Safe-archive inspector (golden fixture must be accepted)
-        run: oiw archive inspect packages/test-fixtures/minimal/https-content-modifier-http/source.zip
+      - name: Safe-archive inspector (golden fixtures must be accepted)
+        run: |
+          oiw archive inspect packages/test-fixtures/minimal/https-content-modifier-http/source.zip
+          oiw archive inspect packages/test-fixtures/minimal/soap-groovy-sftp/source.zip
+
+      - name: Semantic diff (HEAD vs HEAD~1)
+        run: oiw diff --project examples/order-to-s4 HEAD~1 || true
 
       - name: Upload test results
         if: always()
@@ -102,9 +129,12 @@ jobs:
         with:
           name: oiw-test-results
           path: |
-            test-results.xml
+            test-results-order-to-s4.xml
+            test-results-sftp-order-drop.xml
             examples/order-to-s4/dist/
             examples/order-to-s4/.oiw/compiler.lock
+            examples/sftp-order-drop/dist/
+            examples/sftp-order-drop/.oiw/compiler.lock
           retention-days: 14
 
   # -------------------------------------------------------------------

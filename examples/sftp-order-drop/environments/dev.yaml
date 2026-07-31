@@ -1,0 +1,19 @@
+apiVersion: oiw.dev/v1alpha1
+kind: EnvironmentProfile
+metadata:
+  name: dev
+spec:
+  target: sap-cloud-integration-2026-07
+  tenantUrl: ${DEV_TENANT_URL}
+  auth:
+    method: oauth2-client-credentials
+    tokenUrl: ${DEV_TOKEN_URL}
+    clientId: ${DEV_CLIENT_ID}
+    credentialRef: sap-dev-api-client
+  externalizedParameters:
+    SFTP_HOST: sftp-dev.example.invalid
+    SFTP_PORT: "22"
+  deploymentPolicy:
+    requiresApproval: false
+    approvers: []
+    autoVerify: true

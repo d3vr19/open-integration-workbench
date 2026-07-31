@@ -1,0 +1,19 @@
+{
+  "nodes": [
+    {"id": "sender-http", "position": {"x": 0, "y": 200}, "lane": "sender"},
+    {"id": "validate-json", "position": {"x": 250, "y": 200}, "lane": "process"},
+    {"id": "split-orders", "position": {"x": 500, "y": 200}, "lane": "process"},
+    {"id": "filter-valid", "position": {"x": 750, "y": 200}, "lane": "process"},
+    {"id": "gather-orders", "position": {"x": 1000, "y": 200}, "lane": "process"},
+    {"id": "encode-base64", "position": {"x": 1250, "y": 200}, "lane": "process"},
+    {"id": "receiver-sftp", "position": {"x": 1500, "y": 200}, "lane": "receiver"}
+  ],
+  "edges": [
+    {"from": "sender-http", "to": "validate-json"},
+    {"from": "validate-json", "to": "split-orders"},
+    {"from": "split-orders", "to": "filter-valid"},
+    {"from": "filter-valid", "to": "gather-orders"},
+    {"from": "gather-orders", "to": "encode-base64"},
+    {"from": "encode-base64", "to": "receiver-sftp"}
+  ]
+}

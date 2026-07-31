@@ -1,0 +1,18 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationProject
+metadata:
+  id: sftp-order-drop
+  name: SFTP Order Drop
+  created: "2026-07-31T11:30:00Z"
+  description: Reference scenario exercising splitter, gather, encoder, filter, and SFTP receiver (Phase 1 step coverage).
+  labels:
+    archetype: api-to-file
+spec:
+  package: package/package.yaml
+  targetProfiles:
+    - sap-cloud-integration-2026-07
+  minimumCompilerVersion: 0.1.0
+  secretProvider: local-keyring
+  emg:
+    enabled: false
+    confidentialityScope: project-private

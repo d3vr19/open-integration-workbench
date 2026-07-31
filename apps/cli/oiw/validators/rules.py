@@ -137,6 +137,14 @@ def _check_node(project: Project, flow: IntegrationFlow, node: FlowNode) -> list
                 f"OIW-W005: receiver '{node.id}' (flow '{flow.id}') sends credential to non-localhost host: {url[:60]}"
             )
 
+    # OIW-E006 (SFTP variant): credentials to non-placeholder SFTP host
+    if node.type == "receiver.sftp" and node.config.get("credentialRef"):
+        host = node.config.get("host", "")
+        if isinstance(host, str) and host and not _is_safe_placeholder_host(f"sftp://{host}"):
+            errors.append(
+                f"OIW-W005: receiver '{node.id}' (flow '{flow.id}') sends credential to non-localhost SFTP host: {host}"
+            )
+
     # OIW-W001: missing timeout on receiver
     if node.type == "receiver.http" and not node.config.get("timeoutSeconds"):
         errors.append(f"OIW-W001: receiver '{node.id}' in flow '{flow.id}' has no timeoutSeconds")

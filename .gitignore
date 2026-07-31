@@ -47,8 +47,10 @@ out/
 Thumbs.db
 
 # Generated artifacts
-.oiw/compiler.lock
-.oiw/import-manifest.json
+**/.oiw/compiler.lock
+**/.oiw/import-manifest.json
+dist/
+**/dist/
 sbom.json
 *.sbom.json
 coverage/
