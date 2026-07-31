@@ -203,7 +203,37 @@ jobs:
           path: pytest.xml
 
   # -------------------------------------------------------------------
-  # Job 4: Ruff lint (CLI code quality).
+  # Job 3b: Pytest (API server tests).
+  # -------------------------------------------------------------------
+  api-pytest:
+    name: Pytest (API server tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          pip install --upgrade pip
+          pip install -e apps/cli
+          pip install -e apps/server-python-prototype[dev]
+      - name: Run pytest
+        env:
+          OIW_WORKSPACE: ${{ github.workspace }}/examples
+        run: pytest apps/server-python-prototype/tests/ -v --junitxml=pytest-api.xml
+      - name: Upload pytest results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-api-results
+          path: pytest-api.xml
+
+  # -------------------------------------------------------------------
+  # Job 4: Ruff lint (CLI + server code quality).
   # -------------------------------------------------------------------
   lint:
     name: Ruff lint
@@ -217,10 +247,45 @@ jobs:
           python-version: "3.12"
       - name: Install ruff
         run: pip install ruff==0.5.7
-      - name: Run ruff check
+      - name: Run ruff check (CLI)
         run: ruff check apps/cli/
-      - name: Run ruff format check
+      - name: Run ruff format check (CLI)
         run: ruff format --check apps/cli/
+      - name: Run ruff check (server)
+        run: ruff check apps/server-python-prototype/
+      - name: Run ruff format check (server)
+        run: ruff format --check apps/server-python-prototype/
+
+  # -------------------------------------------------------------------
+  # Job 4b: SPA build (React + Vite + TypeScript).
+  # -------------------------------------------------------------------
+  spa-build:
+    name: SPA build (React + Vite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: apps/web
+      - name: Type-check
+        run: npx tsc -p tsconfig.app.json --noEmit
+        working-directory: apps/web
+      - name: Build
+        run: npm run build
+        working-directory: apps/web
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spa-dist
+          path: apps/web/dist/
+          retention-days: 7
 
   # -------------------------------------------------------------------
   # Job 5: DEVELOPMENT_LOG.md must exist and have a recent entry.
@@ -245,7 +310,7 @@ jobs:
   validate-pr-aggregate:
     name: validate-pr (aggregate)
     runs-on: ubuntu-latest
-    needs: [oiw-validate, schema-self-check, pytest, lint, log-check]
+    needs: [oiw-validate, schema-self-check, pytest, api-pytest, lint, spa-build, log-check]
     if: always()
     steps:
       - name: Aggregate
@@ -253,12 +318,16 @@ jobs:
           echo "oiw-validate:       ${{ needs.oiw-validate.result }}"
           echo "schema-self-check:  ${{ needs.schema-self-check.result }}"
           echo "pytest:             ${{ needs.pytest.result }}"
+          echo "api-pytest:         ${{ needs.api-pytest.result }}"
           echo "lint:               ${{ needs.lint.result }}"
+          echo "spa-build:          ${{ needs.spa-build.result }}"
           echo "log-check:          ${{ needs.log-check.result }}"
           if [[ "${{ needs.oiw-validate.result }}" != "success" || \
                 "${{ needs.schema-self-check.result }}" != "success" || \
                 "${{ needs.pytest.result }}" != "success" || \
+                "${{ needs.api-pytest.result }}" != "success" || \
                 "${{ needs.lint.result }}" != "success" || \
+                "${{ needs.spa-build.result }}" != "success" || \
                 "${{ needs.log-check.result }}" != "success" ]]; then
             echo "::error::one or more validation jobs failed"
             exit 1

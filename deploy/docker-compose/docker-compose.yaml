@@ -1,12 +1,17 @@
-# Open Integration Workbench — Docker Compose distribution (Phase 0/1 scaffold).
+# Open Integration Workbench — Docker Compose distribution.
 #
 # Spec ref: §18.1 (Docker Compose).
 #
-# NOTE: Most services are stubs pending the Kotlin/Spring Boot migration (Phase 2+).
-# The currently-runnable service is `oiw-cli` (Python prototype).
+# Profiles:
+#   default          — CLI only (Phase 0/1)
+#   phase2-prototype — FastAPI server + React SPA (Phase 2 starter; ADR-PY-002)
+#   phase2           — Kotlin/Spring Boot server + JVM runtime worker (not yet implemented)
+#   phase3           — MCP server + model gateway (not yet implemented)
+#   phase5           — EMG worker (not yet implemented)
+#   team             — Gitea + Traefik + full infra
 #
-# Bring up the full stack:
-#   docker compose -f deploy/docker-compose/docker-compose.yaml up -d
+# Bring up the Phase 2 prototype stack:
+#   docker compose -f deploy/docker-compose/docker-compose.yaml --profile phase2-prototype up -d
 #
 # Run a one-off CLI command:
 #   docker compose -f deploy/docker-compose/docker-compose.yaml run --rm oiw-cli validate --project /workspace/examples/order-to-s4 --strict
@@ -23,16 +28,33 @@ services:
       - PYTHONUNBUFFERED=1
     entrypoint: ["oiw"]
 
-  # The services below are placeholders for Phase 2+.
-  # Their build contexts point at stub Dockerfiles; do not rely on them yet.
+  # -------------------------------------------------------------------
+  # Phase 2 prototype — FastAPI server + React SPA.
+  # See ADR-PY-002 for the FastAPI deviation rationale.
+  # -------------------------------------------------------------------
+  oiw-server:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.server
+    profiles: ["phase2-prototype"]
+    ports: ["8000:8000"]
+    environment:
+      - OIW_WORKSPACE=/workspace/examples
+    volumes:
+      - ../..:/workspace
 
   oiw-web:
     build:
       context: ../..
-      dockerfile: deploy/docker-compose/Dockerfile.stub
-    profiles: ["phase2"]
+      dockerfile: deploy/docker-compose/Dockerfile.web
+    profiles: ["phase2-prototype"]
+    ports: ["5173:80"]
+    depends_on: [oiw-server]
 
-  oiw-server:
+  # The services below are placeholders for the Kotlin/Spring Boot production
+  # target (Phase 2+, OW-002). They use stub Dockerfiles until implemented.
+
+  oiw-server-kotlin:
     build:
       context: ../..
       dockerfile: deploy/docker-compose/Dockerfile.stub

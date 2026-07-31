@@ -19,6 +19,7 @@ short markdown file describing a single architectural decision.
 | [ADR-010](adr-010-postgres-pgvector.md) | PostgreSQL/pgvector before dedicated graph DB | SPEC ACCEPTED | §13.16 |
 | [ADR-011..020](adr-011-to-020.md) | Per-spec ADRs (edge-labelled graphs, edit paths, process isolation, deterministic builds, fidelity levels, Kotlin+Spring Boot, React Flow 12, MCP, 4-stage graph matching, negative knowledge) | SPEC ACCEPTED | §25 |
 | [ADR-PY-001](adr-py-001-python-bootstrap.md) | Phase 0/1 implementation language is Python (DEVIATION) | DEVIATION — TEMPORARY | §6.2 |
+| [ADR-PY-002](adr-py-002-fastapi-prototype.md) | Python FastAPI prototype for the REST API server (DEVIATION) | DEVIATION — TEMPORARY | §6.2, §21.1 |
 | [ADR-CI-001](adr-ci-001-github-actions.md) | GitHub Actions are the validation gate | ADOPTED | §14.4, §11.6 |
 
 ## ADR template

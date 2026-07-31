@@ -1,0 +1,537 @@
+openapi: 3.1.0
+info:
+  title: Open Integration Workbench API
+  version: 0.1.0
+  description: |
+    REST API for Open Integration Workbench (OIW).
+
+    Spec ref: §21.1 (REST Endpoints), §6.2 (OpenAPI 3.1 first).
+
+    All endpoints are prefixed with `/api/v1`. Authentication is disabled in
+    local mode (localhost only); team mode uses JWT via Gitea OAuth2 (spec §21.4).
+
+    The API is the contract between the visual designer (apps/web), the CLI,
+    the MCP server, and external agents. The implementation language of the
+    server may change (Python FastAPI prototype → Kotlin/Spring Boot per
+    ADR-PY-002 and ADR-PY-001), but this contract is versioned and stable.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  contact:
+    name: Open Integration Workbench
+    url: https://github.com/hehenaice/open-integration-workbench
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://oiw.localhost
+    description: Team deployment (behind Traefik)
+
+tags:
+  - name: Projects
+    description: Project manifest and lifecycle
+  - name: Flows
+    description: Integration flow IR
+  - name: Validation
+    description: Schema + rule-based validation
+  - name: Tests
+    description: FlowTest execution
+  - name: Builds
+    description: Deterministic artifact compilation
+  - name: Git
+    description: Git status and commit proposals
+  - name: Archive
+    description: Safe archive inspection
+
+paths:
+  /api/v1/projects:
+    get:
+      tags: [Projects]
+      summary: List projects in the workspace
+      description: Scans the configured workspace directory for OIW projects (directories containing `oiw.yaml`).
+      operationId: listProjects
+      parameters:
+        - name: workspace
+          in: query
+          description: Workspace root directory (defaults to server config).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of projects found.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectSummary"
+
+  /api/v1/projects/{projectId}:
+    get:
+      tags: [Projects]
+      summary: Get project manifest
+      operationId: getProject
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Project manifest.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/flows:
+    get:
+      tags: [Flows]
+      summary: List flows in a project
+      operationId: listFlows
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: List of flows.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlowSummary"
+
+  /api/v1/projects/{projectId}/flows/{flowId}:
+    get:
+      tags: [Flows]
+      summary: Get the full IR of an integration flow
+      operationId: getFlow
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FlowId"
+      responses:
+        "200":
+          description: Flow IR.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationFlow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/projects/{projectId}/validate:
+    post:
+      tags: [Validation]
+      summary: Validate project (schema + graph + rules)
+      description: |
+        Runs the full validation pipeline (spec §14):
+        1. JSON Schema validation against packages/ir-schema/schemas/
+        2. Semantic graph validation (connectedness, cycles, dangling refs)
+        3. Rule-based validators (OIW-E001..E007, OIW-W001..W012)
+      operationId: validateProject
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                strict:
+                  type: boolean
+                  description: Treat warnings as errors.
+                  default: false
+      responses:
+        "200":
+          description: Validation result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationResult"
+
+  /api/v1/projects/{projectId}/tests:run:
+    post:
+      tags: [Tests]
+      summary: Run flow tests
+      operationId: runTests
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                flowId:
+                  type: string
+                  description: Run tests for a specific flow only.
+                testName:
+                  type: string
+                  description: Run a single named test.
+      responses:
+        "200":
+          description: Test results.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TestResult"
+
+  /api/v1/projects/{projectId}/builds:
+    post:
+      tags: [Builds]
+      summary: Build a target-profile artifact package
+      description: Compiles IR to a deterministic artifact package in `dist/`. Records digest in `.oiw/compiler.lock`. Spec §8, §4.7.
+      operationId: buildArtifact
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetProfile]
+              properties:
+                targetProfile:
+                  type: string
+                  description: e.g. sap-cloud-integration-2026-07
+      responses:
+        "200":
+          description: Build result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildResult"
+        "400":
+          description: Build failed (e.g. undeclared target profile).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/projects/{projectId}/git/status:
+    get:
+      tags: [Git]
+      summary: Get Git status
+      description: Returns branch, HEAD SHA, dirty flag, ahead count, and last build digest from `.oiw/compiler.lock`. Spec §11.
+      operationId: getGitStatus
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Git status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GitStatus"
+
+  /api/v1/archive/inspect:
+    post:
+      tags: [Archive]
+      summary: Safely inspect an archive without extracting it
+      description: |
+        Spec §8.2 (Safe Archive Reader), §16.1 threat 1.
+        Defenses: max compressed size, max uncompressed size, max entry count,
+        compression ratio cap, path-traversal rejection, symlink rejection.
+      operationId: inspectArchive
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [archive]
+              properties:
+                archive:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Archive manifest.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchiveManifest"
+        "400":
+          description: Archive failed safety check.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/health:
+    get:
+      tags: [Projects]
+      summary: Health check
+      operationId: health
+      responses:
+        "200":
+          description: Server is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  version:
+                    type: string
+                    example: 0.1.0
+
+components:
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Project identifier (lowercase kebab-case).
+    FlowId:
+      name: flowId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Flow identifier.
+
+  responses:
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+          description: Stable error code (e.g. OIW-E001).
+        details:
+          type: object
+          additionalProperties: true
+
+    ProjectSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+          description: Absolute path to the project root.
+        created:
+          type: string
+          format: date-time
+        flowCount:
+          type: integer
+        testCount:
+          type: integer
+
+    Project:
+      type: object
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+        metadata:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            created:
+              type: string
+              format: date-time
+            description:
+              type: string
+            labels:
+              type: object
+              additionalProperties:
+                type: string
+        spec:
+          type: object
+          additionalProperties: true
+        flows:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowSummary"
+        environments:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    FlowSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+        nodeCount:
+          type: integer
+        testCount:
+          type: integer
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+
+    IntegrationFlow:
+      type: object
+      description: Full flow IR. Spec §7.2.
+      properties:
+        apiVersion:
+          type: string
+        kind:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        spec:
+          type: object
+          properties:
+            entrypoints:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            nodes:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            edges:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            errorHandling:
+              type: object
+              additionalProperties: true
+            extensions:
+              type: object
+              additionalProperties: true
+        diagram:
+          type: object
+          additionalProperties: true
+          description: Visual layout from diagram.json. Spec §7.3 rule 4.
+
+    ValidationResult:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        errorCount:
+          type: integer
+        warningCount:
+          type: integer
+        passed:
+          type: boolean
+          description: True if no errors (and no warnings when strict).
+
+    TestResult:
+      type: object
+      properties:
+        flowId:
+          type: string
+        testName:
+          type: string
+        passed:
+          type: boolean
+        durationMs:
+          type: integer
+        failures:
+          type: array
+          items:
+            type: string
+
+    BuildResult:
+      type: object
+      properties:
+        outDir:
+          type: string
+        manifestPath:
+          type: string
+        digest:
+          type: string
+          description: sha256 digest of the build. Spec §4.7.
+        compilerVersion:
+          type: string
+        targetProfile:
+          type: string
+        entryCount:
+          type: integer
+
+    GitStatus:
+      type: object
+      properties:
+        branch:
+          type: string
+        headSha:
+          type: string
+        dirty:
+          type: boolean
+        ahead:
+          type: integer
+        lastBuildDigest:
+          type: string
+          nullable: true
+        lastBuildTarget:
+          type: string
+          nullable: true
+
+    ArchiveManifest:
+      type: object
+      properties:
+        path:
+          type: string
+        entryCount:
+          type: integer
+        compressedSize:
+          type: integer
+        uncompressedSize:
+          type: integer
+        compressionRatio:
+          type: number
+        digest:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              compressedSize:
+                type: integer
+              uncompressedSize:
+                type: integer
+              isDir:
+                type: boolean

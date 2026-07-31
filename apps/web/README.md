@@ -1,16 +1,85 @@
-# `apps/web` — React SPA visual designer (Phase 2)
+# OIW Visual Designer (apps/web)
 
-> **Status: NOT YET IMPLEMENTED.**
-> See `DEVELOPMENT_LOG.md` → Open Work item OW-007.
+> **Phase 2 — Visual Workbench (spec §10).**
+> Status: **MINIMAL PROTOTYPE** — project explorer, flow canvas, properties panel,
+> validation panel, test runner panel, and build panel are functional.
+> Drag-and-drop editing, Monaco editor, and WebSocket trace streaming are not yet
+> implemented (tracked as OW-016).
 
-When implemented, this will be a React 19 + TypeScript 5.5 SPA using:
+## Stack
 
-- React Flow 12 for the flow canvas (spec §6.1, §10)
-- Monaco Editor for code editing (Groovy, XSLT, JSON Schema, YAML)
-- Zustand + TanStack Query for state management
-- Tailwind CSS 4 + Radix UI primitives for the design system
-- Vite 6 as the build tool
-- socket.io-client for WebSocket events
-- An OpenAPI 3.1-generated API client
+Per spec §6.1:
 
-Spec ref: §6.1 (Front End), §10 (Visual Designer).
+| Layer | Choice | Status |
+|-------|--------|--------|
+| Framework | React 19 + TypeScript 5.5 | ✓ (React 19 via Vite) |
+| Graph canvas | React Flow 12 | ✓ |
+| Code editor | Monaco Editor | Not yet |
+| State management | Zustand + TanStack Query | Not yet (using React hooks) |
+| Styling | Tailwind CSS 4 + Radix UI primitives | ✓ Tailwind; Radix not yet |
+| Build tool | Vite 6 | ✓ |
+| WebSocket | socket.io-client | Not yet |
+| API client | Generated from OpenAPI 3.1 | Not yet (hand-written; OW-015) |
+| Design system | Original — dark theme | ✓ |
+
+## Run (development)
+
+```bash
+# From the repo root — start the API server first
+pip install -e apps/cli
+pip install -e apps/server-python-prototype
+OIW_WORKSPACE=$(pwd)/examples uvicorn oiw_server.main:app --reload --port 8000
+
+# In a separate terminal — start the SPA
+cd apps/web
+npm install
+npm run dev
+```
+
+Open http://localhost:5173. The Vite dev server proxies `/api` to localhost:8000.
+
+## Build
+
+```bash
+cd apps/web
+npm run build
+# Output: dist/
+```
+
+## Features
+
+### Implemented
+
+- **Project explorer** — lists projects from the workspace; select to view flows.
+- **Flow canvas** — React Flow 12 with dark theme; nodes from `diagram.json`; edges with conditional labels.
+- **Properties panel** — click a node to see its ID, type, fidelity, and config.
+- **Validation panel** — click "Validate" to run `oiw validate --strict` and see results.
+- **Test runner panel** — click "Run Tests" to run `oiw test --all` and see pass/fail per test.
+- **Build panel** — click "Build" to run `oiw build` and see the digest + entry count.
+- **Git status bar** — shows branch, HEAD SHA, dirty flag, and last build digest.
+
+### Not yet implemented
+
+- Drag-and-drop node creation
+- Inline node editing (properties panel is read-only)
+- Monaco code editor for Groovy/XSLT/JSON Schema resources
+- WebSocket trace streaming during simulation
+- Semantic diff viewer
+- Undo/redo
+- Collaborative editing (presence)
+- AI co-pilot panel (Phase 3)
+
+## Architecture
+
+```
+src/
+├── main.tsx          # React entry point
+├── App.tsx           # Main app — three-pane layout
+├── App.css           # Original dark-theme styles
+├── index.css         # Tailwind import + CSS variables
+├── api.ts            # Hand-written API client (OW-015: generate from OpenAPI)
+└── flow-utils.ts     # IR → React Flow node/edge conversion
+```
+
+Spec ref: §10.3 (Component Architecture) — the full target structure is more
+granular; this is the minimal starter.

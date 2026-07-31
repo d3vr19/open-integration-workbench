@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/* OIW original design system. Spec §2.2: do not copy SAP UI. */
+
+:root {
+  --oiw-bg: #0f1117;
+  --oiw-surface: #1a1d27;
+  --oiw-surface-2: #222633;
+  --oiw-border: #2e3344;
+  --oiw-text: #e4e7ef;
+  --oiw-text-muted: #8b91a7;
+  --oiw-accent: #6366f1;
+  --oiw-accent-hover: #818cf8;
+  --oiw-success: #10b981;
+  --oiw-warning: #f59e0b;
+  --oiw-error: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--oiw-bg);
+  color: var(--oiw-text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* React Flow dark theme overrides */
+.react-flow__background {
+  background: var(--oiw-bg);
+}
+
+.react-flow__node {
+  font-size: 12px;
+}
+
+.react-flow__node-default {
+  background: var(--oiw-surface);
+  color: var(--oiw-text);
+  border: 1px solid var(--oiw-border);
+}
+
+.react-flow__node-default.selected {
+  border-color: var(--oiw-accent);
+  box-shadow: 0 0 0 1px var(--oiw-accent);
+}
+
+.react-flow__edge-path {
+  stroke: var(--oiw-text-muted);
+  stroke-width: 1.5;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--oiw-accent);
+}
+
+.react-flow__controls {
+  background: var(--oiw-surface);
+  border: 1px solid var(--oiw-border);
+}
+
+.react-flow__controls-button {
+  background: var(--oiw-surface);
+  color: var(--oiw-text);
+  border-bottom: 1px solid var(--oiw-border);
+  fill: var(--oiw-text);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--oiw-surface-2);
+}
+
+.react-flow__minimap {
+  background: var(--oiw-surface);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--oiw-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--oiw-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--oiw-text-muted);
+}

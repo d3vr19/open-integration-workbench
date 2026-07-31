@@ -34,7 +34,7 @@
 |-------|--------|-------------|-------|
 | Phase 0 — Research & Compatibility Probe | COMPLETE (pending tenant test) | Spec §19 | IR schemas, archive inspector, minimal import/export, 2 golden fixtures + 3 negative fixtures; manual tenant acceptance test deferred (no tenant available in dev environment) — tracked as OW-010 |
 | Phase 1 — Git-Native Headless Core | COMPLETE | Spec §19 | CLI (`init`, `validate`, `test`, `build`, `diff`, `import`, `git status`), validator, semantic diff, compiler interface, Docker Compose, WSL2 bootstrap, full §9.4 MVP step coverage, 2 reference scenarios — all Phase 1 exit criteria met |
-| Phase 2 — Visual Workbench | NOT STARTED | Spec §19 | React Flow 12 + Monaco + Zustand; deferred until Phase 1 stable |
+| Phase 2 — Visual Workbench | IN PROGRESS | Spec §19 | REST API (FastAPI prototype, ADR-PY-002) + React 19 + React Flow 12 SPA with project explorer, flow canvas, properties panel, validation/test/build panels. Monaco editor, drag-and-drop editing, WebSocket trace streaming not yet done. |
 | Phase 3 — LLM-Assisted Engineering | NOT STARTED | Spec §19 | Model gateway + MCP server + typed patch tools; deferred |
 | Phase 4 — Tenant Sync & CI/CD | NOT STARTED | Spec §19 | Deployment state machine, drift detection; deferred until local build correctness is proven |
 | Phase 5 — Experience Memory Graph | NOT STARTED | Spec §19 | Trajectory recorder + graph matching + retrieval; deferred |
@@ -185,6 +185,8 @@ Format: `ADR-<seq>: <decision>` — decisions superseding spec defaults are mark
 | OW-012 | Add UI E2E tests with Playwright (10 critical journeys) | Phase 2 exit | Medium | OW-007 |
 | OW-013 | Add remaining §9.4 MVP step plugins: `sender.timer`, `subprocess.local`, `request-reply`, `datastore.write`, `datastore.read` | Phase 1 | Low | None |
 | OW-014 | Add `odata-pagination-aggregation` golden fixture (requires `receiver.odata-v4` plugin — Phase 6) | Phase 6 | Low | OW-013 |
+| OW-015 | Generate TypeScript API client from `packages/api-spec/openapi.yaml` (replace hand-written `apps/web/src/api.ts`) | Phase 2 | Low | None |
+| OW-016 | Complete Phase 2 visual designer: drag-and-drop editing, Monaco editor, undo/redo, semantic diff viewer, WebSocket trace streaming | Phase 2 | High | None |
 
 ---
 
@@ -282,5 +284,49 @@ Append new entries below. Newest at the bottom. Format:
 - Validation: `oiw validate --strict` passes on both `examples/order-to-s4` and `examples/sftp-order-drop`. `oiw test --all` passes 2/2 + 2/2. `oiw build` produces deterministic digests for both examples (verified).
 - CI: PR #1 (https://github.com/hehenaice/open-integration-workbench/pull/1) — all 6 checks passed (run [#30627024663](https://github.com/hehenaice/open-integration-workbench/actions/runs/30627024663)). PR merged via squash-merge. Post-merge CI on `main` also green (validate-on-pr run [#30627194055](https://github.com/hehenaice/open-integration-workbench/actions/runs/30627194055), security-scan run [#30627194035](https://github.com/hehenaice/open-integration-workbench/actions/runs/30627194035)).
 - Next: OW-001 (Kotlin migration) is the highest-priority remaining work; OW-013 (remaining §9.4 steps) is low priority and can wait until Phase 2.
+
+---
+
+### 2026-07-31 — Implementing Agent — Phase 2 starter: REST API (FastAPI prototype) + React SPA visual designer
+
+- Started Phase 2 — Visual Workbench (spec §19, §10). Marked Phase 2 as IN PROGRESS.
+- Authored OpenAPI 3.1 specification at `packages/api-spec/openapi.yaml` (spec §6.2 "OpenAPI 3.1 first", §21.1). Covers: projects, flows, validate, tests, builds, git status, archive inspect, health. The spec is the authoritative API contract — implementation-language-agnostic.
+- Implemented FastAPI prototype server at `apps/server-python-prototype/` (ADR-PY-002). Thin shim over the existing `oiw` CLI logic — imports `oiw` directly, no subprocess, no duplication. Exposes all §21.1 endpoints. Serves auto-generated Swagger UI at `/docs` and ReDoc at `/redoc`.
+  - Routes: projects, flows, validate, tests, builds, git, archive, health.
+  - Pydantic models matching the OpenAPI spec.
+  - Workspace discovery (scans `examples/` by default; override with `OIW_WORKSPACE` env var).
+- Added 21 API tests at `apps/server-python-prototype/tests/test_api.py` — covers all endpoints, 404s, 400s, OpenAPI spec availability, Swagger UI, golden fixture inspection, zip-bomb/path-traversal rejection.
+- Scaffolded React 19 + Vite 6 + TypeScript SPA at `apps/web/` (spec §6.1):
+  - React Flow 12 for the flow canvas (dark theme, minimap, controls, background grid).
+  - Tailwind CSS 4 via `@tailwindcss/vite`.
+  - Original dark-theme design system (spec §2.2 — no SAP UI copying).
+  - Three-pane layout: project explorer (left), flow canvas (center), properties + results panels (right).
+  - Hand-written API client (`src/api.ts`) — will be generated from OpenAPI in OW-015.
+  - IR → React Flow node/edge conversion (`src/flow-utils.ts`) using `diagram.json` for positions.
+  - Functional panels: properties (click node to see config), validation (run `oiw validate --strict`), test runner (run `oiw test --all`), build (run `oiw build`), git status bar.
+- Added Docker Compose profile `phase2-prototype` with `oiw-server` (FastAPI) + `oiw-web` (nginx-served SPA). Renamed old Phase 2 stubs to `oiw-server-kotlin` to avoid name collision.
+  - `Dockerfile.server` — Python 3.12-slim, installs CLI + server.
+  - `Dockerfile.web` — multi-stage Node 22 build + nginx serve, with API proxy config.
+  - `nginx.conf` — SPA fallback + `/api/` proxy to `oiw-server:8000`.
+- Added ADR-PY-002 documenting the FastAPI deviation: rationale, consequences, migration plan (OW-002 will replace it with Kotlin/Spring Boot against the same OpenAPI contract).
+- Updated `.github/workflows/validate-on-pr.yaml`:
+  - New job `api-pytest` — installs CLI + server, runs 21 API tests with `OIW_WORKSPACE` pointing at `examples/`.
+  - New job `spa-build` — Node 22, `npm ci`, `tsc --noEmit`, `npm run build`, uploads `dist/` as artifact.
+  - Extended `lint` job — also runs ruff on `apps/server-python-prototype/`.
+  - Updated aggregate job to include `api-pytest` and `spa-build` as required checks.
+- Updated Phase Status: Phase 2 marked IN PROGRESS.
+- Added OW-015 (generate TypeScript API client from OpenAPI) and OW-016 (complete visual designer — drag-and-drop, Monaco, undo/redo, diff viewer, WebSocket trace streaming).
+- Files touched:
+  - `packages/api-spec/{openapi.yaml,README.md}` (new)
+  - `apps/server-python-prototype/` (new — full FastAPI server + tests)
+  - `apps/web/` (new — React 19 + Vite 6 + React Flow 12 SPA)
+  - `deploy/docker-compose/{Dockerfile.server,Dockerfile.web,nginx.conf,docker-compose.yaml}` (new + updated)
+  - `docs/architecture/adr-py-002-fastapi-prototype.md` (new)
+  - `.github/workflows/validate-on-pr.yaml` (extended with api-pytest + spa-build + server lint)
+  - `DEVELOPMENT_LOG.md` (this entry + phase status + open work updates)
+- Tests: 21/21 API tests pass locally. SPA type-check passes. SPA build succeeds (343 KB JS / 18 KB CSS). CLI tests still 55/55 (no regression).
+- Lint: ruff check + format clean for both `apps/cli/` and `apps/server-python-prototype/`.
+- CI: pending first run on this PR.
+- Next: OW-016 (complete visual designer — drag-and-drop, Monaco, trace streaming) is the highest-priority Phase 2 work; OW-002 (Kotlin server) can proceed in parallel once the SPA is feature-complete.
 
 ---
