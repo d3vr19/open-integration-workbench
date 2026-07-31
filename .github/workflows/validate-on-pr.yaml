@@ -224,7 +224,7 @@ jobs:
       - name: Run pytest
         env:
           OIW_WORKSPACE: ${{ github.workspace }}/examples
-        run: pytest apps/server-python-prototype/tests/ -v --junitxml=pytest-api.xml
+        run: pytest apps/server-python-prototype/tests/ -v --import-mode=importlib --junitxml=pytest-api.xml
       - name: Upload pytest results
         if: always()
         uses: actions/upload-artifact@v4

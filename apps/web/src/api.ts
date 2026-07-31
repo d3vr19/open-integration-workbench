@@ -123,6 +123,14 @@ export const api = {
     fetchJSON<FlowSummary[]>(`/projects/${projectId}/flows`),
   getFlow: (projectId: string, flowId: string) =>
     fetchJSON<IntegrationFlow>(`/projects/${projectId}/flows/${flowId}`),
+  patchFlow: (projectId: string, flowId: string, operations: unknown[], baseRevision?: string) =>
+    fetchJSON<{ applied: number; new_revision: string | null; flow_id: string }>(
+      `/projects/${projectId}/flows/${flowId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ operations, base_revision: baseRevision }),
+      },
+    ),
   validate: (projectId: string, strict = false) =>
     fetchJSON<ValidationResult>(`/projects/${projectId}/validate`, {
       method: 'POST',

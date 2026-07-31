@@ -118,6 +118,58 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+    patch:
+      tags: [Flows]
+      summary: Apply typed patch operations to a flow
+      description: |
+        Spec ref: §12.5 (Typed Patch Format), §12.1 (all mutations go through
+        typed patches — the LLM never edits files directly; the UI uses the
+        same patch mechanism).
+
+        Supported operations:
+          - `addNode` — add a new node with optional diagram position
+          - `removeNode` — remove a node (and its edges) by ID
+          - `updateNodeConfig` — update a node's config (partial merge by default)
+          - `addEdge` — add an edge between two nodes
+          - `removeEdge` — remove an edge by from+to
+          - `moveNode` — update a node's position in diagram.json
+
+        The server validates:
+          1. Base revision matches HEAD (if `base_revision` is provided)
+          2. All referenced nodes exist
+          3. No cycles are introduced
+          4. No duplicate node IDs
+
+        On success, writes `flow.yaml` and `diagram.json` back to disk
+        (canonical ordering — nodes sorted by ID, edges by (from, to)).
+
+        Returns the count of applied operations and the current revision.
+      operationId: patchFlow
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - $ref: "#/components/parameters/FlowId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchRequest"
+      responses:
+        "200":
+          description: Patch applied successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatchResponse"
+        "400":
+          description: Patch validation failed (e.g. duplicate node, cycle, unknown operation).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/projects/{projectId}/validate:
     post:
       tags: [Validation]
@@ -432,6 +484,69 @@ components:
           type: object
           additionalProperties: true
           description: Visual layout from diagram.json. Spec §7.3 rule 4.
+
+    PatchRequest:
+      type: object
+      description: Typed patch request. Spec §12.5.
+      required: [operations]
+      properties:
+        base_revision:
+          type: string
+          description: The git HEAD sha the client based its patch on. If provided, the server rejects stale writes.
+        operations:
+          type: array
+          minItems: 0
+          items:
+            type: object
+            required: [op]
+            properties:
+              op:
+                type: string
+                enum: [addNode, removeNode, updateNodeConfig, addEdge, removeEdge, moveNode]
+              node:
+                type: object
+                description: "For addNode: {id, type, config, fidelity}"
+              nodeId:
+                type: string
+                description: "For removeNode, updateNodeConfig, moveNode"
+              from:
+                type: string
+                description: "For addEdge, removeEdge"
+              to:
+                type: string
+                description: "For addEdge, removeEdge"
+              condition:
+                type: string
+                description: "Optional edge condition (for router branches)"
+              config:
+                type: object
+                additionalProperties: true
+                description: "For updateNodeConfig: partial config to merge"
+              merge:
+                type: boolean
+                default: true
+                description: "For updateNodeConfig: if false, replace the entire config"
+              position:
+                type: object
+                properties:
+                  x:
+                    type: number
+                  y:
+                    type: number
+                description: "For addNode (optional) and moveNode (required)"
+
+    PatchResponse:
+      type: object
+      properties:
+        applied:
+          type: integer
+          description: Number of operations successfully applied.
+        new_revision:
+          type: string
+          nullable: true
+          description: The current HEAD revision (unchanged until a git commit is made).
+        flow_id:
+          type: string
 
     ValidationResult:
       type: object

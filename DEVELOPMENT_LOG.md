@@ -330,3 +330,48 @@ Append new entries below. Newest at the bottom. Format:
 - Next: OW-016 (complete visual designer — drag-and-drop, Monaco, trace streaming) is the highest-priority Phase 2 work; OW-002 (Kotlin server) can proceed in parallel once the SPA is feature-complete.
 
 ---
+
+### 2026-07-31 — Implementing Agent — Phase 2 interactive designer: typed patches + drag-and-drop + editable properties
+
+- Implemented the core Phase 2 exit criterion (spec §19): "A consultant can build the Phase 1 reference flow without editing YAML manually. UI and CLI produce equivalent IR."
+- **Typed patch module** (`apps/cli/oiw/patch.py`): implements spec §12.5 Typed Patch Format with 6 operations:
+  - `addNode` — add a new node with optional diagram position
+  - `removeNode` — remove a node and all its edges (rejects entrypoint removal, rejects removing last node)
+  - `updateNodeConfig` — partial-merge config update
+  - `addEdge` — add an edge (validates endpoints exist, rejects duplicates)
+  - `removeEdge` — remove an edge by from+to
+  - `moveNode` — update a node's position in diagram.json
+- Post-patch validation: checks for duplicate node IDs, dangling edges, and cycles. Does NOT check reachability (a user may add a node first and connect it later — reachability is checked by `oiw validate`).
+- Base revision validation: if `base_revision` is provided and doesn't match the server's current HEAD, the patch is rejected (spec §12.5: "base revision matches HEAD").
+- `write_flow()` serializes the flow back to `flow.yaml` with canonical ordering (nodes sorted by ID, edges sorted by (from, to)) and updates `diagram.json` (spec §7.3 rules 4 and 7).
+- **PATCH endpoint** (`PATCH /api/v1/projects/{projectId}/flows/{flowId}`): applies typed patches, writes to disk, returns count of applied operations + current revision. Returns 400 for invalid operations (duplicate node, cycle, unknown op).
+- **22 CLI-level patch tests** (`apps/cli/tests/test_patch.py`): covers all 6 operations, duplicate ID rejection, entrypoint removal rejection, last-node removal rejection, cycle rejection, base revision mismatch, canonical ordering, write-back persistence.
+- **12 server-level PATCH API tests** (`apps/server-python-prototype/tests/test_patch_api.py`): covers add/remove/update/move via HTTP, multiple operations in one request, error cases (400s, 404s), empty operations no-op. Uses temp workspace fixture so tests can mutate files safely.
+- **React SPA interactive editing**:
+  - Node palette in left sidebar with 14 draggable step types (all §9.4 MVP steps).
+  - Drag-and-drop onto canvas creates a new node at the drop position.
+  - Properties panel is now editable: inline config editing with per-key text inputs; node ID is editable.
+  - Node position changes (drag-stop) are tracked as `moveNode` ops.
+  - Edge creation (drag between node handles) is tracked as `addEdge` ops.
+  - Node/edge deletion (Delete/Backspace key) is tracked as `removeNode`/`removeEdge` ops.
+  - "Save" button sends accumulated `pendingOps` as a single PATCH request, then reloads the flow from the server.
+  - Dirty-state indicator in the header shows unsaved-changes count.
+- **OpenAPI spec** updated: added `PATCH /flows/{flowId}` with `PatchRequest` and `PatchResponse` schemas documenting all 6 operations.
+- **CI workflow** updated: `api-pytest` job now uses `--import-mode=importlib` to handle the two test files coexisting in the same `tests/` directory.
+- Files touched:
+  - `apps/cli/oiw/patch.py` (new — typed patch engine)
+  - `apps/cli/tests/test_patch.py` (new — 22 tests)
+  - `apps/server-python-prototype/oiw_server/routes/patches.py` (new — PATCH endpoint)
+  - `apps/server-python-prototype/oiw_server/main.py` (register patches router)
+  - `apps/server-python-prototype/tests/test_patch_api.py` (new — 12 API tests)
+  - `apps/web/src/App.tsx` (rewritten — interactive editing, palette, save)
+  - `apps/web/src/App.css` (palette + config editor styles)
+  - `apps/web/src/api.ts` (added `patchFlow` method)
+  - `packages/api-spec/openapi.yaml` (PATCH endpoint + PatchRequest/PatchResponse schemas)
+  - `.github/workflows/validate-on-pr.yaml` (import-mode fix for api-pytest)
+  - `DEVELOPMENT_LOG.md` (this entry)
+- Tests: 110 total (55 CLI + 22 patch + 21 API + 12 PATCH API) — all pass. SPA type-check + build clean. ruff check + format clean.
+- CI: pending first run on this PR.
+- Next: Monaco editor for Groovy/XSLT resources (OW-016 continued), WebSocket trace streaming (§9.2 step 8, §21.2), then Phase 3 (MCP server + model gateway).
+
+---
