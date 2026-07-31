@@ -11,7 +11,20 @@ from fastapi import FastAPI
 from . import __version__
 from .config import server_version
 from .models import HealthStatus
-from .routes import archive, builds, diff, flows, git, patches, projects, resources, simulate, tests, validate
+from .routes import (
+    agent,
+    archive,
+    builds,
+    diff,
+    flows,
+    git,
+    patches,
+    projects,
+    resources,
+    simulate,
+    tests,
+    validate,
+)
 
 
 def create_app() -> FastAPI:
@@ -38,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(patches.router)
     app.include_router(resources.router)
     app.include_router(simulate.router)
+    app.include_router(agent.router)
     app.include_router(validate.router)
     app.include_router(tests.router)
     app.include_router(builds.router)

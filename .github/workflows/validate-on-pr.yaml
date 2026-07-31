@@ -220,6 +220,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -e apps/cli
+          pip install -e apps/mcp-server
           pip install -e apps/server-python-prototype[dev]
       - name: Run pytest
         env:

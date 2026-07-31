@@ -154,6 +154,35 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "test.create",
+            "description": (
+                "Create a test definition file for a flow (spec §12.4). "
+                "Writes a FlowTest YAML file under flows/<flow>/tests/."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": {"type": "string"},
+                    "flowId": {"type": "string"},
+                    "testName": {
+                        "type": "string",
+                        "description": "Test name (file will be <testName>.yaml).",
+                    },
+                    "bodyInline": {"type": "string", "description": "Inline input body."},
+                    "assertions": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "List of assertion dicts.",
+                    },
+                    "mocks": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                    },
+                },
+                "required": ["projectId", "flowId", "testName"],
+            },
+        },
+        {
             "name": "build.export",
             "description": "Compile IR to a target-profile artifact package. Returns the build digest (spec §8, §4.7).",
             "inputSchema": {
@@ -448,6 +477,50 @@ def _tool_test_run(args: dict[str, Any]) -> str:
     )
 
 
+def _tool_test_create(args: dict[str, Any]) -> str:
+    """Create a test definition file. Spec §12.4 (test.create)."""
+    import yaml
+
+    project = _load_project(args["projectId"])
+    flow_id = args["flowId"]
+    test_name = args["testName"]
+
+    # Build the FlowTest IR
+    test_data = {
+        "apiVersion": "oiw.dev/v1alpha1",
+        "kind": "FlowTest",
+        "metadata": {"name": test_name},
+        "spec": {
+            "flow": flow_id,
+            "input": {
+                "entrypoint": "sender-http",
+                "bodyInline": args.get("bodyInline", "{}"),
+                "headers": {"Content-Type": "application/json"},
+            },
+            "assertions": args.get("assertions", [{"type": "exchange.status", "equals": "COMPLETED"}]),
+            "mocks": args.get("mocks", []),
+        },
+    }
+
+    # Write to flows/<flow>/tests/<testName>.yaml
+    test_path = project.root / "flows" / flow_id / "tests" / f"{test_name}.yaml"
+    test_path.parent.mkdir(parents=True, exist_ok=True)
+    test_path.write_text(
+        yaml.safe_dump(test_data, sort_keys=True, default_flow_style=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+    return json.dumps(
+        {
+            "created": True,
+            "path": str(test_path.relative_to(project.root)),
+            "testName": test_name,
+            "flowId": flow_id,
+        },
+        indent=2,
+    )
+
+
 def _tool_build_export(args: dict[str, Any]) -> str:
     from oiw.compiler.export import BuildError, build_artifact
 
@@ -503,6 +576,7 @@ _HANDLERS: dict[str, ToolHandler] = {
     "resource.read": _tool_resource_read,
     "resource.write": _tool_resource_write,
     "test.run": _tool_test_run,
+    "test.create": _tool_test_create,
     "build.export": _tool_build_export,
     "git.status": _tool_git_status,
 }

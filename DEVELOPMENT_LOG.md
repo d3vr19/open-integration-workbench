@@ -547,3 +547,31 @@ Append new entries below. Newest at the bottom. Format:
 - Next: Requirement-to-plan workflow (§12.2) — the agent pipeline that takes a natural-language requirement and produces typed tool calls. Then Phase 4 (tenant sync + deployment state machine).
 
 ---
+
+### 2026-07-31 — Implementing Agent — Phase 3 agent pipeline (§12.2)
+
+- Implemented the requirement-to-plan-to-implementation agent pipeline. Spec §12.2 (Agent Pipeline).
+- **Agent pipeline** (`apps/server-python-prototype/oiw_server/agent.py`): three stages:
+  1. **Requirements Interpreter** — normalizes NL requirement into intent (create-flow, modify-flow, add-validation, add-test, general), source/target protocol, operations (validate, transform, route, filter, split, gather, encode, log), and archetype.
+  2. **Integration Planner** — produces a step-by-step plan with typed tool calls (flow.patch, resource.write, test.create, flow.validate, test.run). Each step has tool name, description, and arguments. Includes assumptions and risks.
+  3. **Implementation Agent** — executes the plan by calling MCP tool dispatch functions. Collects results per step, tracks success/errors.
+- **API endpoints** (`apps/server-python-prototype/oiw_server/routes/agent.py`):
+  - `POST /api/v1/projects/{id}/agents:plan` — generate a plan from a NL requirement (no side effects)
+  - `POST /api/v1/projects/{id}/agents:implement` — execute the plan (mutates files via typed patches). Supports `dryRun` mode.
+- **New MCP tool** (`test.create`): creates a FlowTest YAML file under `flows/<flow>/tests/`. Added to the MCP server's tool catalogue and handler registry. Total MCP tools now: 11 (was 10).
+- **17 agent tests** (`apps/server-python-prototype/tests/test_agent.py`):
+  - Requirements interpreter: create-flow, add-validation, add-test, modify-flow, general, archetype detection (6 tests)
+  - Integration planner: create-flow steps, add-validation creates resource, add-test creates test file, assumptions/risks, general risk (5 tests)
+  - API endpoints: plan endpoint, plan 404, implement dry-run, implement add-validation (verifies node added), implement add-test (verifies test created + runnable), implement 404 (6 tests)
+- Files touched:
+  - `apps/server-python-prototype/oiw_server/agent.py` (new — pipeline: interpreter, planner, executor)
+  - `apps/server-python-prototype/oiw_server/routes/agent.py` (new — 2 endpoints)
+  - `apps/server-python-prototype/oiw_server/main.py` (register agent router)
+  - `apps/server-python-prototype/tests/test_agent.py` (new — 17 tests)
+  - `apps/mcp-server/oiw_mcp/tools.py` (added test.create tool + handler)
+  - `DEVELOPMENT_LOG.md` (this entry)
+- Tests: 171 total (77 CLI + 76 API [59 existing + 17 agent] + 18 MCP) — all pass. ruff check + format clean.
+- CI: pending first run on this PR.
+- Next: Phase 3 exit criteria are now substantially met (MCP server ✓, model gateway ✓, agent pipeline ✓). The next major milestone is **Phase 4** — tenant sync + deployment state machine + drift detection (spec §15).
+
+---

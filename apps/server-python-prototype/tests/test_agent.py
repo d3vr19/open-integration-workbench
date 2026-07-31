@@ -1,0 +1,241 @@
+"""Tests for the agent pipeline.
+
+Spec ref: §12.2 (Agent Pipeline), §21.1 (agents:plan, agents:implement).
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+EXAMPLE = REPO_ROOT / "examples" / "order-to-s4"
+
+
+@pytest.fixture()
+def temp_workspace(tmp_path: Path):
+    dest = tmp_path / "order-to-s4"
+    shutil.copytree(EXAMPLE, dest)
+    old = os.environ.get("OIW_WORKSPACE")
+    os.environ["OIW_WORKSPACE"] = str(tmp_path)
+    yield
+    if old is not None:
+        os.environ["OIW_WORKSPACE"] = old
+    else:
+        os.environ.pop("OIW_WORKSPACE", None)
+
+
+@pytest.fixture()
+def client():
+    from oiw_server.main import app
+
+    return TestClient(app)
+
+
+# ---------------------------------------------------------------------
+# Requirements Interpreter
+# ---------------------------------------------------------------------
+
+
+def test_interpret_create_flow() -> None:
+    from oiw_server.agent import interpret_requirement
+
+    result = interpret_requirement("Create a new flow from HTTP to SFTP")
+    assert result.intent == "create-flow"
+    assert result.source_protocol == "https"
+    assert result.target_protocol == "sftp"
+
+
+def test_interpret_add_validation() -> None:
+    from oiw_server.agent import interpret_requirement
+
+    result = interpret_requirement("Add validation to the order flow")
+    assert result.intent == "add-validation"
+    assert "validate" in result.operations
+
+
+def test_interpret_add_test() -> None:
+    from oiw_server.agent import interpret_requirement
+
+    result = interpret_requirement("Add a test for the order-to-s4 flow")
+    assert result.intent == "add-test"
+
+
+def test_interpret_modify_flow() -> None:
+    from oiw_server.agent import interpret_requirement
+
+    result = interpret_requirement("Modify the flow to add routing")
+    assert result.intent == "modify-flow"
+    assert "route" in result.operations
+
+
+def test_interpret_general() -> None:
+    from oiw_server.agent import interpret_requirement
+
+    result = interpret_requirement("Help me understand the integration")
+    assert result.intent == "general"
+
+
+def test_interpret_archetype_detection() -> None:
+    from oiw_server.agent import interpret_requirement
+
+    result = interpret_requirement("Create a flow from HTTP to SFTP with validation and transformation")
+    assert result.archetype == "https-to-sftp"
+    assert "validate" in result.operations
+    assert "transform" in result.operations
+
+
+# ---------------------------------------------------------------------
+# Integration Planner
+# ---------------------------------------------------------------------
+
+
+def test_plan_create_flow_has_steps() -> None:
+    from oiw_server.agent import interpret_requirement, plan_implementation
+
+    req = interpret_requirement("Create a new flow")
+    plan = plan_implementation(req, "test-project", "new-flow")
+    assert len(plan.steps) > 0
+    # Should include flow.patch, flow.validate, test.run
+    tools = [s.tool for s in plan.steps]
+    assert "flow.patch" in tools
+    assert "flow.validate" in tools
+    assert "test.run" in tools
+
+
+def test_plan_add_validation_creates_resource() -> None:
+    from oiw_server.agent import interpret_requirement, plan_implementation
+
+    req = interpret_requirement("Add validation to the flow")
+    plan = plan_implementation(req, "test-project", "order-to-s4")
+    tools = [s.tool for s in plan.steps]
+    assert "flow.patch" in tools
+    assert "resource.write" in tools
+
+
+def test_plan_add_test_creates_test_file() -> None:
+    from oiw_server.agent import interpret_requirement, plan_implementation
+
+    req = interpret_requirement("Add a test")
+    plan = plan_implementation(req, "test-project", "order-to-s4")
+    tools = [s.tool for s in plan.steps]
+    assert "test.create" in tools
+
+
+def test_plan_includes_assumptions_and_risks() -> None:
+    from oiw_server.agent import interpret_requirement, plan_implementation
+
+    req = interpret_requirement("Create a flow")
+    plan = plan_implementation(req, "test-project")
+    assert len(plan.assumptions) > 0
+
+
+def test_plan_general_requirement_has_risk() -> None:
+    from oiw_server.agent import interpret_requirement, plan_implementation
+
+    req = interpret_requirement("Help me")
+    plan = plan_implementation(req, "test-project")
+    assert len(plan.risks) > 0
+
+
+# ---------------------------------------------------------------------
+# POST /agents:plan
+# ---------------------------------------------------------------------
+
+
+def test_plan_endpoint(temp_workspace, client: TestClient) -> None:
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:plan",
+        json={"requirement": "Add validation to the order flow", "flowId": "order-to-s4"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "requirement" in body
+    assert "steps" in body
+    assert len(body["steps"]) > 0
+    assert body["requirement"]["intent"] == "add-validation"
+
+
+def test_plan_endpoint_404(client: TestClient) -> None:
+    r = client.post(
+        "/api/v1/projects/nonexistent/agents:plan",
+        json={"requirement": "test"},
+    )
+    assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------
+# POST /agents:implement
+# ---------------------------------------------------------------------
+
+
+def test_implement_dry_run(temp_workspace, client: TestClient) -> None:
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:implement",
+        json={
+            "requirement": "Add validation to the order flow",
+            "flowId": "order-to-s4",
+            "dryRun": True,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["success"] is True
+    assert "dry run" in body["errors"][0]
+    assert len(body["stepResults"]) == 0
+
+
+def test_implement_add_validation(temp_workspace, client: TestClient) -> None:
+    """Actually execute the add-validation plan and verify the node is added."""
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:implement",
+        json={
+            "requirement": "Add validation to the order flow",
+            "flowId": "order-to-s4",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["success"] is True
+    assert len(body["stepResults"]) > 0
+
+    # Verify the validator node was actually added
+    r2 = client.get("/api/v1/projects/order-to-s4/flows/order-to-s4")
+    assert r2.status_code == 200
+    node_ids = [n["id"] for n in r2.json()["spec"]["nodes"]]
+    assert "validate-input" in node_ids
+
+
+def test_implement_add_test(temp_workspace, client: TestClient) -> None:
+    """Actually execute the add-test plan and verify the test file is created."""
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:implement",
+        json={
+            "requirement": "Add a test for the flow",
+            "flowId": "order-to-s4",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["success"] is True
+
+    # Verify the test file was created by running tests (the new test should appear)
+    r2 = client.post(
+        "/api/v1/projects/order-to-s4/tests:run",
+        json={"flowId": "order-to-s4"},
+    )
+    assert r2.status_code == 200
+    test_names = [t["test_name"] for t in r2.json()]
+    assert "agent-generated" in test_names
+
+
+def test_implement_404(client: TestClient) -> None:
+    r = client.post(
+        "/api/v1/projects/nonexistent/agents:implement",
+        json={"requirement": "test"},
+    )
+    assert r.status_code == 404
