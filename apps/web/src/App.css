@@ -643,6 +643,104 @@
   max-width: none;
 }
 
+/* Semantic diff viewer */
+.diff-viewer {
+  font-size: 12px;
+}
+
+.diff-viewer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.diff-viewer__range {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  color: var(--oiw-text-muted);
+}
+
+.diff-viewer__footer {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--oiw-border);
+}
+
+.diff-section {
+  margin-bottom: 8px;
+}
+
+.diff-section__title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--oiw-text-muted);
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diff-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.diff-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  border-left: 2px solid transparent;
+}
+
+.diff-item--added {
+  border-left-color: var(--oiw-success);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.diff-item--modified {
+  border-left-color: var(--oiw-warning);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.diff-item--removed {
+  border-left-color: var(--oiw-error);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.diff-item__symbol {
+  font-weight: 700;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.diff-item--added .diff-item__symbol {
+  color: var(--oiw-success);
+}
+
+.diff-item--modified .diff-item__symbol {
+  color: var(--oiw-warning);
+}
+
+.diff-item--removed .diff-item__symbol {
+  color: var(--oiw-error);
+}
+
+.diff-item__path {
+  color: var(--oiw-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Simulation trace */
 .trace-list {
   display: flex;

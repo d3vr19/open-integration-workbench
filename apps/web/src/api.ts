@@ -146,6 +146,16 @@ export interface ResourceContent {
   size: number;
 }
 
+export interface StructuredDiff {
+  base_sha: string;
+  head_sha: string;
+  total_changes: number;
+  flows: { added: string[]; modified: string[]; removed: string[] };
+  resources: { added: string[]; modified: string[]; removed: string[] };
+  tests: { added: string[]; modified: string[]; removed: string[] };
+  other: Array<{ path: string; status: string; category: string }>;
+}
+
 export const api = {
   health: () => fetchJSON<{ status: string; version: string }>('/health'),
   listProjects: () => fetchJSON<ProjectSummary[]>('/projects'),
@@ -199,4 +209,6 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ content }),
     }),
+  getDiff: (projectId: string, rev = 'HEAD~1') =>
+    fetchJSON<StructuredDiff>(`/projects/${projectId}/diff?rev=${encodeURIComponent(rev)}`),
 };

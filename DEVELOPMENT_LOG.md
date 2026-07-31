@@ -442,3 +442,32 @@ Append new entries below. Newest at the bottom. Format:
 - Next: Semantic diff viewer (§10.5), then Phase 3 (MCP server + model gateway + LLM-assisted engineering with typed patches).
 
 ---
+
+### 2026-07-31 — Implementing Agent — Phase 2 semantic diff viewer (§10.5)
+
+- Implemented the semantic diff viewer — a consultant can now see what changed between revisions in human-readable IR terms, not raw file diffs. Spec §10.5.
+- **Structured diff engine** (`apps/cli/oiw/diff.py`): added `structured_diff()` returning a `StructuredDiff` dataclass with categorized changes (flows/resources/tests added/modified/removed + other). The existing `semantic_diff()` text function now delegates to `structured_diff()` and formats the result — no duplication.
+  - `StructuredDiff.to_dict()` produces JSON-serializable output for the API.
+  - `total_changes` property for quick at-a-glance count.
+  - Status normalization: git status codes (A/D/M/R) → added/removed/modified/renamed.
+- **GET /api/v1/projects/{id}/diff** endpoint (`apps/server-python-prototype/oiw_server/routes/diff.py`): accepts `?rev=HEAD~1` query param, returns `DiffResponse` with structured diff. Spec §21.1, §10.5.
+- **6 diff API tests** (`apps/server-python-prototype/tests/test_diff.py`): returns correct structure, detects added resource, SHAs differ, no-changes case (HEAD vs HEAD), 404 for unknown project, flows structure validation. Uses a temp git repo with 2 commits to exercise real git history.
+- **SPA DiffViewer component** (`apps/web/src/DiffViewer.tsx`): renders the structured diff with color-coded entries (added=green +, modified=amber ~, removed=red -, renamed=R). Groups by category (Flows/Resources/Tests/Other) with section headers and count badges. Shows base→head SHA range and total change count.
+- **SPA "View Diff" button**: added to the actions sidebar. Clicking it fetches the diff from the API and renders the DiffViewer in the right sidebar.
+- **OpenAPI spec** updated: added `GET /projects/{id}/diff` with `StructuredDiff` schema documenting all fields.
+- Files touched:
+  - `apps/cli/oiw/diff.py` (added `structured_diff()` + `StructuredDiff` dataclass; refactored `semantic_diff()` to use it)
+  - `apps/server-python-prototype/oiw_server/routes/diff.py` (new — diff endpoint)
+  - `apps/server-python-prototype/oiw_server/main.py` (register diff router)
+  - `apps/server-python-prototype/tests/test_diff.py` (new — 6 tests)
+  - `apps/web/src/DiffViewer.tsx` (new — diff viewer component)
+  - `apps/web/src/App.tsx` (View Diff button + diff panel)
+  - `apps/web/src/App.css` (diff viewer styles)
+  - `apps/web/src/api.ts` (added `getDiff` method + `StructuredDiff` type)
+  - `packages/api-spec/openapi.yaml` (diff endpoint + StructuredDiff schema)
+  - `DEVELOPMENT_LOG.md` (this entry)
+- Tests: 136 total (77 CLI + 46 API + 6 diff + 13 resources) — all pass. SPA type-check + build clean (370 KB JS / 25 KB CSS). ruff check + format clean.
+- CI: pending first run on this PR.
+- Next: Phase 2 is now substantially complete (interactive editing ✓, simulation trace ✓, Monaco resource editor ✓, semantic diff viewer ✓). The next major milestone is **Phase 3** — MCP server + model gateway + LLM-assisted engineering with typed patches. The typed patch infrastructure (PR #3) and resource write API (PR #5) give Phase 3 a solid foundation.
+
+---

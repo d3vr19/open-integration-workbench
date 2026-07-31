@@ -15,9 +15,10 @@ import 'reactflow/dist/style.css';
 import './App.css';
 
 import { api } from './api';
-import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus, SimulationResult, TraceEntry, ResourceSummary } from './api';
+import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus, SimulationResult, TraceEntry, ResourceSummary, StructuredDiff } from './api';
 import { toReactFlowNodes, toReactFlowEdges, fidelityColor } from './flow-utils';
 import { ResourceEditor } from './ResourceEditor';
+import { DiffViewer } from './DiffViewer';
 
 // Available step types for the palette (spec §9.4)
 const PALETTE_STEPS = [
@@ -66,6 +67,7 @@ function App() {
   const [resources, setResources] = useState<ResourceSummary[]>([]);
   const [selectedResource, setSelectedResource] = useState<ResourceSummary | null>(null);
   const [viewMode, setViewMode] = useState<'canvas' | 'resource'>('canvas');
+  const [diff, setDiff] = useState<StructuredDiff | null>(null);
   const dragType = useRef<string | null>(null);
 
   // Load project list on mount
@@ -313,6 +315,20 @@ function App() {
     }
   };
 
+  const viewDiff = async () => {
+    if (!selectedProject) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.getDiff(selectedProject, 'HEAD~1');
+      setDiff(result);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const runSimulation = async () => {
     if (!selectedProject || !selectedFlow) return;
     setSimulating(true);
@@ -467,6 +483,9 @@ function App() {
                 </button>
                 <button onClick={runSimulation} disabled={simulating || !selectedFlow} className="btn btn--primary">
                   {simulating ? 'Simulating…' : 'Simulate'}
+                </button>
+                <button onClick={viewDiff} disabled={loading} className="btn btn--secondary">
+                  View Diff
                 </button>
                 <button onClick={loadGitStatus} disabled={loading} className="btn btn--secondary">
                   Git Status
@@ -659,6 +678,16 @@ function App() {
                   <span className="properties__value">{build.entry_count}</span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {diff && (
+            <div className="sidebar__section">
+              <h3 className="sidebar__title">
+                Semantic Diff
+                <span className="badge badge--mono">{diff.total_changes}</span>
+              </h3>
+              <DiffViewer diff={diff} />
             </div>
           )}
 

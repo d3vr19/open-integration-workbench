@@ -406,6 +406,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/GitStatus"
 
+  /api/v1/projects/{projectId}/diff:
+    get:
+      tags: [Git]
+      summary: Get a structured semantic diff between revisions
+      description: |
+        Spec ref: §10.5 (Semantic Diff).
+
+        Returns a structured diff between `rev` (default HEAD~1) and HEAD,
+        categorized into flows/resources/tests added/modified/removed + other.
+        Includes base and head SHAs and a total change count.
+      operationId: getDiff
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: rev
+          in: query
+          schema:
+            type: string
+            default: HEAD~1
+          description: Git revision to diff against HEAD.
+      responses:
+        "200":
+          description: Structured diff.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StructuredDiff"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/archive/inspect:
     post:
       tags: [Archive]
@@ -855,6 +884,74 @@ components:
         lastBuildTarget:
           type: string
           nullable: true
+
+    StructuredDiff:
+      type: object
+      description: Structured semantic diff. Spec §10.5.
+      properties:
+        base_sha:
+          type: string
+        head_sha:
+          type: string
+        total_changes:
+          type: integer
+        flows:
+          type: object
+          properties:
+            added:
+              type: array
+              items:
+                type: string
+            modified:
+              type: array
+              items:
+                type: string
+            removed:
+              type: array
+              items:
+                type: string
+        resources:
+          type: object
+          properties:
+            added:
+              type: array
+              items:
+                type: string
+            modified:
+              type: array
+              items:
+                type: string
+            removed:
+              type: array
+              items:
+                type: string
+        tests:
+          type: object
+          properties:
+            added:
+              type: array
+              items:
+                type: string
+            modified:
+              type: array
+              items:
+                type: string
+            removed:
+              type: array
+              items:
+                type: string
+        other:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              status:
+                type: string
+                enum: [added, modified, removed, renamed]
+              category:
+                type: string
 
     ArchiveManifest:
       type: object
