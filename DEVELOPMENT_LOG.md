@@ -35,7 +35,7 @@
 | Phase 0 — Research & Compatibility Probe | COMPLETE (pending tenant test) | Spec §19 | IR schemas, archive inspector, minimal import/export, 2 golden fixtures + 3 negative fixtures; manual tenant acceptance test deferred (no tenant available in dev environment) — tracked as OW-010 |
 | Phase 1 — Git-Native Headless Core | COMPLETE | Spec §19 | CLI (`init`, `validate`, `test`, `build`, `diff`, `import`, `git status`), validator, semantic diff, compiler interface, Docker Compose, WSL2 bootstrap, full §9.4 MVP step coverage, 2 reference scenarios — all Phase 1 exit criteria met |
 | Phase 2 — Visual Workbench | IN PROGRESS | Spec §19 | REST API (FastAPI prototype, ADR-PY-002) + React 19 + React Flow 12 SPA with project explorer, flow canvas, properties panel, validation/test/build panels. Monaco editor, drag-and-drop editing, WebSocket trace streaming not yet done. |
-| Phase 3 — LLM-Assisted Engineering | NOT STARTED | Spec §19 | Model gateway + MCP server + typed patch tools; deferred |
+| Phase 3 — LLM-Assisted Engineering | IN PROGRESS | Spec §19 | MCP server implemented (10 tools, 18 tests). Model gateway + requirement-to-plan workflow not yet done. |
 | Phase 4 — Tenant Sync & CI/CD | NOT STARTED | Spec §19 | Deployment state machine, drift detection; deferred until local build correctness is proven |
 | Phase 5 — Experience Memory Graph | NOT STARTED | Spec §19 | Trajectory recorder + graph matching + retrieval; deferred |
 | Phase 6 — Compatibility Expansion | NOT STARTED | Spec §19 | Additional adapters (SFTP, SOAP, OData, IDoc, Mail, JMS, SuccessFactors, ProcessDirect); SFTP receiver plugin implemented in Phase 1 (simulated, mocked); real SFTP support is Phase 6 |
@@ -469,5 +469,41 @@ Append new entries below. Newest at the bottom. Format:
 - Tests: 136 total (77 CLI + 46 API + 6 diff + 13 resources) — all pass. SPA type-check + build clean (370 KB JS / 25 KB CSS). ruff check + format clean.
 - CI: pending first run on this PR.
 - Next: Phase 2 is now substantially complete (interactive editing ✓, simulation trace ✓, Monaco resource editor ✓, semantic diff viewer ✓). The next major milestone is **Phase 3** — MCP server + model gateway + LLM-assisted engineering with typed patches. The typed patch infrastructure (PR #3) and resource write API (PR #5) give Phase 3 a solid foundation.
+
+---
+
+### 2026-07-31 — Implementing Agent — Phase 3 starter: MCP server (§12.4, §21.3)
+
+- Started Phase 3 — LLM-Assisted Engineering. Built the MCP server that exposes OIW's operations as MCP tools for external agents (Claude, Cursor, Windsurf).
+- **MCP server** (`apps/mcp-server/`): Python implementation speaking JSON-RPC 2.0 over stdio (the standard MCP transport). ADR-PY-003 documents the deviation from the spec's Kotlin target. The server is a thin protocol adapter — it delegates all business logic to the existing `oiw` CLI package. No duplication.
+- **10 MCP tools** implemented per spec §12.4:
+  - `project.list` — list all projects in the workspace
+  - `flow.get` — get full flow IR (nodes, edges, diagram)
+  - `flow.patch` — apply typed patch operations (§12.5: addNode, removeNode, updateNodeConfig, addEdge, removeEdge, moveNode)
+  - `flow.validate` — run schema + graph + rule validation
+  - `flow.simulate` — run local simulation, return trace + status
+  - `resource.read` — read a resource file (path traversal prevented)
+  - `resource.write` — create/update a resource file (only under flows/*/resources/)
+  - `test.run` — execute flow tests
+  - `build.export` — compile IR to target-profile artifact
+  - `git.status` — get Git status + last build digest
+- **Security** (spec §12.1, §16.3): the LLM never edits files directly (all mutations via `flow.patch`); never receives secret values (only `credentialRef` identifiers); never deploys (`build.export` produces an artifact but deployment requires Phase 4's approval gate). Path traversal prevented on all file operations. Tool permissions enforced server-side.
+- **18 MCP tests** (`apps/mcp-server/tests/test_mcp.py`): protocol tests (initialize, tools/list, tools/call, unknown method, notification), tool definition validation (all have name/description/schema, all handlers registered), individual tool tests (project.list, flow.get, flow.validate, flow.simulate, resource.read + path traversal rejection, test.run, build.export, git.status, unknown tool error, flow.patch adds node).
+- **Claude Desktop integration**: documented in README — add `oiw-mcp` as an MCP server in `claude_desktop_config.json` with `OIW_WORKSPACE` env var.
+- **CI workflow extended**: new `mcp-pytest` job (18 tests); `lint` job extended to cover `apps/mcp-server/`; aggregate job now requires 9 checks (was 8).
+- Added ADR-PY-003 documenting the Python MCP server deviation.
+- Updated Phase Status: Phase 3 marked IN PROGRESS.
+- Files touched:
+  - `apps/mcp-server/` (new — full MCP server + tests)
+  - `apps/mcp-server/oiw_mcp/{__init__,main,tools,config,workspace}.py`
+  - `apps/mcp-server/tests/test_mcp.py` (new — 18 tests)
+  - `apps/mcp-server/pyproject.toml` + `README.md`
+  - `.github/workflows/validate-on-pr.yaml` (mcp-pytest job + lint extension)
+  - `docs/architecture/adr-py-003-mcp-server-prototype.md` (new)
+  - `docs/architecture/README.md` (ADR index updated)
+  - `DEVELOPMENT_LOG.md` (this entry + phase status)
+- Tests: 154 total (77 CLI + 59 API + 18 MCP) — all pass. ruff check + format clean.
+- CI: pending first run on this PR.
+- Next: Model gateway (§12.7) with LLM routing + redaction + token budgets + prompt-injection defense. Then requirement-to-plan workflow (§12.2). Then Phase 4 (tenant sync + deployment state machine).
 
 ---
