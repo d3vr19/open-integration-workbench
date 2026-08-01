@@ -1,6 +1,7 @@
 # OIW Compatibility Matrix
 
 > Spec ref: §4.3 (Explicit Fidelity), §8 (Compatibility Compiler), §9.4 (Initial Step Coverage).
+> Last updated: 2026-08-01. Reflects 15 step plugins across Phases 0–3.
 
 This matrix records the **current** fidelity level of each supported component.
 Every entry MUST link to a fixture (spec §8.5) and a test that proves the claim.

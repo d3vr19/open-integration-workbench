@@ -1,85 +1,48 @@
-# OIW Visual Designer (apps/web)
+# `apps/web` — React SPA visual designer (Phase 2)
 
-> **Phase 2 — Visual Workbench (spec §10).**
-> Status: **MINIMAL PROTOTYPE** — project explorer, flow canvas, properties panel,
-> validation panel, test runner panel, and build panel are functional.
-> Drag-and-drop editing, Monaco editor, and WebSocket trace streaming are not yet
-> implemented (tracked as OW-016).
+> **Status: SUBSTANTIALLY COMPLETE.**
+> React 19 + Vite 6 + TypeScript + React Flow 12 + Tailwind CSS 4 + Monaco Editor.
+
+## What's implemented
+
+- **Three-pane layout**: project explorer (left) / flow canvas (center) / properties + results (right)
+- **Drag-and-drop**: 14 step types in palette, draggable onto canvas
+- **Editable properties**: inline config editing, node ID editing
+- **Monaco editor**: Groovy/XSLT/JSON Schema with syntax highlighting (vs-dark theme)
+- **Tabbed canvas**: Flow Canvas / Resource Editor tabs
+- **Simulation trace**: color-coded per-node trace entries + outbound calls
+- **Semantic diff viewer**: structured diff with color-coded entries (added/modified/removed)
+- **Action buttons**: Validate, Run Tests, Build, Simulate, View Diff, Git Status
+- **Dirty-state tracking**: unsaved-changes indicator + Save button → PATCH flow
 
 ## Stack
 
-Per spec §6.1:
-
 | Layer | Choice | Status |
 |-------|--------|--------|
-| Framework | React 19 + TypeScript 5.5 | ✓ (React 19 via Vite) |
+| Framework | React 19 + TypeScript | ✓ |
 | Graph canvas | React Flow 12 | ✓ |
-| Code editor | Monaco Editor | Not yet |
-| State management | Zustand + TanStack Query | Not yet (using React hooks) |
-| Styling | Tailwind CSS 4 + Radix UI primitives | ✓ Tailwind; Radix not yet |
+| Code editor | Monaco Editor | ✓ |
+| State management | React hooks (Zustand planned) | Partial |
+| Styling | Tailwind CSS 4 | ✓ |
 | Build tool | Vite 6 | ✓ |
-| WebSocket | socket.io-client | Not yet |
-| API client | Generated from OpenAPI 3.1 | Not yet (hand-written; OW-015) |
-| Design system | Original — dark theme | ✓ |
+| WebSocket | (via fetch + WebSocket API) | ✓ |
+| API client | Hand-written (OW-015: generate from OpenAPI) | Partial |
 
-## Run (development)
+## Run
 
 ```bash
-# From the repo root — start the API server first
-pip install -e apps/cli
-pip install -e apps/server-python-prototype
-OIW_WORKSPACE=$(pwd)/examples uvicorn oiw_server.main:app --reload --port 8000
-
-# In a separate terminal — start the SPA
 cd apps/web
 npm install
-npm run dev
+npm run dev    # http://localhost:5173 (proxies /api to localhost:8000)
+npm run build  # production build to dist/
 ```
 
-Open http://localhost:5173. The Vite dev server proxies `/api` to localhost:8000.
+## Not yet implemented
 
-## Build
-
-```bash
-cd apps/web
-npm run build
-# Output: dist/
-```
-
-## Features
-
-### Implemented
-
-- **Project explorer** — lists projects from the workspace; select to view flows.
-- **Flow canvas** — React Flow 12 with dark theme; nodes from `diagram.json`; edges with conditional labels.
-- **Properties panel** — click a node to see its ID, type, fidelity, and config.
-- **Validation panel** — click "Validate" to run `oiw validate --strict` and see results.
-- **Test runner panel** — click "Run Tests" to run `oiw test --all` and see pass/fail per test.
-- **Build panel** — click "Build" to run `oiw build` and see the digest + entry count.
-- **Git status bar** — shows branch, HEAD SHA, dirty flag, and last build digest.
-
-### Not yet implemented
-
-- Drag-and-drop node creation
-- Inline node editing (properties panel is read-only)
-- Monaco code editor for Groovy/XSLT/JSON Schema resources
-- WebSocket trace streaming during simulation
-- Semantic diff viewer
-- Undo/redo
+- Undo/redo (command pattern)
 - Collaborative editing (presence)
-- AI co-pilot panel (Phase 3)
+- AI co-pilot panel (Phase 3 LLM integration in UI)
+- Playwright E2E tests (OW-012)
+- Generated TypeScript API client from OpenAPI (OW-015)
 
-## Architecture
-
-```
-src/
-├── main.tsx          # React entry point
-├── App.tsx           # Main app — three-pane layout
-├── App.css           # Original dark-theme styles
-├── index.css         # Tailwind import + CSS variables
-├── api.ts            # Hand-written API client (OW-015: generate from OpenAPI)
-└── flow-utils.ts     # IR → React Flow node/edge conversion
-```
-
-Spec ref: §10.3 (Component Architecture) — the full target structure is more
-granular; this is the minimal starter.
+Spec ref: §6.1 (Front End), §10 (Visual Designer).

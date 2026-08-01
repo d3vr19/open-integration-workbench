@@ -1,7 +1,6 @@
 # `services/emg-worker` — Experience Memory Graph (Phase 5)
 
-> **Status: NOT YET IMPLEMENTED.**
-> See `DEVELOPMENT_LOG.md` → Open Work item OW-006.
+> **Status: NOT YET IMPLEMENTED (OW-006).**
 
 When implemented, this Python 3.12 service will provide:
 
