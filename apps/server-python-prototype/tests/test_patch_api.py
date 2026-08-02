@@ -35,8 +35,13 @@ def temp_workspace(tmp_path: Path):
     subprocess.run(["git", "-C", str(dest), "add", "."], check=True)
     subprocess.run(
         ["git", "-C", str(dest), "commit", "-q", "-m", "test fixture"],
-        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
-             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com"},
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
         check=True,
     )
     old = os.environ.get("OIW_WORKSPACE")
@@ -85,7 +90,7 @@ def test_patch_add_node(temp_workspace, client: TestClient) -> None:
                         "fidelity": "compatible-subset",
                     },
                 }
-            ]
+            ],
         },
     )
     assert r.status_code == 200
@@ -105,14 +110,15 @@ def test_patch_remove_node(temp_workspace, client: TestClient) -> None:
     # Add
     client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"base_revision": _head_sha(),
-              "operations": [{"op": "addNode", "node": {"id": "to-remove", "type": "log.message"}}]},
+        json={
+            "base_revision": _head_sha(),
+            "operations": [{"op": "addNode", "node": {"id": "to-remove", "type": "log.message"}}],
+        },
     )
     # Remove
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"base_revision": _head_sha(),
-              "operations": [{"op": "removeNode", "nodeId": "to-remove"}]},
+        json={"base_revision": _head_sha(), "operations": [{"op": "removeNode", "nodeId": "to-remove"}]},
     )
     assert r.status_code == 200
     # Verify it's gone
@@ -133,7 +139,7 @@ def test_patch_update_node_config(temp_workspace, client: TestClient) -> None:
                     "nodeId": "receiver-s4-eu",
                     "config": {"timeoutSeconds": 99},
                 }
-            ]
+            ],
         },
     )
     assert r.status_code == 200
@@ -154,7 +160,7 @@ def test_patch_add_edge(temp_workspace, client: TestClient) -> None:
             "operations": [
                 {"op": "addNode", "node": {"id": "edge-target", "type": "log.message"}},
                 {"op": "addEdge", "from": "transform", "to": "edge-target"},
-            ]
+            ],
         },
     )
     assert r.status_code == 200
@@ -173,7 +179,7 @@ def test_patch_move_node(temp_workspace, client: TestClient) -> None:
                     "nodeId": "transform",
                     "position": {"x": 123, "y": 456},
                 }
-            ]
+            ],
         },
     )
     assert r.status_code == 200
@@ -196,7 +202,7 @@ def test_patch_multiple_operations(temp_workspace, client: TestClient) -> None:
                 {"op": "addNode", "node": {"id": "multi-2", "type": "log.message"}},
                 {"op": "addEdge", "from": "multi-1", "to": "multi-2"},
                 {"op": "moveNode", "nodeId": "multi-1", "position": {"x": 10, "y": 20}},
-            ]
+            ],
         },
     )
     assert r.status_code == 200
@@ -211,7 +217,7 @@ def test_patch_invalid_operation_returns_400(temp_workspace, client: TestClient)
             "base_revision": _head_sha(),
             "operations": [
                 {"op": "addNode", "node": {"id": "transform"}}  # duplicate ID
-            ]
+            ],
         },
     )
     assert r.status_code == 400
@@ -221,8 +227,7 @@ def test_patch_unknown_operation_returns_400(temp_workspace, client: TestClient)
     """An unknown operation type returns 400."""
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"base_revision": _head_sha(),
-              "operations": [{"op": "doMagic"}]},
+        json={"base_revision": _head_sha(), "operations": [{"op": "doMagic"}]},
     )
     assert r.status_code == 400
 
@@ -231,8 +236,10 @@ def test_patch_cycle_rejected(temp_workspace, client: TestClient) -> None:
     """A patch that introduces a cycle returns 400."""
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"base_revision": _head_sha(),
-              "operations": [{"op": "addEdge", "from": "route-by-region", "to": "transform"}]},
+        json={
+            "base_revision": _head_sha(),
+            "operations": [{"op": "addEdge", "from": "route-by-region", "to": "transform"}],
+        },
     )
     assert r.status_code == 400
 

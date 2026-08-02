@@ -196,7 +196,9 @@ def interpret_requirement(raw_requirement: str) -> NormalizedRequirement:
 
 
 def plan_implementation(
-    requirement: NormalizedRequirement, project_id: str, flow_id: str | None = None,
+    requirement: NormalizedRequirement,
+    project_id: str,
+    flow_id: str | None = None,
     base_revision: str | None = None,
 ) -> ImplementationPlan:
     """Produce a step-by-step implementation plan.
