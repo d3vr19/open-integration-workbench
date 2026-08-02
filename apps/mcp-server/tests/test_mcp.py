@@ -242,13 +242,20 @@ def test_flow_patch_adds_node(tmp_path: Path) -> None:
     subprocess.run(["git", "-C", str(dest), "add", "."], check=True)
     subprocess.run(
         ["git", "-C", str(dest), "commit", "-q", "-m", "test fixture"],
-        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
-             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com"},
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
         check=True,
     )
     head = subprocess.run(
         ["git", "-C", str(dest), "rev-parse", "--short", "HEAD"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
     old = os.environ.get("OIW_WORKSPACE")
     os.environ["OIW_WORKSPACE"] = str(tmp_path)
@@ -327,8 +334,13 @@ def test_flow_patch_stale_base_revision_conflict(tmp_path: Path) -> None:
     subprocess.run(["git", "-C", str(dest), "add", "."], check=True)
     subprocess.run(
         ["git", "-C", str(dest), "commit", "-q", "-m", "fixture"],
-        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
-             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com"},
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
         check=True,
     )
     old = os.environ.get("OIW_WORKSPACE")
