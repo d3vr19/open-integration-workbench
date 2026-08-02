@@ -58,6 +58,10 @@ test-results/
 playwright-report/
 trace.zip
 
+# JVM build artifacts
+services/runtime-worker-jvm/build/
+services/runtime-worker-jvm/lib/*.jar
+
 # Local environment & secrets
 .env
 .env.local

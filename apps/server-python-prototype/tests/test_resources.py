@@ -78,7 +78,7 @@ def test_get_resource_groovy(temp_workspace, client: TestClient) -> None:
     )
     assert r.status_code == 200
     body = r.json()
-    assert "message" in body["content"]
+    assert "JsonSlurper" in body["content"]
     assert body["language"] == "groovy"
     assert body["resource_type"] == "groovy"
     assert body["size"] > 0

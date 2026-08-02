@@ -173,7 +173,7 @@ def test_resource_read() -> None:
     )
     data = json.loads(result)
     assert "content" in data
-    assert "message" in data["content"]
+    assert "JsonSlurper" in data["content"]
 
 
 def test_resource_read_path_traversal_rejected() -> None:
