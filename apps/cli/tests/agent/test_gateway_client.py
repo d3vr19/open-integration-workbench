@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import httpx
@@ -23,13 +22,16 @@ class FakeTransport(httpx.AsyncBaseTransport):
         # Match by method + path prefix
         key = f"{request.method} {request.url.path}"
         for route_key, response in self.routes.items():
-            if key == route_key or request.url.path.startswith(route_key.split(" ", 1)[1] if " " in route_key else ""):
-                if request.method == route_key.split(" ", 1)[0]:
-                    return httpx.Response(
-                        status_code=response.get("status", 200),
-                        json=response.get("json"),
-                        text=response.get("text"),
-                    )
+            route_path = route_key.split(" ", 1)[1] if " " in route_key else ""
+            route_method = route_key.split(" ", 1)[0]
+            if (
+                key == route_key or request.url.path.startswith(route_path)
+            ) and request.method == route_method:
+                return httpx.Response(
+                    status_code=response.get("status", 200),
+                    json=response.get("json"),
+                    text=response.get("text"),
+                )
         return httpx.Response(status_code=404, text="not found")
 
 

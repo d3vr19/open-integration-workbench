@@ -15,7 +15,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 import yaml
@@ -23,30 +23,28 @@ import yaml
 # Make the oiw packages importable.
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 import sys
+
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(REPO_ROOT / "apps" / "mcp-server"))
 sys.path.insert(0, str(REPO_ROOT / "apps" / "server-python-prototype"))
 
-from oiw.agent.gateway_client import ChatResponse, ModelGatewayClient  # noqa: E402
+from oiw.agent.gateway_client import ChatResponse, ModelGatewayClient
 
-from tests.agent_eval.benchmarks import (  # noqa: E402
+from tests.agent_eval.benchmarks import (
     BENCHMARKS,
-    Benchmark,
-    BenchmarkExpectation,
     ci_benchmarks,
     fast_benchmarks,
     get_benchmark,
 )
-from tests.agent_eval.metrics import (  # noqa: E402
+from tests.agent_eval.metrics import (
     BenchmarkMetrics,
     BenchmarkResult,
     classify_status,
 )
-from tests.agent_eval.runner import (  # noqa: E402
+from tests.agent_eval.runner import (
     run_benchmark_fallback,
     run_ci_suite,
 )
-
 
 # ---------------------------------------------------------------------------
 # WP-04 Task 8 mandatory tests
@@ -80,9 +78,12 @@ def test_benchmark_001_without_llm(_clean_workspace: Path) -> None:
     # The validate-input node must be present
     assert result.expectation_results.get("nodes_added:validate-input") is True
     # The schema resource must be created
-    assert result.expectation_results.get(
-        "resources_added:flows/order-to-s4/resources/schemas/input.schema.json"
-    ) is True
+    assert (
+        result.expectation_results.get(
+            "resources_added:flows/order-to-s4/resources/schemas/input.schema.json"
+        )
+        is True
+    )
     # A trajectory must be recorded
     assert result.metrics.trajectory_id.startswith("traj-")
     # Fallback = 0 token cost
@@ -118,8 +119,10 @@ def test_benchmark_001_with_mock(_clean_workspace: Path) -> None:
         ["git", "-C", str(dest), "commit", "-q", "-m", "fixture"],
         env={
             **__import__("os").environ,
-            "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
-            "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com",
+            "GIT_AUTHOR_NAME": "test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
         },
         check=True,
     )
@@ -128,7 +131,9 @@ def test_benchmark_001_with_mock(_clean_workspace: Path) -> None:
     # Capture the HEAD for the mock plan's baseRevision
     head = subprocess.run(
         ["git", "-C", str(dest), "rev-parse", "--short", "HEAD"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
 
     # Build a mock gateway that returns a valid interpretation + plan
@@ -139,58 +144,72 @@ def test_benchmark_001_with_mock(_clean_workspace: Path) -> None:
     gateway.aclose = AsyncMock()
     gateway.chat.side_effect = [
         # Interpreter response
-        ChatResponse(content=json.dumps({
-            "intent": "modify-flow",
-            "operations": ["validate"],
-            "components": ["validator.json-schema"],
-            "confidence": 0.95,
-        })),
+        ChatResponse(
+            content=json.dumps(
+                {
+                    "intent": "modify-flow",
+                    "operations": ["validate"],
+                    "components": ["validator.json-schema"],
+                    "confidence": 0.95,
+                }
+            )
+        ),
         # Planner response — matches the fallback's plan structure
-        ChatResponse(content=json.dumps({
-            "steps": [
+        ChatResponse(
+            content=json.dumps(
                 {
-                    "order": 1,
-                    "tool": "flow.patch",
-                    "arguments": {
-                        "projectId": "order-to-s4",
-                        "flowId": "order-to-s4",
-                        "baseRevision": head,
-                        "operations": [{
-                            "op": "addNode",
-                            "node": {
-                                "id": "validate-input",
-                                "type": "validator.json-schema",
-                                "config": {"schema": "resources/schemas/input.schema.json"},
-                                "fidelity": "compatible-subset",
+                    "steps": [
+                        {
+                            "order": 1,
+                            "tool": "flow.patch",
+                            "arguments": {
+                                "projectId": "order-to-s4",
+                                "flowId": "order-to-s4",
+                                "baseRevision": head,
+                                "operations": [
+                                    {
+                                        "op": "addNode",
+                                        "node": {
+                                            "id": "validate-input",
+                                            "type": "validator.json-schema",
+                                            "config": {
+                                                "schema": "resources/schemas/input.schema.json"
+                                            },
+                                            "fidelity": "compatible-subset",
+                                        },
+                                    }
+                                ],
                             },
-                        }],
-                    },
-                    "rationale": "add validator",
-                },
-                {
-                    "order": 2,
-                    "tool": "resource.write",
-                    "arguments": {
-                        "projectId": "order-to-s4",
-                        "path": "flows/order-to-s4/resources/schemas/input.schema.json",
-                        "content": '{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","required":["id"],"properties":{"id":{"type":"string"}}}',
-                    },
-                    "rationale": "create schema",
-                },
-            ],
-            "assumptions": [],
-            "risks": [],
-        })),
+                            "rationale": "add validator",
+                        },
+                        {
+                            "order": 2,
+                            "tool": "resource.write",
+                            "arguments": {
+                                "projectId": "order-to-s4",
+                                "path": "flows/order-to-s4/resources/schemas/input.schema.json",
+                                "content": '{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","required":["id"],"properties":{"id":{"type":"string"}}}',
+                            },
+                            "rationale": "create schema",
+                        },
+                    ],
+                    "assumptions": [],
+                    "risks": [],
+                }
+            )
+        ),
     ]
 
-    agent_result = asyncio.run(run_agent(
-        requirement=bench.requirement,
-        project_path=dest,
-        mode="autonomous",
-        flow_id="order-to-s4",
-        gateway=gateway,
-        persist_dir=workspace / ".oiw" / "trajectories",
-    ))
+    agent_result = asyncio.run(
+        run_agent(
+            requirement=bench.requirement,
+            project_path=dest,
+            mode="autonomous",
+            flow_id="order-to-s4",
+            gateway=gateway,
+            persist_dir=workspace / ".oiw" / "trajectories",
+        )
+    )
 
     assert agent_result.status == "COMPLETED"
     assert agent_result.plan is not None
@@ -199,7 +218,9 @@ def test_benchmark_001_with_mock(_clean_workspace: Path) -> None:
     assert gateway.health.await_count >= 1
     assert gateway.chat.await_count >= 2
     # The validator node was added
-    flow_data = yaml.safe_load((dest / "flows" / "order-to-s4" / "flow.yaml").read_text(encoding="utf-8"))
+    flow_data = yaml.safe_load(
+        (dest / "flows" / "order-to-s4" / "flow.yaml").read_text(encoding="utf-8")
+    )
     node_ids = [n["id"] for n in flow_data["spec"]["nodes"]]
     assert "validate-input" in node_ids
 
@@ -282,6 +303,7 @@ class TestCiSuiteRunner:
         old_cwd = Path.cwd()
         try:
             import os
+
             os.chdir(tmp_path)
             report = run_ci_suite(tmp_path / "report.yaml")
         finally:
@@ -303,11 +325,14 @@ class TestCiSuiteRunner:
         old_cwd = Path.cwd()
         try:
             import os
+
             os.chdir(tmp_path)
             report = run_ci_suite()
         finally:
             os.chdir(old_cwd)
-        bench_001 = next(r for r in report["results"] if r["benchmarkId"] == "bench-001")
+        bench_001 = next(
+            r for r in report["results"] if r["benchmarkId"] == "bench-001"
+        )
         assert bench_001["status"] == "PASS"
         assert bench_001["metrics"]["structural_correctness"] == 1.0
         assert bench_001["metrics"]["token_cost"] == 0  # fallback = no tokens

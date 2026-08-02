@@ -25,7 +25,6 @@ from .context import ProjectContext
 from .gateway_client import ChatResponse, ModelGatewayClient
 from .interpreter import NormalizedRequirement
 
-
 OIW_W014_PLANNER = "OIW-W014: LLM planner unavailable; using hardcoded fallback planner."
 
 
@@ -39,7 +38,7 @@ class PlanStep:
     """
 
     order: int
-    tool: str                          # MCP tool name: flow.patch, resource.write, test.create, ...
+    tool: str  # MCP tool name: flow.patch, resource.write, test.create, ...
     arguments: dict[str, Any] = field(default_factory=dict)
     rationale: str = ""
     depends_on: list[int] = field(default_factory=list)
@@ -195,7 +194,9 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 ]
 
 
-def _parse_llm_plan(response: ChatResponse, requirement: NormalizedRequirement, head_revision: str) -> ImplementationPlan:
+def _parse_llm_plan(
+    response: ChatResponse, requirement: NormalizedRequirement, head_revision: str
+) -> ImplementationPlan:
     """Parse the LLM's response (either tool_calls or JSON content) into a plan."""
     steps: list[PlanStep] = []
     assumptions: list[str] = []
@@ -209,7 +210,9 @@ def _parse_llm_plan(response: ChatResponse, requirement: NormalizedRequirement, 
                 PlanStep(
                     order=i,
                     tool=fn.get("name", "unknown"),
-                    arguments=fn.get("arguments", {}) if isinstance(fn.get("arguments"), dict) else _safe_json(fn.get("arguments")),
+                    arguments=fn.get("arguments", {})
+                    if isinstance(fn.get("arguments"), dict)
+                    else _safe_json(fn.get("arguments")),
                     rationale=fn.get("description", ""),
                     depends_on=[],
                 )
@@ -241,9 +244,8 @@ def _parse_llm_plan(response: ChatResponse, requirement: NormalizedRequirement, 
     # Enforce baseRevision on every flow.patch step (defensive — the prompt
     # asks for it, but the LLM may forget)
     for step in steps:
-        if step.tool == "flow.patch":
-            if not step.arguments.get("baseRevision"):
-                step.arguments["baseRevision"] = head_revision
+        if step.tool == "flow.patch" and not step.arguments.get("baseRevision"):
+            step.arguments["baseRevision"] = head_revision
 
     return ImplementationPlan(
         requirement=requirement,
@@ -280,7 +282,10 @@ async def plan_implementation(
     head_revision = project_context.git_head()
     messages = [
         {"role": "system", "content": _load_system_prompt()},
-        {"role": "user", "content": _build_planning_prompt(requirement, project_context, head_revision, flow_id)},
+        {
+            "role": "user",
+            "content": _build_planning_prompt(requirement, project_context, head_revision, flow_id),
+        },
     ]
     response = await gateway.chat(
         messages=messages,
@@ -312,10 +317,13 @@ def plan_implementation_fallback(
     # Try to delegate to the existing server-side planner (it has the
     # most up-to-date plan templates for create-flow / add-validation / etc.)
     try:
-        from oiw_server.agent import (  # type: ignore[import-not-found]
-            plan_implementation as _legacy_plan,
+        from oiw_server.agent import (
             NormalizedRequirement as _LegacyReq,
         )
+        from oiw_server.agent import (  # type: ignore[import-not-found]
+            plan_implementation as _legacy_plan,
+        )
+
         # Convert our NormalizedRequirement to the legacy shape (which
         # uses fewer fields)
         legacy_req = _LegacyReq(
@@ -326,7 +334,9 @@ def plan_implementation_fallback(
             archetype=requirement.archetype,
             raw=requirement.raw,
         )
-        legacy_plan = _legacy_plan(legacy_req, project_context.project_id, flow_id, base_revision=head_revision)
+        legacy_plan = _legacy_plan(
+            legacy_req, project_context.project_id, flow_id, base_revision=head_revision
+        )
         # Convert legacy PlanSteps to our PlanStep shape
         steps = [
             PlanStep(

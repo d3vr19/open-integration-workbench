@@ -38,7 +38,6 @@ import yaml
 
 from .redaction import Redactor
 
-
 # ---------------------------------------------------------------------------
 # Data model (spec §15.2)
 # ---------------------------------------------------------------------------
@@ -50,7 +49,7 @@ class TrajectoryMetadata:
     projectId: str
     taskId: str
     baseRevision: str
-    startedAt: float            # unix epoch
+    startedAt: float  # unix epoch
     finishedAt: float | None = None
     schemaVersion: str = "1.0"
 
@@ -63,8 +62,8 @@ class TrajectoryQuery:
 
 @dataclass
 class ObservationRecord:
-    type: str                                # "project.snapshot" | "validation.result" | "test.result" | ...
-    fingerprint: str                         # sha256 of normalized state
+    type: str  # "project.snapshot" | "validation.result" | "test.result" | ...
+    fingerprint: str  # sha256 of normalized state
     summary: dict[str, Any] = field(default_factory=dict)
     diagnosticCode: str | None = None
     diagnosticCategory: str | None = None
@@ -74,15 +73,15 @@ class ObservationRecord:
 
 @dataclass
 class ActionRecord:
-    type: str                                # "flow.patch" | "resource.write" | "test.create" | ...
-    normalized: tuple[str, ...] = ()         # (tool, op, componentType, semanticTarget, paramClass)
-    argumentsDigest: str = ""                # sha256 of arguments
-    rawRef: str | None = None                # audit ref; None by default
+    type: str  # "flow.patch" | "resource.write" | "test.create" | ...
+    normalized: tuple[str, ...] = ()  # (tool, op, componentType, semanticTarget, paramClass)
+    argumentsDigest: str = ""  # sha256 of arguments
+    rawRef: str | None = None  # audit ref; None by default
 
 
 @dataclass
 class ResultRecord:
-    status: str                              # "applied" | "failed" | "skipped" | "conflict"
+    status: str  # "applied" | "failed" | "skipped" | "conflict"
     revision: str | None = None
     summary: str = ""
     diagnostics: list[dict[str, Any]] = field(default_factory=list)
@@ -98,7 +97,7 @@ class TrajectoryStep:
 
 @dataclass
 class TrajectoryOutcome:
-    status: str = "in_progress"              # in_progress | success | failed | rejected | conflict
+    status: str = "in_progress"  # in_progress | success | failed | rejected | conflict
     reward: dict[str, Any] = field(default_factory=dict)
 
 
@@ -163,7 +162,7 @@ class TrajectoryRecorder:
                 projectId=project_id,
                 taskId=task_id,
                 baseRevision=base_revision,
-                startedAt=startedAt if started_at is not None else time.time(),
+                startedAt=started_at if started_at is not None else time.time(),
             ),
         )
         self._redactor = redactor or Redactor()
@@ -206,9 +205,11 @@ class TrajectoryRecorder:
         before passing in.
         """
         fingerprint = _sha256_of_state(state)
-        summary = self._redactor.redact_dict(state) if isinstance(state, dict) else {
-            "_value": self._redactor.redact(str(state))
-        }
+        summary = (
+            self._redactor.redact_dict(state)
+            if isinstance(state, dict)
+            else {"_value": self._redactor.redact(str(state))}
+        )
         obs = ObservationRecord(
             type=obs_type,
             fingerprint=fingerprint,
@@ -248,7 +249,9 @@ class TrajectoryRecorder:
             status=result_status,
             revision=revision,
             summary=self._redactor.redact(result_summary),
-            diagnostics=[self._redactor.redact_dict(d) if isinstance(d, dict) else d for d in (diagnostics or [])],
+            diagnostics=[
+                self._redactor.redact_dict(d) if isinstance(d, dict) else d for d in (diagnostics or [])
+            ],
         )
         step = TrajectoryStep(
             index=step_index,
@@ -278,10 +281,7 @@ class TrajectoryRecorder:
         Honors `persist_dir` if set on the recorder (used by tests);
         otherwise defaults to `<cwd>/.oiw/trajectories/`.
         """
-        if self._persist_dir is not None:
-            out_dir = self._persist_dir
-        else:
-            out_dir = Path.cwd() / ".oiw" / "trajectories"
+        out_dir = self._persist_dir if self._persist_dir is not None else Path.cwd() / ".oiw" / "trajectories"
         out_dir.mkdir(parents=True, exist_ok=True)
         path = out_dir / f"{self.trajectory.metadata.id}.yaml"
         data = self.to_dict()

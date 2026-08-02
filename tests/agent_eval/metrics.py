@@ -54,11 +54,11 @@ class BenchmarkResult:
 
     benchmark_id: str
     benchmark_name: str
-    status: str                           # PASS | PARTIAL | FAIL | ERROR | SKIP
+    status: str  # PASS | PARTIAL | FAIL | ERROR | SKIP
     metrics: BenchmarkMetrics = field(default_factory=BenchmarkMetrics)
     expectation_results: dict[str, bool] = field(default_factory=dict)
     error: str | None = None
-    agent_status: str = ""                # COMPLETED | FAILED | CONFLICT | REJECTED | FALLBACK
+    agent_status: str = ""  # COMPLETED | FAILED | CONFLICT | REJECTED | FALLBACK
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -73,8 +73,8 @@ class BenchmarkResult:
 
 
 # Thresholds for PASS/PARTIAL/FAIL classification (spec §27).
-PASS_STRUCTURAL_THRESHOLD = 0.9      # >= 90% of structural expectations met
-PARTIAL_STRUCTURAL_THRESHOLD = 0.5   # >= 50% but < 90% = PARTIAL
+PASS_STRUCTURAL_THRESHOLD = 0.9  # >= 90% of structural expectations met
+PARTIAL_STRUCTURAL_THRESHOLD = 0.5  # >= 50% but < 90% = PARTIAL
 
 
 def classify_status(expectation_results: dict[str, bool], agent_status: str) -> str:
@@ -103,9 +103,9 @@ def classify_status(expectation_results: dict[str, bool], agent_status: str) -> 
 
 
 __all__ = [
+    "PARTIAL_STRUCTURAL_THRESHOLD",
+    "PASS_STRUCTURAL_THRESHOLD",
     "BenchmarkMetrics",
     "BenchmarkResult",
     "classify_status",
-    "PASS_STRUCTURAL_THRESHOLD",
-    "PARTIAL_STRUCTURAL_THRESHOLD",
 ]

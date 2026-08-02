@@ -80,10 +80,10 @@ def normalize_observation(diagnostic: dict[str, Any]) -> tuple:
     detail.
     """
     return (
-        diagnostic.get("category", "unknown"),        # validation, test, policy, compiler, review
-        diagnostic.get("code", "NONE"),               # OIW-E001, OIW-W003, ...
-        diagnostic.get("componentRole", ""),           # validator-node, receiver-http, ...
-        diagnostic.get("targetProfile", ""),           # sap-ci-2026-07
+        diagnostic.get("category", "unknown"),  # validation, test, policy, compiler, review
+        diagnostic.get("code", "NONE"),  # OIW-E001, OIW-W003, ...
+        diagnostic.get("componentRole", ""),  # validator-node, receiver-http, ...
+        diagnostic.get("targetProfile", ""),  # sap-ci-2026-07
     )
 
 
@@ -181,9 +181,8 @@ def _semantic_ref(path: str) -> str:
     # /flows/order-to-s4/resources/schemas/order.schema.json
     #   -> flows/<flow>/resources/schemas/order.schema.json
     parts = path.split("/")
-    if len(parts) >= 2 and parts[0] == "flows":
-        if len(parts) >= 4:
-            return "/".join([parts[0], "<flow>", *parts[2:]])
+    if len(parts) >= 4 and parts[0] == "flows":
+        return "/".join([parts[0], "<flow>", *parts[2:]])
     return path
 
 

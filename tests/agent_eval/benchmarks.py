@@ -54,15 +54,15 @@ class BenchmarkExpectation:
 class Benchmark:
     """A single agent evaluation benchmark (spec §27)."""
 
-    id: str                                # bench-001, bench-002, ...
-    name: str                              # short human-readable name
-    requirement: str                       # natural-language input to the agent
-    project: str | None                    # examples/order-to-s4, or None to create new
-    flow_id: str | None = None             # target flow; None = pick project's only flow
+    id: str  # bench-001, bench-002, ...
+    name: str  # short human-readable name
+    requirement: str  # natural-language input to the agent
+    project: str | None  # examples/order-to-s4, or None to create new
+    flow_id: str | None = None  # target flow; None = pick project's only flow
     expected: BenchmarkExpectation = field(default_factory=BenchmarkExpectation)
-    requires_llm: bool = False             # True = skipped in CI (fallback can't satisfy)
+    requires_llm: bool = False  # True = skipped in CI (fallback can't satisfy)
     tags: list[str] = field(default_factory=list)
-    description: str = ""                  # longer context for the benchmark
+    description: str = ""  # longer context for the benchmark
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ BENCHMARKS: list[Benchmark] = [
         expected=BenchmarkExpectation(
             nodes_added=["validate-input"],
             resources_added=["flows/order-to-s4/resources/schemas/input.schema.json"],
-            validation_passes=False,   # fallback planner's schema path is intentionally imperfect
+            validation_passes=False,  # fallback planner's schema path is intentionally imperfect
             tests_pass=True,
         ),
         tags=["modify-flow", "validation", "fast"],
@@ -101,7 +101,7 @@ BENCHMARKS: list[Benchmark] = [
             flow_created=True,
             nodes_added=["sender-http", "receiver-http"],
             has_error_handling=True,
-            validation_passes=False,   # fallback planner's create-flow plan is minimal
+            validation_passes=False,  # fallback planner's create-flow plan is minimal
         ),
         tags=["create-flow", "slow"],
         requires_llm=False,  # fallback can produce the skeleton; LLM should refine it
@@ -193,10 +193,10 @@ def ci_benchmarks() -> list[Benchmark]:
 
 
 __all__ = [
+    "BENCHMARKS",
     "Benchmark",
     "BenchmarkExpectation",
-    "BENCHMARKS",
-    "get_benchmark",
-    "fast_benchmarks",
     "ci_benchmarks",
+    "fast_benchmarks",
+    "get_benchmark",
 ]
