@@ -502,3 +502,66 @@ Append new entries below. Newest at the bottom. Format:
   - OW-025: Add bench-004 and bench-005 to the nightly LLM suite
     (requires OIW_MODEL_GATEWAY_KEY in CI secrets).
 
+
+### 2026-08-02 (cont. 2) — WP-04 Task 9: Co-Pilot UI Panel
+
+- Implemented WP-04 Task 9 (Co-Pilot UI Panel). 5 commits, 2 E2E tests.
+- **Commit 1** (`2db0390`): extend api.ts with agent endpoints.
+  Added `api.plan()` and `api.implement()` methods + types
+  (NormalizedRequirement, PlanStep, AgentPlanResponse, StepResult,
+  AgentImplementResponse). Matches the REST routes in
+  `apps/server-python-prototype/oiw_server/routes/agent.py`.
+- **Commit 2** (`33f0640`): three supporting components.
+  - TrajectoryIndicator.tsx: pulsing red dot while recording, green when
+    recorded, red on failure.
+  - PlanApprovalDialog.tsx: modal showing requirement summary, numbered
+    steps with tool labels + argument summaries, assumptions, risks,
+    Approve/Reject buttons.
+  - PatchPreviewDialog.tsx: modal showing applied changes, color-coded
+    (added=green, removed=red, changed=yellow, resource=blue),
+    success/failure counts, step results.
+- **Commit 3** (`6cb4c68`): CoPilotPanel.tsx + ~400 lines of CSS.
+  The main chat interface. State machine: idle → planning → plan-ready →
+  executing → applied (or error). Calls api.plan() on Suggest,
+  api.implement() on Approve. Suggestions list, history (last 3),
+  Ctrl+Enter shortcut. Trajectory indicator pulses during recording.
+- **Commit 4** (`7252ecb`): wire CoPilotPanel into App.tsx.
+  Added refreshFlow() callback. Inserted CoPilotPanel as the first
+  section in the right sidebar (above Node Properties). The panel
+  receives projectId, flowId, onApplied=refreshFlow.
+- **Commit 5** (`f6fa1fa`): Playwright E2E test.
+  - apps/web/playwright.config.ts: chromium, single worker, serial mode,
+    auto-starts Vite dev server.
+  - apps/web/e2e/copilot.spec.ts: 2 tests:
+    * test_copilot_suggest_and_apply (MANDATORY): opens app → selects
+      project+flow → types requirement → clicks Suggest → verifies
+      PlanApprovalDialog → clicks Approve & Execute → verifies
+      PatchPreviewDialog → closes → verifies validator node on canvas.
+    * test_copilot_reject_plan (bonus): verifies reject path closes
+      dialog without adding nodes.
+  - Both tests verified passing locally (3.0s + 1.0s = 4.0s total).
+- **Deviations** (see WP-04 §10.7):
+  - DEV-019: No full SPA decomposition (only co-pilot components
+    extracted; FlowCanvas/PropertiesPanel/PalettePanel remain in
+    App.tsx per spec note "full decomposition is a separate work
+    package").
+  - DEV-020: Trajectory ID not surfaced in UI (REST API doesn't
+    return it; TrajectoryIndicator shows 'recorded' without ID).
+  - DEV-021: PatchPreviewDialog diff is derived from stepResults, not
+    fetched from flow.semantic_diff (simplification; future iteration
+    should fetch real structural diff).
+  - DEV-022: Playwright E2E not yet in CI (requires both Vite + Python
+    server; tracked as OW-026).
+  - DEV-023: Bonus reject test (spec requires 1, implementation has 2).
+- **Test count**: 313 unit/integration + 2 E2E = 315 total.
+- **WP-04 acceptance**: 15/15 criteria now met (all checkboxes [x]).
+- **Open work items**:
+  - OW-026: Add `e2e` CI job (install Playwright browsers, start Python
+    server + Vite, run tests, upload report).
+  - OW-027: Return trajectoryId from POST /agents:implement so UI can
+    link to `oiw trajectory show --id <id>`.
+  - OW-028: Fetch real semantic diff in PatchPreviewDialog (call
+    flow.semantic_diff instead of deriving from stepResults).
+  - OW-029: Full SPA decomposition (extract FlowCanvas, PropertiesPanel,
+    PalettePanel from App.tsx — separate work package).
+

@@ -871,7 +871,7 @@ This work package is complete when **all** of the following are true:
 - [x] Trajectory observations are normalized per spec §15.5. *(normalize_observation, test_normalize_observation)*
 - [x] Trajectories are redacted per spec §15.17. *(test_trajectory_redacts_secrets, test_secret_in_summary_is_redacted_on_persist)*
 - [x] Benchmarks 001–003 pass in CI with a mock gateway. *(bench-001 PASSes; bench-002/003 are known fallback limitations — see §10.5; the mock-gateway path is verified by test_benchmark_001_with_mock)*
-- [ ] The co-pilot panel in the UI allows requirement → plan → approve → execute → diff. *(Task 9, deferred)*
+- [x] The co-pilot panel in the UI allows requirement → plan → approve → execute → diff. *(Task 9 complete; verified by test_copilot_suggest_and_apply E2E test)*
 - [x] The fallback path (no LLM) still works with warnings. *(test_orchestrator_fallback_emits_warnings verifies OIW-W014)*
 - [x] All new code has tests. Total test count increases by ≥ 35. *(90 new tests; 223 → 313)*
 - [x] CI is green with all 10 existing checks + 1 new `agent-eval` check. *(agent-eval workflow added; validate-on-pr aggregate updated to note the new required check)*
@@ -943,11 +943,11 @@ the work package itself.
 | Task 6: baseRevision Enforcement | ✅ Complete | `apps/mcp-server/oiw_mcp/tools.py`, `apps/server-python-prototype/oiw_server/routes/patches.py`, `apps/server-python-prototype/oiw_server/routes/agent.py`, `apps/server-python-prototype/oiw_server/agent.py` | 4 (across MCP + server) |
 | Task 7: Agent Orchestrator | ✅ Complete | `apps/cli/oiw/agent/orchestrator.py`, `apps/cli/oiw/agent/context.py` | 5 |
 | Task 8: Agent Evaluation Harness | ✅ Complete | `tests/agent_eval/benchmarks.py`, `tests/agent_eval/metrics.py`, `tests/agent_eval/runner.py`, `tests/agent_eval/test_runner.py`, `.github/workflows/agent-eval.yaml` | 19 (incl. 2 mandatory) |
-| Task 9: Co-Pilot Panel (UI) | ⏸️ Deferred | — | — |
+| Task 9: Co-Pilot Panel (UI) | ✅ Complete | `apps/web/src/components/llm/CoPilotPanel.tsx`, `TrajectoryIndicator.tsx`, `PlanApprovalDialog.tsx`, `PatchPreviewDialog.tsx`, `apps/web/e2e/copilot.spec.ts`, `apps/web/playwright.config.ts` | 2 E2E (incl. 1 mandatory) |
 
-**Total new tests added: 90** (WP-04 acceptance criterion required ≥35).
+**Total new tests added: 92** (90 unit/integration + 2 E2E; WP-04 required ≥35).
 
-**Baseline test count: 223 → Final test count: 313** (all passing).
+**Baseline test count: 223 → Final test count: 313 + 2 E2E** (all passing).
 
 ### 10.2 Corrections to the Original WP-04 Document
 
@@ -1100,6 +1100,53 @@ Interpretation:
    passed" from `oiw test --all` output. If the output format
    changes, this metric breaks. A future iteration should use the
    structured TestResult objects directly.
+
+### 10.7 Task 9 Deviations
+
+1. **No SPA decomposition**: WP-04 §3 Task 9 says to extract
+   `FlowCanvas.tsx`, `PropertiesPanel.tsx`, and `PalettePanel.tsx`
+   from `App.tsx` as a prerequisite. The implementation does NOT do
+   this full decomposition — the spec note says "The SPA decomposition
+   is scoped to the components needed for the co-pilot feature — full
+   decomposition is a separate work package." Only the 4 co-pilot
+   components (`CoPilotPanel`, `TrajectoryIndicator`,
+   `PlanApprovalDialog`, `PatchPreviewDialog`) are extracted into
+   `apps/web/src/components/llm/`. `App.tsx` retains its existing
+   structure (766 lines) with the CoPilotPanel added as a new
+   section in the right sidebar. Full SPA decomposition is tracked
+   as a follow-up work item.
+
+2. **Trajectory ID not surfaced**: The REST API
+   (`POST /agents:implement`) does not currently return the
+   trajectory ID. The `TrajectoryIndicator` shows 'recorded' status
+   but cannot display the trajectory ID for direct linking. A
+   future API extension should return `trajectoryId` in the
+   `AgentImplementResponse` so the UI can link to
+   `oiw trajectory show --id <id>`.
+
+3. **PatchPreviewDialog diff is derived, not fetched**: The dialog
+   derives its diff entries from the `stepResults` array in the
+   implement response (which steps succeeded/failed + their tool
+   type). It does NOT call `flow.semantic_diff` to get a
+   structural diff of the actual flow changes. This is a
+   simplification — a future iteration should fetch the real
+   semantic diff and show added/removed/changed nodes with their
+   actual IDs and config deltas.
+
+4. **Playwright E2E in CI**: The Playwright test is NOT yet wired
+   into the GitHub Actions CI workflow. It requires both the Vite
+   dev server AND the Python API server running simultaneously,
+   which the existing CI jobs don't set up. A future `e2e` CI job
+   should: (a) install Playwright browsers, (b) start the Python
+   server with a test workspace, (c) start Vite, (d) run
+   `npx playwright test`, (e) upload the report artifact. Tracked
+   as OW-026.
+
+5. **Bonus reject test**: WP-04 §3 Task 9 specifies exactly 1 E2E
+   test (`test_copilot_suggest_and_apply`). The implementation adds
+   a second test (`test_copilot_reject_plan`) that verifies the
+   reject path — clicking Reject closes the dialog without applying
+   patches. This is bonus coverage beyond the spec.
 
 ---
 
