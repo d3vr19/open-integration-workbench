@@ -1410,3 +1410,25 @@
 
 .step-result--ok .step-result__status { color: var(--oiw-success); }
 .step-result--err .step-result__status { color: var(--oiw-error); }
+
+/* OW-028: PatchPreviewDialog additions */
+.patch-summary__trajectory {
+  margin-left: auto;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 10px;
+  color: var(--oiw-text-muted);
+  cursor: help;
+}
+
+.patch-section__loading {
+  font-size: 11px;
+  color: var(--oiw-text-muted);
+  font-weight: normal;
+}
+
+.patch-section__fallback {
+  font-size: 10px;
+  color: var(--oiw-warning);
+  font-weight: normal;
+  cursor: help;
+}

@@ -224,6 +224,7 @@ export function CoPilotPanel({ projectId, flowId, onApplied }: CoPilotPanelProps
       {state.kind === 'applied' && (
         <PatchPreviewDialog
           implementResult={state.result}
+          projectId={projectId}
           onClose={handleClosePatchPreview}
         />
       )}

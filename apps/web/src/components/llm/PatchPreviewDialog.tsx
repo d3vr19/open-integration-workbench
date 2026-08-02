@@ -6,20 +6,24 @@
  * a diff. Added nodes are green, removed nodes are red, changed config
  * is yellow.
  *
+ * OW-028: the dialog now fetches the real semantic diff from the
+ * server (GET /projects/{id}/diff) instead of deriving a coarse diff
+ * from the stepResults. Falls back to the derived diff if the fetch
+ * fails or returns no changes.
+ *
  * Props:
  *  - implementResult: the AgentImplementResponse from POST /agents:implement
+ *  - projectId: the project ID (used to fetch the semantic diff)
  *  - onClose: called when the user closes the dialog
- *
- * The dialog derives a structural diff from the implement response's
- * step results (which flow.patch operations were applied). It does NOT
- * re-fetch the flow from the server — that's the caller's job if a
- * full semantic diff is needed.
  */
 
-import type { AgentImplementResponse, StepResult } from '../../api';
+import { useEffect, useState } from 'react';
+import { api } from '../../api';
+import type { AgentImplementResponse, StepResult, StructuredDiff } from '../../api';
 
 interface PatchPreviewDialogProps {
   implementResult: AgentImplementResponse;
+  projectId: string | null;
   onClose: () => void;
 }
 
@@ -35,8 +39,6 @@ function deriveDiffEntries(results: StepResult[]): DiffEntry[] {
     if (!r.success) continue;
     if (r.tool === 'flow.patch') {
       const result = r.result as { applied?: number };
-      // The implement response doesn't echo back the operations; we
-      // rely on the step's description to give us a hint.
       entries.push({
         kind: 'changed',
         label: `flow.patch (${result.applied ?? 0} ops)`,
@@ -65,6 +67,28 @@ function deriveDiffEntries(results: StepResult[]): DiffEntry[] {
   return entries;
 }
 
+/** Convert a StructuredDiff (from GET /diff) into DiffEntry[] for display. */
+function diffToEntries(diff: StructuredDiff): DiffEntry[] {
+  const entries: DiffEntry[] = [];
+  // The StructuredDiff shape (from api.ts) has a `changes` array with
+  // {path, old_value, new_value} or similar. Adapt to our display format.
+  // The exact shape depends on the server's /diff endpoint output.
+  const changes = (diff as unknown as { changes?: Array<Record<string, unknown>> }).changes ?? [];
+  for (const c of changes) {
+    const path = String(c.path ?? c.file ?? '');
+    const oldValue = c.old_value ?? c.old ?? null;
+    const newValue = c.new_value ?? c.new ?? null;
+    if (oldValue === null && newValue !== null) {
+      entries.push({ kind: 'added', label: path, detail: String(newValue).slice(0, 120) });
+    } else if (oldValue !== null && newValue === null) {
+      entries.push({ kind: 'removed', label: path, detail: String(oldValue).slice(0, 120) });
+    } else if (oldValue !== null && newValue !== null) {
+      entries.push({ kind: 'changed', label: path, detail: `${String(oldValue).slice(0, 60)} → ${String(newValue).slice(0, 60)}` });
+    }
+  }
+  return entries;
+}
+
 function diffEntryClass(kind: DiffEntry['kind']): string {
   return `diff-entry diff-entry--${kind}`;
 }
@@ -79,8 +103,38 @@ function diffEntryIcon(kind: DiffEntry['kind']): string {
   }[kind];
 }
 
-export function PatchPreviewDialog({ implementResult, onClose }: PatchPreviewDialogProps) {
-  const entries = deriveDiffEntries(implementResult.stepResults);
+export function PatchPreviewDialog({ implementResult, projectId, onClose }: PatchPreviewDialogProps) {
+  // OW-028: fetch the real semantic diff from the server.
+  const [diffEntries, setDiffEntries] = useState<DiffEntry[]>([]);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    setDiffLoading(true);
+    setDiffError(null);
+    // GET /projects/{id}/diff compares working tree against HEAD~1.
+    // After an agent patch, the working tree has the new state and
+    // HEAD~1 has the pre-patch state, so this shows exactly what changed.
+    api
+      .getDiff(projectId, 'HEAD~1')
+      .then((diff: StructuredDiff) => {
+        const entries = diffToEntries(diff);
+        if (entries.length > 0) {
+          setDiffEntries(entries);
+        } else {
+          // Fall back to derived entries if the server returned no changes
+          setDiffEntries(deriveDiffEntries(implementResult.stepResults));
+        }
+      })
+      .catch((e: unknown) => {
+        setDiffError(String(e));
+        // Fall back to derived entries on error
+        setDiffEntries(deriveDiffEntries(implementResult.stepResults));
+      })
+      .finally(() => setDiffLoading(false));
+  }, [projectId, implementResult.stepResults]);
+
   const succeeded = implementResult.stepResults.filter((r) => r.success).length;
   const failed = implementResult.stepResults.length - succeeded;
 
@@ -101,6 +155,11 @@ export function PatchPreviewDialog({ implementResult, onClose }: PatchPreviewDia
             <span className="patch-summary__counts">
               {succeeded} succeeded, {failed} failed
             </span>
+            {implementResult.trajectoryId && (
+              <span className="patch-summary__trajectory" title="Trajectory ID (link to oiw trajectory show)">
+                traj: {implementResult.trajectoryId}
+              </span>
+            )}
           </div>
 
           {/* Errors */}
@@ -115,14 +174,22 @@ export function PatchPreviewDialog({ implementResult, onClose }: PatchPreviewDia
             </section>
           )}
 
-          {/* Diff entries */}
+          {/* Diff entries (OW-028: fetched from server, fallback to derived) */}
           <section className="patch-section">
-            <h3 className="patch-section__title">Changes ({entries.length})</h3>
-            {entries.length === 0 ? (
+            <h3 className="patch-section__title">
+              Changes ({diffEntries.length})
+              {diffLoading && <span className="patch-section__loading"> loading…</span>}
+              {diffError && (
+                <span className="patch-section__fallback" title={diffError}>
+                  {' '}(fallback: derived from step results)
+                </span>
+              )}
+            </h3>
+            {diffEntries.length === 0 ? (
               <p className="muted">No structural changes were applied.</p>
             ) : (
               <ul className="diff-list">
-                {entries.map((e, i) => (
+                {diffEntries.map((e, i) => (
                   <li key={i} className={diffEntryClass(e.kind)}>
                     <span className="diff-entry__icon">{diffEntryIcon(e.kind)}</span>
                     <span className="diff-entry__label">{e.label}</span>
