@@ -12,8 +12,6 @@ from oiw.agent.context import ProjectContext
 from oiw.agent.gateway_client import ChatResponse, ModelGatewayClient
 from oiw.agent.interpreter import NormalizedRequirement
 from oiw.agent.planner import (
-    ImplementationPlan,
-    PlanStep,
     TOOL_DEFINITIONS,
     _parse_llm_plan,
     plan_implementation,
@@ -24,31 +22,35 @@ from oiw.agent.planner import (
 class TestParseLLMPlan:
     def test_parses_steps_from_json_content(self) -> None:
         requirement = NormalizedRequirement(intent="modify-flow", raw="x")
-        content = json.dumps({
-            "steps": [
-                {
-                    "order": 1,
-                    "tool": "flow.patch",
-                    "arguments": {
-                        "projectId": "p",
-                        "flowId": "f",
-                        "baseRevision": "abc123",
-                        "operations": [{"op": "addNode", "node": {"id": "v", "type": "validator.json-schema"}}],
+        content = json.dumps(
+            {
+                "steps": [
+                    {
+                        "order": 1,
+                        "tool": "flow.patch",
+                        "arguments": {
+                            "projectId": "p",
+                            "flowId": "f",
+                            "baseRevision": "abc123",
+                            "operations": [
+                                {"op": "addNode", "node": {"id": "v", "type": "validator.json-schema"}}
+                            ],
+                        },
+                        "rationale": "add validator",
+                        "depends_on": [],
                     },
-                    "rationale": "add validator",
-                    "depends_on": [],
-                },
-                {
-                    "order": 2,
-                    "tool": "resource.write",
-                    "arguments": {"projectId": "p", "path": "schemas/x.json", "content": "{}"},
-                    "rationale": "create schema",
-                    "depends_on": [1],
-                },
-            ],
-            "assumptions": ["a1"],
-            "risks": ["r1"],
-        })
+                    {
+                        "order": 2,
+                        "tool": "resource.write",
+                        "arguments": {"projectId": "p", "path": "schemas/x.json", "content": "{}"},
+                        "rationale": "create schema",
+                        "depends_on": [1],
+                    },
+                ],
+                "assumptions": ["a1"],
+                "risks": ["r1"],
+            }
+        )
         response = ChatResponse(content=content)
         plan = _parse_llm_plan(response, requirement, head_revision="abc123")
         assert plan.base_revision == "abc123"
@@ -65,10 +67,17 @@ class TestParseLLMPlan:
         response = ChatResponse(
             content=None,
             tool_calls=[
-                {"function": {"name": "flow.patch", "arguments": {
-                    "projectId": "p", "flowId": "f", "baseRevision": "abc",
-                    "operations": [{"op": "addNode", "node": {"id": "x", "type": "log.message"}}],
-                }}},
+                {
+                    "function": {
+                        "name": "flow.patch",
+                        "arguments": {
+                            "projectId": "p",
+                            "flowId": "f",
+                            "baseRevision": "abc",
+                            "operations": [{"op": "addNode", "node": {"id": "x", "type": "log.message"}}],
+                        },
+                    }
+                },
             ],
         )
         plan = _parse_llm_plan(response, requirement, head_revision="abc")
@@ -78,18 +87,21 @@ class TestParseLLMPlan:
     def test_injects_baserevision_when_llm_omits_it(self) -> None:
         """Critical: even if the LLM forgets baseRevision, the parser injects it."""
         requirement = NormalizedRequirement(intent="create-flow", raw="x")
-        content = json.dumps({
-            "steps": [
-                {
-                    "tool": "flow.patch",
-                    "arguments": {
-                        "projectId": "p", "flowId": "f",
-                        # Note: no baseRevision
-                        "operations": [{"op": "addNode", "node": {"id": "x", "type": "log.message"}}],
-                    },
-                }
-            ]
-        })
+        content = json.dumps(
+            {
+                "steps": [
+                    {
+                        "tool": "flow.patch",
+                        "arguments": {
+                            "projectId": "p",
+                            "flowId": "f",
+                            # Note: no baseRevision
+                            "operations": [{"op": "addNode", "node": {"id": "x", "type": "log.message"}}],
+                        },
+                    }
+                ]
+            }
+        )
         response = ChatResponse(content=content)
         plan = _parse_llm_plan(response, requirement, head_revision="deadbeef")
         assert plan.steps[0].arguments["baseRevision"] == "deadbeef"
@@ -146,35 +158,50 @@ async def test_plan_implementation_with_mock_gateway(temp_project: Path) -> None
     )
     gateway = AsyncMock(spec=ModelGatewayClient)
     gateway.chat.return_value = ChatResponse(
-        content=json.dumps({
-            "steps": [
-                {
-                    "order": 1,
-                    "tool": "resource.write",
-                    "arguments": {"projectId": "order-to-s4", "path": "flows/order-to-s4/resources/schemas/input.schema.json", "content": "{}"},
-                    "rationale": "create schema",
-                },
-                {
-                    "order": 2,
-                    "tool": "flow.patch",
-                    "arguments": {
-                        "projectId": "order-to-s4",
-                        "flowId": "order-to-s4",
-                        "baseRevision": head,
-                        "operations": [{"op": "addNode", "node": {"id": "validate-input", "type": "validator.json-schema"}}],
+        content=json.dumps(
+            {
+                "steps": [
+                    {
+                        "order": 1,
+                        "tool": "resource.write",
+                        "arguments": {
+                            "projectId": "order-to-s4",
+                            "path": "flows/order-to-s4/resources/schemas/input.schema.json",
+                            "content": "{}",
+                        },
+                        "rationale": "create schema",
                     },
-                    "rationale": "add validator",
-                },
-                {
-                    "order": 3,
-                    "tool": "test.create",
-                    "arguments": {"projectId": "order-to-s4", "flowId": "order-to-s4", "testName": "agent-test"},
-                    "rationale": "add test",
-                },
-            ],
-            "assumptions": ["a1"],
-            "risks": [],
-        }),
+                    {
+                        "order": 2,
+                        "tool": "flow.patch",
+                        "arguments": {
+                            "projectId": "order-to-s4",
+                            "flowId": "order-to-s4",
+                            "baseRevision": head,
+                            "operations": [
+                                {
+                                    "op": "addNode",
+                                    "node": {"id": "validate-input", "type": "validator.json-schema"},
+                                }
+                            ],
+                        },
+                        "rationale": "add validator",
+                    },
+                    {
+                        "order": 3,
+                        "tool": "test.create",
+                        "arguments": {
+                            "projectId": "order-to-s4",
+                            "flowId": "order-to-s4",
+                            "testName": "agent-test",
+                        },
+                        "rationale": "add test",
+                    },
+                ],
+                "assumptions": ["a1"],
+                "risks": [],
+            }
+        ),
     )
     plan = await plan_implementation(requirement, project, gateway, flow_id="order-to-s4")
     assert plan.base_revision == head
@@ -203,26 +230,35 @@ async def test_plan_no_secrets_in_arguments(temp_project: Path) -> None:
     gateway = AsyncMock(spec=ModelGatewayClient)
     # LLM correctly uses credentialRef instead of the password
     gateway.chat.return_value = ChatResponse(
-        content=json.dumps({
-            "steps": [
-                {
-                    "order": 1,
-                    "tool": "flow.patch",
-                    "arguments": {
-                        "projectId": "p", "flowId": "f", "baseRevision": head,
-                        "operations": [{
-                            "op": "addNode",
-                            "node": {
-                                "id": "receiver-sap",
-                                "type": "receiver.http",
-                                "config": {"url": "https://example.invalid/api", "credentialRef": "sap-cred-001"},
-                            },
-                        }],
+        content=json.dumps(
+            {
+                "steps": [
+                    {
+                        "order": 1,
+                        "tool": "flow.patch",
+                        "arguments": {
+                            "projectId": "p",
+                            "flowId": "f",
+                            "baseRevision": head,
+                            "operations": [
+                                {
+                                    "op": "addNode",
+                                    "node": {
+                                        "id": "receiver-sap",
+                                        "type": "receiver.http",
+                                        "config": {
+                                            "url": "https://example.invalid/api",
+                                            "credentialRef": "sap-cred-001",
+                                        },
+                                    },
+                                }
+                            ],
+                        },
+                        "rationale": "add SAP receiver with credential ref",
                     },
-                    "rationale": "add SAP receiver with credential ref",
-                },
-            ],
-        }),
+                ],
+            }
+        ),
     )
     plan = await plan_implementation(requirement, project, gateway)
     # WP-04 Task 2: the password value must NOT appear in any step's

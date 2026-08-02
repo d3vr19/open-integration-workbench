@@ -6,11 +6,8 @@ Covers spec §15.2 (trajectory shape), §15.4 (action normalization),
 
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
 
-import pytest
 import yaml
 
 from oiw.agent.normalization import (
@@ -20,13 +17,8 @@ from oiw.agent.normalization import (
 )
 from oiw.agent.redaction import Redactor
 from oiw.agent.trajectory import (
-    ActionRecord,
-    EngineeringTrajectory,
-    ObservationRecord,
     TrajectoryRecorder,
-    TrajectoryStep,
 )
-
 
 # ---------------------------------------------------------------------------
 # Normalization (spec §15.4, §15.5)
@@ -61,7 +53,11 @@ class TestNormalizeAction:
         assert result == ("flow.patch", "multi-op", "2-operations", "", "")
 
     def test_resource_write_add(self) -> None:
-        args = {"projectId": "p", "path": "flows/order-to-s4/resources/schemas/order.schema.json", "content": "{}"}
+        args = {
+            "projectId": "p",
+            "path": "flows/order-to-s4/resources/schemas/order.schema.json",
+            "content": "{}",
+        }
         result = normalize_action("resource.write", args)
         assert result[0] == "resource.write"
         assert result[1] == "add-resource"
@@ -130,11 +126,7 @@ class TestRedactor:
 
     def test_redacts_private_key(self) -> None:
         r = Redactor()
-        text = (
-            "-----BEGIN RSA PRIVATE KEY-----\n"
-            "MIIEpAIBAAKCAQEA...\n"
-            "-----END RSA PRIVATE KEY-----"
-        )
+        text = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----"
         out = r.redact(text)
         assert "[REDACTED_KEY]" in out
         assert "MIIEpAIBAAKCAQEA" not in out
@@ -174,7 +166,9 @@ class TestRedactor:
 class TestTrajectoryRecorder:
     def test_recorder_initial_state(self, tmp_path: Path) -> None:
         rec = TrajectoryRecorder(
-            project_id="p1", task_id="t1", base_revision="abc123",
+            project_id="p1",
+            task_id="t1",
+            base_revision="abc123",
             persist_dir=tmp_path,
         )
         assert rec.trajectory_id.startswith("traj-")
@@ -211,7 +205,11 @@ class TestTrajectoryRecorder:
         assert step.observation.type == "pre-action"
         assert step.action.type == "flow.patch"
         assert step.action.normalized == (
-            "flow.patch", "addNode", "validator.json-schema", "after-sender", "single-required",
+            "flow.patch",
+            "addNode",
+            "validator.json-schema",
+            "after-sender",
+            "single-required",
         )
         assert step.result.status == "applied"
 
@@ -220,9 +218,12 @@ class TestTrajectoryRecorder:
         rec.set_query("req", {"intent": "x"})
         rec.record_observation(0, "pre-action", {"flows": []})
         rec.record_action(
-            0, "flow.patch",
+            0,
+            "flow.patch",
             ("flow.patch", "addNode", "log.message", "add-log.message", "single-required"),
-            "digest", "applied", "ok",
+            "digest",
+            "applied",
+            "ok",
         )
         path = rec.finalize("success", {"completion": 1.0})
         assert path.exists()
@@ -234,7 +235,11 @@ class TestTrajectoryRecorder:
         assert len(loaded["spec"]["steps"]) == 1
         # Normalized tuple should be persisted as a list (YAML-safe)
         assert loaded["spec"]["steps"][0]["action"]["normalized"] == [
-            "flow.patch", "addNode", "log.message", "add-log.message", "single-required",
+            "flow.patch",
+            "addNode",
+            "log.message",
+            "add-log.message",
+            "single-required",
         ]
 
     def test_finalize_redacts_reward(self, tmp_path: Path) -> None:
@@ -250,9 +255,12 @@ class TestTrajectoryRecorder:
         for i in range(3):
             rec.record_observation(i, "pre-action", {"i": i})
             rec.record_action(
-                i, "flow.patch",
+                i,
+                "flow.patch",
                 ("flow.patch", "addNode", "log.message", "add-log.message", "single-required"),
-                f"digest-{i}", "applied", f"step {i}",
+                f"digest-{i}",
+                "applied",
+                f"step {i}",
             )
         rec.finalize("success", {})
         assert len(rec.trajectory.spec.steps) == 3
@@ -275,9 +283,11 @@ class TestTrajectoryRecorder:
         rec.set_query("req", {"intent": "x"})
         rec.record_observation(0, "pre-action", {"flows": []})
         rec.record_action(
-            0, "flow.patch",
+            0,
+            "flow.patch",
             ("flow.patch", "addNode", "validator.json-schema", "after-sender", "single-required"),
-            "digest", "applied",
+            "digest",
+            "applied",
             "applied with password=hunter2",
         )
         path = rec.finalize("success", {})

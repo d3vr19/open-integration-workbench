@@ -11,7 +11,6 @@ import pytest
 from oiw.agent.context import ProjectContext
 from oiw.agent.gateway_client import ChatResponse, ModelGatewayClient
 from oiw.agent.interpreter import (
-    NormalizedRequirement,
     OIW_W014,
     _parse_llm_response,
     interpret_requirement,
@@ -21,16 +20,18 @@ from oiw.agent.interpreter import (
 
 class TestParseLLMResponse:
     def test_parses_clean_json(self) -> None:
-        content = json.dumps({
-            "intent": "create-flow",
-            "archetype": "api-to-erp",
-            "sourceProtocol": "https",
-            "targetProtocol": "https",
-            "operations": ["validate"],
-            "components": ["validator.json-schema", "receiver.http"],
-            "constraints": ["must-have-error-handling"],
-            "confidence": 0.9,
-        })
+        content = json.dumps(
+            {
+                "intent": "create-flow",
+                "archetype": "api-to-erp",
+                "sourceProtocol": "https",
+                "targetProtocol": "https",
+                "operations": ["validate"],
+                "components": ["validator.json-schema", "receiver.http"],
+                "constraints": ["must-have-error-handling"],
+                "confidence": 0.9,
+            }
+        )
         result = _parse_llm_response(content, "raw")
         assert result.intent == "create-flow"
         assert result.archetype == "api-to-erp"
@@ -69,7 +70,9 @@ class TestInterpretRequirementFallback:
         assert result.confidence >= 0.5
 
     def test_modify_flow_intent_detected(self) -> None:
-        result = interpret_requirement_fallback("Add schema validation before the normalize step in order-to-s4")
+        result = interpret_requirement_fallback(
+            "Add schema validation before the normalize step in order-to-s4"
+        )
         assert result.intent == "modify-flow"
         assert "validate" in result.operations
 
@@ -106,16 +109,18 @@ async def test_interpret_requirement_with_mock_gateway(temp_project: Path) -> No
     project = ProjectContext.load(temp_project / "order-to-s4")
     gateway = AsyncMock(spec=ModelGatewayClient)
     gateway.chat.return_value = ChatResponse(
-        content=json.dumps({
-            "intent": "create-flow",
-            "archetype": "api-to-erp",
-            "sourceProtocol": "https",
-            "targetProtocol": "https",
-            "operations": ["validate"],
-            "components": ["validator.json-schema", "receiver.http"],
-            "constraints": ["must-have-error-handling"],
-            "confidence": 0.9,
-        }),
+        content=json.dumps(
+            {
+                "intent": "create-flow",
+                "archetype": "api-to-erp",
+                "sourceProtocol": "https",
+                "targetProtocol": "https",
+                "operations": ["validate"],
+                "components": ["validator.json-schema", "receiver.http"],
+                "constraints": ["must-have-error-handling"],
+                "confidence": 0.9,
+            }
+        ),
         usage={},
     )
     result = await interpret_requirement(
@@ -167,17 +172,20 @@ class TestInterpreterCreateFlowScenario:
         project = ProjectContext.load(temp_project / "order-to-s4")
         gateway = AsyncMock(spec=ModelGatewayClient)
         gateway.chat.return_value = ChatResponse(
-            content=json.dumps({
-                "intent": "create-flow",
-                "components": ["validator.json-schema", "receiver.http", "sender.http"],
-                "operations": ["validate"],
-                "confidence": 0.9,
-            }),
+            content=json.dumps(
+                {
+                    "intent": "create-flow",
+                    "components": ["validator.json-schema", "receiver.http", "sender.http"],
+                    "operations": ["validate"],
+                    "confidence": 0.9,
+                }
+            ),
             usage={},
         )
         result = await interpret_requirement(
             "Create a flow that validates JSON orders and sends them to S/4HANA",
-            project, gateway,
+            project,
+            gateway,
         )
         assert result.intent == "create-flow"
         assert "validator.json-schema" in result.components
@@ -194,17 +202,20 @@ class TestInterpreterModifyFlowScenario:
         project = ProjectContext.load(temp_project / "order-to-s4")
         gateway = AsyncMock(spec=ModelGatewayClient)
         gateway.chat.return_value = ChatResponse(
-            content=json.dumps({
-                "intent": "modify-flow",
-                "operations": ["validate"],
-                "components": ["validator.json-schema"],
-                "confidence": 0.85,
-            }),
+            content=json.dumps(
+                {
+                    "intent": "modify-flow",
+                    "operations": ["validate"],
+                    "components": ["validator.json-schema"],
+                    "confidence": 0.85,
+                }
+            ),
             usage={},
         )
         result = await interpret_requirement(
             "Add schema validation before the normalize step in order-to-s4",
-            project, gateway,
+            project,
+            gateway,
         )
         assert result.intent == "modify-flow"
         assert "validate" in result.operations
@@ -218,11 +229,13 @@ class TestInterpreterAmbiguousScenario:
         project = ProjectContext.load(temp_project / "order-to-s4")
         gateway = AsyncMock(spec=ModelGatewayClient)
         gateway.chat.return_value = ChatResponse(
-            content=json.dumps({
-                "intent": "general",
-                "confidence": 0.3,
-                "assumptions": ["requirement unclear"],
-            }),
+            content=json.dumps(
+                {
+                    "intent": "general",
+                    "confidence": 0.3,
+                    "assumptions": ["requirement unclear"],
+                }
+            ),
             usage={},
         )
         result = await interpret_requirement("Make it better", project, gateway)

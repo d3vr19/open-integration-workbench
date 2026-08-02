@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 import yaml
 
 from oiw.agent.gateway_client import ChatResponse, ModelGatewayClient
-from oiw.agent.orchestrator import AgentResult, run_agent
+from oiw.agent.orchestrator import run_agent
 
 
 @pytest.mark.asyncio
@@ -53,12 +53,14 @@ async def test_orchestrator_co_pilot_rejection(temp_project: Path) -> None:
     gateway = AsyncMock(spec=ModelGatewayClient)
     gateway.health.return_value = True
     gateway.chat.return_value = ChatResponse(
-        content=json.dumps({
-            "intent": "modify-flow",
-            "operations": ["validate"],
-            "components": ["validator.json-schema"],
-            "confidence": 0.9,
-        }),
+        content=json.dumps(
+            {
+                "intent": "modify-flow",
+                "operations": ["validate"],
+                "components": ["validator.json-schema"],
+                "confidence": 0.9,
+            }
+        ),
     )
     gateway.aclose = AsyncMock()
 
@@ -114,38 +116,48 @@ async def test_orchestrator_end_to_end_with_mock_gateway(temp_project: Path) -> 
     # First call: interpreter; second call: planner
     gateway.chat.side_effect = [
         # Interpreter response
-        ChatResponse(content=json.dumps({
-            "intent": "modify-flow",
-            "operations": ["validate"],
-            "components": ["validator.json-schema"],
-            "confidence": 0.9,
-        })),
-        # Planner response — produces a flow.patch that adds a validator node
-        ChatResponse(content=json.dumps({
-            "steps": [
+        ChatResponse(
+            content=json.dumps(
                 {
-                    "order": 1,
-                    "tool": "flow.patch",
-                    "arguments": {
-                        "projectId": "order-to-s4",
-                        "flowId": "order-to-s4",
-                        "baseRevision": head,
-                        "operations": [{
-                            "op": "addNode",
-                            "node": {
-                                "id": "e2e-validator",
-                                "type": "validator.json-schema",
-                                "config": {"schema": "resources/schemas/order.schema.json"},
-                                "fidelity": "compatible-subset",
+                    "intent": "modify-flow",
+                    "operations": ["validate"],
+                    "components": ["validator.json-schema"],
+                    "confidence": 0.9,
+                }
+            )
+        ),
+        # Planner response — produces a flow.patch that adds a validator node
+        ChatResponse(
+            content=json.dumps(
+                {
+                    "steps": [
+                        {
+                            "order": 1,
+                            "tool": "flow.patch",
+                            "arguments": {
+                                "projectId": "order-to-s4",
+                                "flowId": "order-to-s4",
+                                "baseRevision": head,
+                                "operations": [
+                                    {
+                                        "op": "addNode",
+                                        "node": {
+                                            "id": "e2e-validator",
+                                            "type": "validator.json-schema",
+                                            "config": {"schema": "resources/schemas/order.schema.json"},
+                                            "fidelity": "compatible-subset",
+                                        },
+                                    }
+                                ],
                             },
-                        }],
-                    },
-                    "rationale": "add validator",
-                },
-            ],
-            "assumptions": [],
-            "risks": [],
-        })),
+                            "rationale": "add validator",
+                        },
+                    ],
+                    "assumptions": [],
+                    "risks": [],
+                }
+            )
+        ),
     ]
     gateway.aclose = AsyncMock()
 
@@ -163,6 +175,7 @@ async def test_orchestrator_end_to_end_with_mock_gateway(temp_project: Path) -> 
     assert len(result.execution.completed_steps) >= 1
     # The validator node should have been added to the flow
     import yaml as _yaml
+
     flow_path = temp_project / "order-to-s4" / "flows" / "order-to-s4" / "flow.yaml"
     flow_data = _yaml.safe_load(flow_path.read_text(encoding="utf-8"))
     node_ids = [n["id"] for n in flow_data["spec"]["nodes"]]
@@ -171,9 +184,12 @@ async def test_orchestrator_end_to_end_with_mock_gateway(temp_project: Path) -> 
 
 def _git_head(project_dir: Path) -> str:
     import subprocess
+
     return subprocess.run(
         ["git", "-C", str(project_dir), "rev-parse", "--short", "HEAD"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
 
 
