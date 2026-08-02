@@ -85,3 +85,7 @@ tmp/
 temp/
 *.log
 !docs/**/*.log
+
+# WP-04 Task 4: Trajectory files (contain project-specific data, redacted but
+# still project-local). Use `oiw trajectory export --redacted` to share.
+.oiw/trajectories/

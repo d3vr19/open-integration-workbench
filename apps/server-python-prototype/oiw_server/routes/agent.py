@@ -2,9 +2,12 @@
 
 Spec ref: §12.2 (Agent Pipeline), §21.1 (POST /projects/{id}/agents:plan,
 POST /projects/{id}/agents:implement).
+WP-04 Task 6: every flow.patch step now carries baseRevision = current HEAD.
 """
 
 from __future__ import annotations
+
+import subprocess
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -48,19 +51,36 @@ class ImplementResponse(BaseModel):
     errors: list[str]
 
 
+def _git_head_sha(root) -> str:
+    """Short HEAD sha of the project's git repo. 'unknown' if no git."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "unknown"
+
+
 @router.post("/projects/{project_id}/agents:plan", response_model=PlanResponse)
 def plan_endpoint(project_id: str, req: PlanRequest) -> PlanResponse:
     """Generate an implementation plan from a natural-language requirement.
 
     Spec §12.2: Requirements Interpreter → Integration Planner.
+    WP-04 Task 6: baseRevision captured at planning time and injected
+    into every flow.patch step.
     """
     try:
-        load_project(project_id)
+        project = load_project(project_id)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f"project not found: {exc}") from exc
 
+    base_revision = _git_head_sha(project.root)
     normalized = interpret_requirement(req.requirement)
-    plan = plan_implementation(normalized, project_id, req.flowId)
+    plan = plan_implementation(normalized, project_id, req.flowId, base_revision=base_revision)
 
     return PlanResponse(
         requirement=plan.requirement.to_dict(),
@@ -77,14 +97,17 @@ def implement_endpoint(project_id: str, req: ImplementRequest) -> ImplementRespo
     Spec §12.2: Implementation Agent → Validation & Test Agent.
     Spec §12.1: all mutations go through typed patches — the agent never
     edits files directly.
+    WP-04 Task 6: baseRevision captured at planning time and injected
+    into every flow.patch step.
     """
     try:
-        load_project(project_id)
+        project = load_project(project_id)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f"project not found: {exc}") from exc
 
+    base_revision = _git_head_sha(project.root)
     normalized = interpret_requirement(req.requirement)
-    plan = plan_implementation(normalized, project_id, req.flowId)
+    plan = plan_implementation(normalized, project_id, req.flowId, base_revision=base_revision)
 
     if req.dryRun:
         return ImplementResponse(

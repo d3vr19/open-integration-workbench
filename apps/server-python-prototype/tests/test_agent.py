@@ -18,8 +18,20 @@ EXAMPLE = REPO_ROOT / "examples" / "order-to-s4"
 
 @pytest.fixture()
 def temp_workspace(tmp_path: Path):
+    """Copy example to a temp dir, init git so baseRevision validation works
+    (WP-04 Task 6)."""
+    import subprocess
+
     dest = tmp_path / "order-to-s4"
     shutil.copytree(EXAMPLE, dest)
+    subprocess.run(["git", "init", "-q"], cwd=dest, check=True)
+    subprocess.run(["git", "-C", str(dest), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(dest), "commit", "-q", "-m", "test fixture"],
+        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
+             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com"},
+        check=True,
+    )
     old = os.environ.get("OIW_WORKSPACE")
     os.environ["OIW_WORKSPACE"] = str(tmp_path)
     yield

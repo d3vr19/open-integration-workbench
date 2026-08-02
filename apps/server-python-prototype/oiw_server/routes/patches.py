@@ -29,7 +29,9 @@ class PatchOperation(BaseModel):
 
 
 class PatchRequest(BaseModel):
-    base_revision: str | None = None
+    # WP-04 Task 6: baseRevision is now REQUIRED. Missing or stale
+    # revision raises HTTP 409 Conflict.
+    base_revision: str
     operations: list[dict]
 
 
@@ -45,6 +47,9 @@ def patch_flow(project_id: str, flow_id: str, req: PatchRequest) -> PatchRespons
 
     Spec §12.5: validates base revision, applies operations, writes
     flow.yaml + diagram.json back to disk.
+
+    WP-04 Task 6: baseRevision is REQUIRED. Returns 409 Conflict when
+    missing or stale (i.e. client revision != current HEAD).
     """
     try:
         project = load_project(project_id)
@@ -57,6 +62,22 @@ def patch_flow(project_id: str, flow_id: str, req: PatchRequest) -> PatchRespons
 
     # Get current HEAD revision for base-revision validation
     current_revision = _git_head_sha(project.root)
+
+    # WP-04 Task 6: explicit conflict check (in addition to apply_patch's
+    # own check) so we can return a structured 409 body.
+    if req.base_revision != current_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "BASE_REVISION_CONFLICT",
+                "message": (
+                    f"baseRevision {req.base_revision} != HEAD {current_revision}. "
+                    "Re-fetch the flow and retry."
+                ),
+                "clientRevision": req.base_revision,
+                "serverRevision": current_revision,
+            },
+        )
 
     try:
         result = apply_patch(

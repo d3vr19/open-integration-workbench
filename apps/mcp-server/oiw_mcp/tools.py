@@ -63,10 +63,15 @@ def tool_definitions() -> list[dict[str, Any]]:
                     },
                     "baseRevision": {
                         "type": "string",
-                        "description": "The git HEAD sha the patch is based on. If provided, the server rejects stale writes.",
+                        "description": (
+                            "The git HEAD sha the patch is based on. REQUIRED (spec §12.5, WP-04 Task 6): "
+                            "the server rejects stale writes with a 409-equivalent error. "
+                            "The agent planner captures HEAD at planning time and injects it into every "
+                            "flow.patch step (WP-04 Task 2)."
+                        ),
                     },
                 },
-                "required": ["projectId", "flowId", "operations"],
+                "required": ["projectId", "flowId", "operations", "baseRevision"],
             },
         },
         {
@@ -289,6 +294,18 @@ def _tool_flow_patch(args: dict[str, Any]) -> str:
     operations = args.get("operations", [])
     base_revision = args.get("baseRevision")
 
+    # WP-04 Task 6: baseRevision is REQUIRED. Missing or stale revision
+    # produces a JSON-RPC -32602 (Invalid params) / 409-equivalent error.
+    if not base_revision:
+        return json.dumps(
+            {
+                "error": "flow.patch requires 'baseRevision' (spec §12.5, WP-04 Task 6).",
+                "code": -32602,
+                "applied": 0,
+            },
+            indent=2,
+        )
+
     # Get current HEAD for base-revision validation
     import subprocess
 
@@ -302,6 +319,22 @@ def _tool_flow_patch(args: dict[str, Any]) -> str:
         current_revision = result.stdout.strip()
     except Exception:
         current_revision = "unknown"
+
+    if base_revision != current_revision:
+        return json.dumps(
+            {
+                "error": (
+                    f"baseRevision conflict: client={base_revision}, server={current_revision}. "
+                    "Re-fetch the flow and retry (spec §12.5, WP-04 Task 6)."
+                ),
+                "code": -32602,  # JSON-RPC Invalid params; surface maps to HTTP 409
+                "status": "CONFLICT",
+                "applied": 0,
+                "clientRevision": base_revision,
+                "serverRevision": current_revision,
+            },
+            indent=2,
+        )
 
     try:
         result = apply_patch(

@@ -642,12 +642,21 @@ components:
 
     PatchRequest:
       type: object
-      description: Typed patch request. Spec §12.5.
-      required: [operations]
+      description: |
+        Typed patch request. Spec §12.5.
+        WP-04 Task 6: `base_revision` is REQUIRED. The server returns
+        HTTP 409 Conflict with body
+        `{code: "BASE_REVISION_CONFLICT", clientRevision, serverRevision}`
+        when `base_revision` is missing or does not match the current
+        HEAD. The agent planner captures HEAD at planning time and
+        injects it into every `flow.patch` step.
+      required: [base_revision, operations]
       properties:
         base_revision:
           type: string
-          description: The git HEAD sha the client based its patch on. If provided, the server rejects stale writes.
+          description: |
+            REQUIRED (WP-04 Task 6). The git HEAD sha the client based
+            its patch on. The server rejects stale writes with HTTP 409.
         operations:
           type: array
           minItems: 0
