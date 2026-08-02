@@ -211,4 +211,68 @@ export const api = {
     }),
   getDiff: (projectId: string, rev = 'HEAD~1') =>
     fetchJSON<StructuredDiff>(`/projects/${projectId}/diff?rev=${encodeURIComponent(rev)}`),
+
+  // -----------------------------------------------------------------
+  // Agent endpoints (WP-04 Task 7 + Task 9).
+  // Spec ref: §21.1 (POST /projects/{id}/agents:plan,
+  //                     POST /projects/{id}/agents:implement).
+  // -----------------------------------------------------------------
+  plan: (projectId: string, requirement: string, flowId?: string) =>
+    fetchJSON<AgentPlanResponse>(`/projects/${projectId}/agents:plan`, {
+      method: 'POST',
+      body: JSON.stringify({ requirement, flowId }),
+    }),
+  implement: (projectId: string, requirement: string, flowId?: string, dryRun = false) =>
+    fetchJSON<AgentImplementResponse>(`/projects/${projectId}/agents:implement`, {
+      method: 'POST',
+      body: JSON.stringify({ requirement, flowId, dryRun }),
+    }),
 };
+
+// -----------------------------------------------------------------
+// Agent + trajectory types (WP-04 Task 9).
+// -----------------------------------------------------------------
+
+export interface NormalizedRequirement {
+  intent: string;                 // create-flow | modify-flow | fix-flow | add-test | refactor | general
+  sourceProtocol?: string | null;
+  targetProtocol?: string | null;
+  operations: string[];
+  archetype?: string | null;
+  raw: string;
+}
+
+export interface PlanStep {
+  index: number;
+  tool: string;                   // flow.patch | resource.write | test.create | flow.validate | test.run
+  description: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface AgentPlanResponse {
+  requirement: NormalizedRequirement;
+  steps: PlanStep[];
+  assumptions: string[];
+  risks: string[];
+}
+
+export interface StepResult {
+  stepIndex: number;
+  tool: string;
+  description: string;
+  result: Record<string, unknown>;
+  success: boolean;
+  error?: string;
+}
+
+export interface AgentImplementResponse {
+  plan: {
+    requirement: NormalizedRequirement;
+    steps: PlanStep[];
+    assumptions: string[];
+    risks: string[];
+  };
+  stepResults: StepResult[];
+  success: boolean;
+  errors: string[];
+}
