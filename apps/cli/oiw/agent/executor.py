@@ -16,7 +16,7 @@ patches), §15.4 (action normalization for trajectory).
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 from .context import ProjectContext
@@ -24,7 +24,6 @@ from .gateway_client import ChatResponse, ModelGatewayClient
 from .normalization import arguments_digest, normalize_action
 from .planner import ImplementationPlan, PlanStep
 from .trajectory import TrajectoryRecorder
-
 
 # Maximum correction attempts per failed step (spec §15.13: bounded).
 MAX_CORRECTIONS = 2
@@ -35,7 +34,7 @@ class StepResult:
     """Result of executing a single plan step."""
 
     step: PlanStep
-    status: str                            # applied | failed | skipped | conflict
+    status: str  # applied | failed | skipped | conflict
     summary: str = ""
     diagnostics: list[dict[str, Any]] = field(default_factory=list)
     correction_attempts: int = 0
@@ -55,7 +54,7 @@ class StepResult:
 class ExecutionResult:
     """Result of executing an entire plan."""
 
-    status: str                            # COMPLETED | FAILED | CONFLICT | REJECTED
+    status: str  # COMPLETED | FAILED | CONFLICT | REJECTED
     completed_steps: list[StepResult] = field(default_factory=list)
     error: str | None = None
     trajectory_id: str = ""
@@ -102,7 +101,9 @@ def _result_status(parsed: dict[str, Any], tool: str) -> tuple[str, str]:
     if tool == "flow.validate":
         # flow.validate returns errors[] + warnings[]; treat empty errors as success
         errors = parsed.get("errors", [])
-        return ("applied" if not errors else "failed"), f"errors={len(errors)} warnings={len(parsed.get('warnings', []))}"
+        return (
+            "applied" if not errors else "failed"
+        ), f"errors={len(errors)} warnings={len(parsed.get('warnings', []))}"
     if tool == "test.run":
         # test.run returns pass/fail counts
         passed = parsed.get("passed", 0)

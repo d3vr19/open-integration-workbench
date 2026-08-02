@@ -25,7 +25,6 @@ from typing import Any
 
 import httpx
 
-
 DEFAULT_BASE_URL = os.environ.get("OIW_MODEL_GATEWAY_URL", "http://127.0.0.1:8080")
 DEFAULT_TIMEOUT_SECONDS = 60.0
 
@@ -170,7 +169,7 @@ class ModelGatewayClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def __aenter__(self) -> "ModelGatewayClient":
+    async def __aenter__(self) -> ModelGatewayClient:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:

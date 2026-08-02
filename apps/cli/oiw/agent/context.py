@@ -31,7 +31,7 @@ class ProjectContext:
     _head_cache: str | None = field(default=None, repr=False)
 
     @classmethod
-    def load(cls, project_path: Path | str, project_id: str | None = None) -> "ProjectContext":
+    def load(cls, project_path: Path | str, project_id: str | None = None) -> ProjectContext:
         """Load a project context from a directory.
 
         `project_path` is the directory containing the project's files

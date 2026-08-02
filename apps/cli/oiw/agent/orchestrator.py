@@ -16,27 +16,27 @@ CLI integration (planned, see WP-04 §3 Task 7):
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from .context import ProjectContext
 from .executor import ExecutionResult, execute_plan
 from .gateway_client import ModelGatewayClient
 from .interpreter import (
-    NormalizedRequirement,
     OIW_W014,
+    NormalizedRequirement,
     interpret_requirement,
     interpret_requirement_fallback,
 )
 from .planner import (
-    ImplementationPlan,
     OIW_W014_PLANNER,
+    ImplementationPlan,
     plan_implementation,
     plan_implementation_fallback,
 )
 from .trajectory import TrajectoryRecorder
-
 
 # Type for the approval callback. Receives the plan; returns True to
 # proceed, False to abort. In co-pilot mode the CLI/UI supplies a
@@ -48,7 +48,7 @@ ApprovalCallback = Callable[[ImplementationPlan], Awaitable[bool]]
 class AgentResult:
     """Top-level result returned by `run_agent`."""
 
-    status: str                          # COMPLETED | FAILED | CONFLICT | REJECTED | FALLBACK
+    status: str  # COMPLETED | FAILED | CONFLICT | REJECTED | FALLBACK
     plan: ImplementationPlan | None = None
     execution: ExecutionResult | None = None
     trajectory_id: str = ""
@@ -62,7 +62,9 @@ class AgentResult:
             "execution": self.execution.to_dict() if self.execution else None,
             "trajectoryId": self.trajectory_id,
             "warnings": self.warnings,
-            "normalizedRequirement": self.normalized_requirement.to_dict() if self.normalized_requirement else None,
+            "normalizedRequirement": self.normalized_requirement.to_dict()
+            if self.normalized_requirement
+            else None,
         }
 
 

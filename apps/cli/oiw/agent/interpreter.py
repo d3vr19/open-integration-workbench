@@ -25,7 +25,6 @@ from typing import Any
 from .context import ProjectContext
 from .gateway_client import ChatResponse, ModelGatewayClient
 
-
 # Warning code emitted when the LLM is unavailable and we fall back.
 OIW_W014 = "OIW-W014: LLM interpreter unavailable; using keyword fallback. Install an API key for full interpretation."
 
@@ -38,7 +37,7 @@ class NormalizedRequirement:
     `apps/cli/oiw/agent/prompts/interpreter.md`.
     """
 
-    intent: str                          # create-flow | modify-flow | fix-flow | add-test | refactor
+    intent: str  # create-flow | modify-flow | fix-flow | add-test | refactor
     archetype: str | None = None
     source_protocol: str | None = None
     target_protocol: str | None = None
@@ -93,9 +92,11 @@ def _parse_llm_response(content: str | None, raw_text: str) -> NormalizedRequire
             data = json.loads(match.group(0))
         except json.JSONDecodeError:
             return NormalizedRequirement(intent="general", raw=raw_text, confidence=0.1)
+
     # Map camelCase keys to snake_case (the LLM may use either)
     def _get(key_camel: str, key_snake: str | None = None, default: Any = None) -> Any:
         return data.get(key_camel) or data.get(key_snake or key_camel, default)
+
     return NormalizedRequirement(
         intent=_get("intent", default="general"),
         archetype=_get("archetype"),
