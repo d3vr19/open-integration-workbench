@@ -37,12 +37,25 @@ npm run dev    # http://localhost:5173 (proxies /api to localhost:8000)
 npm run build  # production build to dist/
 ```
 
+## Implemented
+
+- Flow canvas (ReactFlow) with drag-and-drop palette
+- Node properties panel with inline config editor
+- Validation, test, build, simulate, diff panels
+- Resource editor (schemas, scripts, mappings)
+- **AI co-pilot panel** (WP-04 Task 9): natural-language requirement →
+  plan → approve → execute → diff. Calls `POST /agents:plan` and
+  `POST /agents:implement`. Trajectory indicator shows recording status.
+- **Playwright E2E tests** (WP-04 Task 9): `test_copilot_suggest_and_apply`
+  + `test_copilot_reject_plan` in `apps/web/e2e/copilot.spec.ts`.
+
 ## Not yet implemented
 
 - Undo/redo (command pattern)
 - Collaborative editing (presence)
-- AI co-pilot panel (Phase 3 LLM integration in UI)
-- Playwright E2E tests (OW-012)
+- Full SPA decomposition (FlowCanvas/PropertiesPanel/PalettePanel extraction — OW-029)
+- Playwright E2E in CI (OW-026 — tests pass locally but not yet wired into GitHub Actions)
 - Generated TypeScript API client from OpenAPI (OW-015)
+- Real semantic diff in PatchPreviewDialog (OW-028 — currently derives from step results)
 
 Spec ref: §6.1 (Front End), §10 (Visual Designer).

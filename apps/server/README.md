@@ -13,6 +13,6 @@ When implemented, this will be the modular monolith providing:
 - Validation engine
 - Compatibility compiler interface
 
-The FastAPI prototype's 76 tests will be translated to Kotlin and must pass against the same OpenAPI contract.
+The FastAPI prototype's 78 tests will be translated to Kotlin and must pass against the same OpenAPI contract.
 
 Spec ref: §5.1, §6.2 (Backend stack).

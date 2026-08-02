@@ -1,7 +1,8 @@
 # `apps/mcp-server` — MCP protocol server (Phase 3)
 
 > **Status: SUBSTANTIALLY COMPLETE.**
-> Python implementation (ADR-PY-003). 11 MCP tools, 18 tests. JSON-RPC 2.0 over stdio.
+> Python implementation (ADR-PY-003). 11 MCP tools, 20 tests. JSON-RPC 2.0 over stdio.
+> WP-04 Task 6: `flow.patch` tool now requires `baseRevision` (returns JSON-RPC -32602 on missing/stale).
 
 Exposes OIW's operations as MCP tools for external agents (Claude, Cursor, Windsurf).
 

@@ -9,7 +9,7 @@
 [![CI: Validate PR](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml/badge.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 [![Security Scan](https://github.com/hehenaice/open-integration-workbench/actions/workflows/security-scan.yaml/badge.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/security-scan.yaml)
 [![Status: Phase 3](https://img.shields.io/badge/Status-Phase%203%20(Substantially%20Complete)-green.svg)](DEVELOPMENT_LOG.md)
-[![Tests: 216](https://img.shields.io/badge/Tests-216%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
+[![Tests: 315](https://img.shields.io/badge/Tests-315%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 
 ## What this is
 
@@ -56,15 +56,17 @@ Phases 0–3 are substantially complete. See [`DEVELOPMENT_LOG.md`](DEVELOPMENT_
 - Model gateway (redaction, token budgets, circuit breaker, prompt-injection defense, 5 LLM providers)
 - Agent pipeline (requirement interpreter → integration planner → implementation agent)
 - POST `/agents:plan` and POST `/agents:implement` endpoints
+- **WP-04 complete**: LLM-driven agent pipeline (Tasks 1-7), trajectory recorder (Task 4),
+  baseRevision enforcement (Task 6), agent evaluation harness (Task 8), co-pilot UI panel (Task 9)
 
 ### What's not yet implemented
 
-- **Phase 4**: Tenant sync, deployment state machine, drift detection
-- **Phase 5**: Experience Memory Graph (trajectory recorder, graph matching, retrieval)
+- **Phase 4** (next): Tenant sync, deployment state machine, drift detection
+- **Phase 5**: Experience Memory Graph (graph matching, retrieval) — requires Phase 4 deployment outcomes for honest reward vectors
 - **Phase 6**: Additional adapters (SOAP, OData, IDoc, Mail, JMS, SuccessFactors)
 - Kotlin/Spring Boot migration (currently Python prototypes with documented ADRs)
 - JVM process-isolated runtime worker (security-critical for untrusted Groovy)
-- Playwright E2E tests
+- Playwright E2E in CI (OW-026 — tests pass locally, not yet wired into GitHub Actions)
 - OPA/Rego wired into CLI (runs in CI only)
 
 ## Quick start
@@ -172,13 +174,15 @@ See spec §20 for the full target structure.
 
 | Package | Tests | Description |
 |---------|-------|-------------|
-| `apps/cli` | 79 | CLI, validators, patch engine, runtime steps, archive safety, error subprocess |
-| `apps/server-python-prototype` | 76 | REST API, PATCH endpoints, simulate, resources, diff, agent pipeline |
-| `apps/mcp-server` | 18 | MCP protocol, 11 tools |
+| `apps/cli` | 153 | CLI, validators, patch engine, runtime steps, archive safety, error subprocess, **agent pipeline** (WP-04 Tasks 1-7) |
+| `apps/server-python-prototype` | 78 | REST API, PATCH endpoints, simulate, resources, diff, agent pipeline |
+| `apps/mcp-server` | 20 | MCP protocol, 11 tools, baseRevision enforcement (WP-04 Task 6) |
 | `services/model-gateway-python` | 43 | Redaction, budget, circuit breaker, prompts, API |
-| **Total** | **216** | All pass in CI |
+| `tests/agent_eval` | 19 | Agent evaluation harness (WP-04 Task 8): benchmarks, runner, metrics |
+| `apps/web/e2e` | 2 | Playwright E2E: co-pilot suggest+apply, reject (WP-04 Task 9) |
+| **Total** | **315** | 313 unit/integration + 2 E2E; all pass in CI |
 
-CI runs 10 required checks (validate-pr aggregate): OIW validate+test+build, schema self-check, CLI pytest, API pytest, MCP pytest, gateway pytest, ruff lint, SPA build, DEVELOPMENT_LOG.md present.
+CI runs 11 required checks: OIW validate+test+build, schema self-check, CLI pytest, API pytest, MCP pytest, gateway pytest, ruff lint, SPA build, DEVELOPMENT_LOG.md present, **agent-eval** (WP-04 Task 8).
 
 ## Legal boundaries
 
