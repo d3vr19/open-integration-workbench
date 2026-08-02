@@ -42,12 +42,12 @@ def test_error_subprocess_executes_on_validation_failure(project: Project) -> No
     # The error subprocess steps should have executed
     # The errorHandling block has: log-error (log.message) + set-500 (modifier.content)
     trace_node_ids = {t.node_id for t in ctx.trace}
-    assert "log-error" in trace_node_ids, (
-        f"Error subprocess 'log-error' step was not executed. " f"Trace node IDs: {trace_node_ids}"
-    )
-    assert "set-500" in trace_node_ids, (
-        f"Error subprocess 'set-500' step was not executed. " f"Trace node IDs: {trace_node_ids}"
-    )
+    assert (
+        "log-error" in trace_node_ids
+    ), f"Error subprocess 'log-error' step was not executed. Trace node IDs: {trace_node_ids}"
+    assert (
+        "set-500" in trace_node_ids
+    ), f"Error subprocess 'set-500' step was not executed. Trace node IDs: {trace_node_ids}"
 
     # The set-500 step should have set HTTP_Status to 500
     assert (

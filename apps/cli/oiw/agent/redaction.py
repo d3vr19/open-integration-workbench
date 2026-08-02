@@ -24,7 +24,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # Order matters: private keys must be matched before generic "key=..."
 # patterns so we don't fragment them.
 PATTERNS: list[tuple[re.Pattern[str], str]] = [
@@ -125,7 +124,7 @@ class Redactor:
         for k, v in d.items():
             if self._is_secret_key(k) and v is not None:
                 # Key-based redaction: replace any non-None value
-                if isinstance(v, (dict, list)):
+                if isinstance(v, dict | list):
                     out[k] = "[REDACTED]"
                 else:
                     out[k] = "[REDACTED]"
@@ -135,7 +134,8 @@ class Redactor:
                 out[k] = self.redact_dict(v)
             elif isinstance(v, list):
                 out[k] = [
-                    self.redact_dict(x) if isinstance(x, dict)
+                    self.redact_dict(x)
+                    if isinstance(x, dict)
                     else (self.redact(x) if isinstance(x, str) else x)
                     for x in v
                 ]
