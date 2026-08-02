@@ -27,6 +27,7 @@ jobs:
   # -------------------------------------------------------------------
   # Job 1: Python CLI — schema validation, rule engine, tests, build.
   # This is the core OIW validation gate. Spec §14.
+  # Includes JDK 21 + Groovy JARs for real Groovy execution.
   # -------------------------------------------------------------------
   oiw-validate:
     name: OIW validate + test + build
@@ -42,6 +43,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Download Groovy JARs + compile GroovyRunner
+        run: bash services/runtime-worker-jvm/setup.sh
 
       - name: Install oiw CLI
         run: |
@@ -177,6 +187,7 @@ jobs:
 
   # -------------------------------------------------------------------
   # Job 3: Pytest (CLI unit tests).
+  # Includes JDK 21 + Groovy JARs for real Groovy execution in CI.
   # -------------------------------------------------------------------
   pytest:
     name: Pytest (CLI unit tests)
@@ -189,6 +200,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Download Groovy JARs + compile GroovyRunner
+        run: bash services/runtime-worker-jvm/setup.sh
       - name: Install
         run: |
           pip install --upgrade pip
@@ -204,6 +222,7 @@ jobs:
 
   # -------------------------------------------------------------------
   # Job 3b: Pytest (API server tests).
+  # Includes JDK 21 + Groovy JARs for real Groovy execution in CI.
   # -------------------------------------------------------------------
   api-pytest:
     name: Pytest (API server tests)
@@ -216,6 +235,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Download Groovy JARs + compile GroovyRunner
+        run: bash services/runtime-worker-jvm/setup.sh
       - name: Install
         run: |
           pip install --upgrade pip

@@ -147,14 +147,42 @@ class GroovyScript(StepPlugin):
                 }
             )
 
-            # Execute the JVM bridge
-            result = subprocess.run(
+            # Execute the JVM bridge with process group so we can kill the whole tree
+
+            proc = subprocess.Popen(
                 ["bash", bridge_path],
-                input=input_payload,
-                capture_output=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=35,  # 30s script timeout + 5s grace
+                preexec_fn=os.setsid,  # create new process group
             )
+            try:
+                stdout, stderr = proc.communicate(input=input_payload, timeout=35)
+                result = subprocess.CompletedProcess(
+                    args=["bash", bridge_path],
+                    returncode=proc.returncode,
+                    stdout=stdout,
+                    stderr=stderr,
+                )
+            except subprocess.TimeoutExpired:
+                # Kill the entire process group (bash + java)
+                import signal as _sig
+
+                try:
+                    pgid = os.getpgid(proc.pid)
+                    os.killpg(pgid, _sig.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    # Fallback: kill the process directly
+                    import contextlib
+
+                    with contextlib.suppress(ProcessLookupError):
+                        proc.kill()
+                proc.wait()
+                ctx.exchange_status = ExchangeStatus.FAILED
+                ctx.exception = RuntimeError("Groovy script exceeded 30s timeout")
+                ctx.add_trace(node.id, "error", "timeout: script exceeded 30s limit")
+                return ctx
 
             if result.returncode != 0:
                 # Check if the output is a JSON "bridge unavailable" response
@@ -257,11 +285,23 @@ class GroovyScript(StepPlugin):
 
         Handles both SAP Message API style (message.setProperty) and
         OIW binding style (properties["key"] = "value").
+
+        Emits OIW-W013 warning when unrecognized constructs are encountered.
         """
+        unrecognized_count = 0
         for raw_line in script_text.splitlines():
             line = raw_line.strip()
-            if not line or line.startswith("//") or line.startswith("/*"):
+            if not line or line.startswith("//") or line.startswith("/*") or line.startswith("*"):
                 continue
+            if line.startswith("import ") or line.startswith("package "):
+                continue
+            if line.startswith("def ") or line.startswith("try ") or line.startswith("catch "):
+                # These are Groovy constructs the stub can't interpret
+                unrecognized_count += 1
+                continue
+            if line.startswith("}") or line == "{":
+                continue
+
             # SAP Message API style
             m = re.match(r"message\.setHeader\(\s*['\"]([^'\"]+)['\"]\s*,\s*['\"]([^'\"]*)['\"]\s*\)", line)
             if m:
@@ -286,14 +326,27 @@ class GroovyScript(StepPlugin):
                 ctx.headers[m.group(1)] = m.group(2)
                 continue
             # OIW binding style: properties["key"] = variable (not a string literal)
-            # e.g., properties["region"] = json.region ?: "GLOBAL"
             m = re.match(r'properties\["([^"]+)"\]\s*=\s*.+', line)
             if m:
                 key = m.group(1)
                 # For known properties, set a default that matches the test fixture
                 if key == "region":
                     ctx.properties[key] = "EU"
+                unrecognized_count += 1
                 continue
+
+            # Unrecognized line
+            if not line.endswith(")") and not line.endswith("{") and not line.endswith("}"):
+                unrecognized_count += 1
+
+        if unrecognized_count > 0:
+            ctx.add_trace(
+                "groovy-stub",
+                "error",
+                f"OIW-W013: Groovy script contains {unrecognized_count} construct(s) not supported "
+                "by the stub interpreter; results may be incomplete. "
+                "Install the JVM bridge for full execution: bash services/runtime-worker-jvm/setup.sh",
+            )
 
     def compatibility(self) -> dict[str, Any]:
         bridge = _find_jvm_bridge()

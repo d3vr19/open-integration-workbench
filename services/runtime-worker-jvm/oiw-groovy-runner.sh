@@ -3,8 +3,8 @@
 # Usage: echo '{"scriptPath":"...","message":{...},"timeoutMs":30000}' | oiw-groovy-runner.sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Check if JARs exist
-if [ ! -f "$DIR/lib/groovy-4.0.22.jar" ]; then
+# Check if JARs exist (any Groovy version)
+if ! ls "$DIR"/lib/groovy-*.jar > /dev/null 2>&1; then
     # JARs not available — output a FAILED response so Python falls back to stub
     echo '{"status":"FAILED","message":null,"error":{"type":"IOException","message":"Groovy JARs not found — JVM bridge unavailable"}}'
     exit 1

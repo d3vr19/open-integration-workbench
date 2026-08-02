@@ -209,27 +209,33 @@ public class GroovyRunner {
     private static CompilerConfiguration createSandboxConfig() {
         CompilerConfiguration config = new CompilerConfiguration();
 
-        // Import customizer — add allowed imports
+        // Import customizer — add allowed imports (spec §9.6 allowed list)
         ImportCustomizer importCustomizer = new ImportCustomizer();
-        for (String imp : ALLOWED_IMPORTS) {
-            if (imp.contains(".")) {
-                String className = imp.substring(imp.lastIndexOf('.') + 1);
-                if (imp.endsWith(".*") || imp.equals("java.util") || imp.equals("java.time")) {
-                    importCustomizer.addStarImports(imp);
-                } else {
-                    importCustomizer.addImports(imp);
-                }
-            }
-        }
+        importCustomizer.addStarImports("java.util", "java.time", "groovy.json", "groovy.xml");
+        importCustomizer.addImports(
+            "java.lang.String", "java.lang.Integer", "java.lang.Long",
+            "java.lang.Boolean", "java.lang.Double", "java.lang.Math",
+            "java.lang.Object", "java.lang.Exception", "java.lang.RuntimeException",
+            "java.lang.IllegalArgumentException",
+            "java.text.SimpleDateFormat",
+            "java.math.BigDecimal", "java.math.BigInteger",
+            "java.util.Base64", "java.util.UUID"
+        );
         config.addCompilationCustomizers(importCustomizer);
 
-        // SecureASTCustomizer — block dangerous constructs
+        // SecureASTCustomizer — closed-by-default whitelist (spec §9.6)
+        // Use whitelist as primary defense; disallowed receivers as second layer.
+        // Note: SecureASTCustomizer does not allow both allowedImports and
+        // disallowedImports simultaneously. We use the whitelist (closed-by-default)
+        // and rely on disallowedReceivers for method-call blocking.
         SecureASTCustomizer secure = new SecureASTCustomizer();
-        secure.setDisallowedImports(DISALLOWED_IMPORTS);
-        secure.setDisallowedReceivers(DISALLOWED_RECEIVERS);
 
-        // Block method calls on dangerous types
+        // Whitelist: only these imports are allowed (closed-by-default)
+        secure.setAllowedImports(ALLOWED_IMPORTS);
         secure.setIndirectImportCheckEnabled(true);
+
+        // Block method calls on dangerous types (defense-in-depth)
+        secure.setDisallowedReceivers(DISALLOWED_RECEIVERS);
 
         config.addCompilationCustomizers(secure);
 

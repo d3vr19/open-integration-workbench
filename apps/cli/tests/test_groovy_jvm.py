@@ -6,9 +6,10 @@ Tests:
   1. Header set — Groovy script sets a header → assert header in output
   2. Body transform — Groovy script transforms JSON body → assert body changed
   3. Runtime.exec blocked — Groovy script with Runtime.getRuntime() → assert FAILED
-  4. Timeout killed — Groovy script with infinite loop → assert timeout
+  4. Timeout killed — Groovy script with infinite loop → assert timeout + process killed
 
-These tests are skipped if the JVM bridge is not available (no Java or no JAR).
+These tests are skipped if the JVM bridge is not runnable (no JDK or no JARs).
+In CI, setup.sh installs JDK + JARs + compiles, so tests will run.
 """
 
 from __future__ import annotations
@@ -29,16 +30,19 @@ def _jvm_bridge_runnable() -> bool:
     if bridge is None:
         return False
     bridge_dir = Path(bridge).parent
-    has_jars = (bridge_dir / "lib" / "groovy-4.0.22.jar").exists()
+    lib_dir = bridge_dir / "lib"
+    has_jars = lib_dir.is_dir() and any(
+        f.name.startswith("groovy-") and f.suffix == ".jar" for f in lib_dir.iterdir()
+    )
     has_classes = (bridge_dir / "build" / "io").is_dir()
     return has_jars and has_classes
 
 
-# Skip all tests if JVM bridge is not actually runnable
+# Skip JVM tests if bridge is not runnable (e.g., local dev without JDK)
+# In CI, setup.sh installs JDK + JARs + compiles, so tests will run.
 pytestmark = pytest.mark.skipif(
     not _jvm_bridge_runnable(),
-    reason="JVM Groovy bridge not runnable — requires Java + Groovy JARs + compiled classes. "
-    "Run: cd services/runtime-worker-jvm && javac -cp 'lib/*' -d build src/main/java/io/oiw/groovy/GroovyRunner.java",
+    reason="JVM Groovy bridge not runnable — run: bash services/runtime-worker-jvm/setup.sh",
 )
 
 
@@ -48,7 +52,6 @@ def plugin():
 
 
 def _make_node(script_content: str) -> FlowNode:
-    """Create a FlowNode with an inline Groovy script."""
     return FlowNode(
         id="test-groovy",
         type="script.groovy",
@@ -66,17 +69,9 @@ def _make_ctx(body: bytes = b"{}", headers: dict | None = None) -> MessageContex
     )
 
 
-# ---------------------------------------------------------------------
 # Test 1: Header set
-# ---------------------------------------------------------------------
-
-
 def test_groovy_sets_header(plugin) -> None:
-    """A Groovy script that sets a header → the header appears in the output context."""
-    script = """
-// Set a header via Groovy
-headers["X-Test"] = "hello from groovy"
-"""
+    script = 'headers["X-Test"] = "hello from groovy"'
     node = _make_node(script)
     ctx = _make_ctx()
     result = plugin.execute(node, ctx, mocks={})
@@ -85,13 +80,8 @@ headers["X-Test"] = "hello from groovy"
     assert result.headers.get("X-Test") == "hello from groovy"
 
 
-# ---------------------------------------------------------------------
 # Test 2: Body transform
-# ---------------------------------------------------------------------
-
-
 def test_groovy_transforms_body(plugin) -> None:
-    """A Groovy script that transforms the JSON body → the body is changed."""
     script = """
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
@@ -112,13 +102,8 @@ body = JsonOutput.toJson(json)
     assert output["processed"] is True
 
 
-# ---------------------------------------------------------------------
 # Test 3: Runtime.exec blocked
-# ---------------------------------------------------------------------
-
-
 def test_groovy_blocks_runtime_exec(plugin) -> None:
-    """A Groovy script containing Runtime.getRuntime().exec() → execution FAILED."""
     script = """
 def runtime = Runtime.getRuntime()
 runtime.exec("id")
@@ -128,34 +113,48 @@ runtime.exec("id")
     result = plugin.execute(node, ctx, mocks={})
 
     assert result.exchange_status == "FAILED"
-    # The error should mention the forbidden construct
     error_msg = str(result.exception or "")
     assert "Runtime" in error_msg or "forbidden" in error_msg.lower() or "SecurityException" in error_msg
 
 
-# ---------------------------------------------------------------------
-# Test 4: Timeout killed
-# ---------------------------------------------------------------------
-
-
+# Test 4: Timeout killed (uses 4s timeout via monkey-patch)
 def test_groovy_timeout_killed(plugin) -> None:
-    """A Groovy script with an infinite loop → timeout after 30s, subprocess killed.
+    """A Groovy script with an infinite loop → timeout, subprocess killed.
 
-    Note: This test takes ~30s to run. It verifies that the JVM process is
-    killed after the timeout and doesn't linger.
+    Uses a 4s timeout so the test runs fast. Verifies the JVM process
+    is killed and doesn't linger.
     """
-    script = """
-while (true) { Thread.sleep(100) }
-"""
-    node = _make_node(script)
+    import subprocess as sp
+    import time
+
+    # Pure Groovy infinite loop (no Thread.sleep — Thread is blocked by whitelist)
+    script = "while (true) { def x = 1 + 1 }"
+    node = FlowNode(
+        id="test-timeout",
+        type="script.groovy",
+        config={"script": script},
+        fidelity="compatible-subset",
+    )
     ctx = _make_ctx()
-    result = plugin.execute(node, ctx, mocks={})
+
+    # Monkey-patch Popen.communicate to use a 4s timeout
+    original_popen = sp.Popen
+
+    class FastPopen(original_popen):
+        def communicate(self, *args, **kwargs):
+            kwargs["timeout"] = 4
+            return super().communicate(*args, **kwargs)
+
+    sp.Popen = FastPopen
+    try:
+        result = plugin.execute(node, ctx, mocks={})
+    finally:
+        sp.Popen = original_popen
 
     assert result.exchange_status == "FAILED"
     assert "timeout" in str(result.exception or "").lower()
 
-    # Verify no lingering Java process
-    import subprocess
-
-    ps = subprocess.run(["pgrep", "-f", "oiw-groovy-runner"], capture_output=True, text=True)
+    # Wait for process cleanup, then verify no lingering Java process
+    time.sleep(0.5)
+    ps = sp.run(["pgrep", "-f", "GroovyRunner"], capture_output=True, text=True)
     assert ps.stdout.strip() == "", f"Java process still running after timeout: {ps.stdout}"
