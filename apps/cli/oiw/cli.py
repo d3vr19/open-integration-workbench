@@ -357,5 +357,166 @@ def _write_junit(results: list[TestResult], path: Path) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+# ---------------------------------------------------------------------------
+# WP-04: Agent + Trajectory commands
+# ---------------------------------------------------------------------------
+
+
+@main.command()
+@click.argument("requirement")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+    help="Project root.",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["co-pilot", "autonomous"]),
+    default="co-pilot",
+    help="co-pilot: present plan, wait for approval. autonomous: execute without approval.",
+)
+@click.option("--flow", "flow_id", default=None, help="Target flow ID (optional).")
+def agent(requirement: str, project_path: Path, mode: str, flow_id: str | None) -> None:
+    """Run the LLM-driven agent pipeline (WP-04).
+
+    Interpret a natural-language REQUIREMENT, generate a plan, (optionally)
+    approve it, execute it, and record a trajectory.
+
+    Examples:
+      oiw agent "Add JSON schema validation to order-to-s4"
+      oiw agent --mode autonomous "Fix the receiver timeout"
+      oiw agent --project examples/order-to-s4 --flow order-to-s4 "Add validation"
+    """
+    import asyncio
+    import json as _json
+
+    from .agent.orchestrator import run_agent
+
+    async def _approve(plan):
+        click.echo("\n=== Proposed Plan ===")
+        click.echo(f"Base revision: {plan.base_revision}")
+        click.echo(f"Estimated patches: {plan.estimated_patches}")
+        click.echo(f"Assumptions: {plan.assumptions}")
+        click.echo(f"Risks: {plan.risks}")
+        for step in plan.steps:
+            click.echo(f"  {step.order}. [{step.tool}] {step.rationale}")
+        click.echo(f"    args: {_json.dumps(step.arguments, default=str)[:200]}")
+        return click.confirm("Approve this plan?", default=False)
+
+    result = asyncio.run(
+        run_agent(
+            requirement=requirement,
+            project_path=project_path,
+            mode=mode,
+            flow_id=flow_id,
+            approval_callback=_approve if mode == "co-pilot" else None,
+        )
+    )
+    click.echo(f"\n=== Result: {result.status} ===")
+    click.echo(f"Trajectory ID: {result.trajectory_id}")
+    if result.warnings:
+        click.echo("Warnings:")
+        for w in result.warnings:
+            click.echo(f"  - {w}")
+    if result.execution:
+        click.echo(f"Completed steps: {len(result.execution.completed_steps)}")
+        for sr in result.execution.completed_steps:
+            click.echo(f"  {sr.step.order}. [{sr.step.tool}] {sr.status} — {sr.summary}")
+    if result.execution and result.execution.error:
+        click.echo(f"Error: {result.execution.error}")
+
+
+@main.group()
+def trajectory() -> None:
+    """Trajectory inspection (WP-04 Task 4)."""
+
+
+@trajectory.command("show")
+@click.option("--last", is_flag=True, help="Show the most recent trajectory.")
+@click.option("--id", "traj_id", default=None, help="Show a specific trajectory by ID.")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+    help="Project root (where .oiw/trajectories/ lives).",
+)
+def trajectory_show(last: bool, traj_id: str | None, project_path: Path) -> None:
+    """Show a trajectory's metadata, query, steps, and outcome."""
+    import yaml
+
+    traj_dir = project_path / ".oiw" / "trajectories"
+    if not traj_dir.is_dir():
+        click.echo(f"No trajectories found at {traj_dir}")
+        return
+    files = sorted(traj_dir.glob("traj-*.yaml"))
+    if not files:
+        click.echo(f"No trajectories found at {traj_dir}")
+        return
+    if traj_id:
+        target = traj_dir / f"{traj_id}.yaml"
+        if not target.is_file():
+            click.echo(f"Trajectory {traj_id} not found")
+            return
+    elif last:
+        target = files[-1]
+    else:
+        click.echo("Specify --last or --id TRAJ_ID")
+        return
+    data = yaml.safe_load(target.read_text(encoding="utf-8"))
+    click.echo(yaml.safe_dump(data, sort_keys=False, default_flow_style=False, allow_unicode=True))
+
+
+@trajectory.command("export")
+@click.option("--redacted", is_flag=True, default=True, help="Strip any remaining secrets (default).")
+@click.option("--output", type=click.Path(path_type=Path), required=True, help="Output YAML path.")
+@click.option("--id", "traj_id", default=None, help="Export a specific trajectory by ID.")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+    help="Project root.",
+)
+def trajectory_export(redacted: bool, output: Path, traj_id: str | None, project_path: Path) -> None:
+    """Export a trajectory for EMG research (WP-04 Task 4).
+
+    Trajectories are already redacted at persistence time; this command
+    re-applies the redactor as a defense-in-depth measure and writes
+    the result to the specified output path.
+    """
+    import yaml
+
+    from .agent.redaction import Redactor
+
+    traj_dir = project_path / ".oiw" / "trajectories"
+    if not traj_dir.is_dir():
+        click.echo(f"No trajectories found at {traj_dir}")
+        return
+    if traj_id:
+        target = traj_dir / f"{traj_id}.yaml"
+        if not target.is_file():
+            click.echo(f"Trajectory {traj_id} not found")
+            return
+    else:
+        files = sorted(traj_dir.glob("traj-*.yaml"))
+        if not files:
+            click.echo(f"No trajectories found at {traj_dir}")
+            return
+        target = files[-1]
+    data = yaml.safe_load(target.read_text(encoding="utf-8"))
+    if redacted:
+        red = Redactor()
+        data = red.redact_dict(data)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        yaml.safe_dump(data, sort_keys=False, default_flow_style=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    click.echo(f"Exported {target.name} → {output}")
+
+
 if __name__ == "__main__":
     main()

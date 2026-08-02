@@ -2,12 +2,16 @@
 
 Uses a temp workspace so tests can mutate files without affecting the real
 examples directory.
+
+WP-04 Task 6: baseRevision is now REQUIRED. Every test must pass
+`base_revision` matching the temp repo's HEAD, or expect a 409.
 """
 
 from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -19,9 +23,22 @@ EXAMPLE = REPO_ROOT / "examples" / "order-to-s4"
 
 @pytest.fixture()
 def temp_workspace(tmp_path: Path):
-    """Copy order-to-s4 to a temp dir and point OIW_WORKSPACE at it."""
+    """Copy order-to-s4 to a temp dir, init a git repo, and point OIW_WORKSPACE at it.
+
+    WP-04 Task 6: baseRevision is now enforced, so the workspace must have
+    a real HEAD sha for tests to pass.
+    """
     dest = tmp_path / "order-to-s4"
     shutil.copytree(EXAMPLE, dest)
+    # Init a git repo so _git_head_sha returns a real sha (not "unknown")
+    subprocess.run(["git", "init", "-q"], cwd=dest, check=True)
+    subprocess.run(["git", "-C", str(dest), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(dest), "commit", "-q", "-m", "test fixture"],
+        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
+             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com"},
+        check=True,
+    )
     old = os.environ.get("OIW_WORKSPACE")
     os.environ["OIW_WORKSPACE"] = str(tmp_path)
     yield
@@ -38,11 +55,26 @@ def client():
     return TestClient(app)
 
 
+def _head_sha() -> str:
+    """Read the current HEAD of the temp workspace's git repo."""
+    workspace = os.environ.get("OIW_WORKSPACE")
+    if not workspace:
+        return "unknown"
+    result = subprocess.run(
+        ["git", "-C", str(Path(workspace) / "order-to-s4"), "rev-parse", "--short", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
 def test_patch_add_node(temp_workspace, client: TestClient) -> None:
     """Add a node via PATCH and verify it persists."""
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
         json={
+            "base_revision": _head_sha(),
             "operations": [
                 {
                     "op": "addNode",
@@ -73,12 +105,14 @@ def test_patch_remove_node(temp_workspace, client: TestClient) -> None:
     # Add
     client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"operations": [{"op": "addNode", "node": {"id": "to-remove", "type": "log.message"}}]},
+        json={"base_revision": _head_sha(),
+              "operations": [{"op": "addNode", "node": {"id": "to-remove", "type": "log.message"}}]},
     )
     # Remove
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"operations": [{"op": "removeNode", "nodeId": "to-remove"}]},
+        json={"base_revision": _head_sha(),
+              "operations": [{"op": "removeNode", "nodeId": "to-remove"}]},
     )
     assert r.status_code == 200
     # Verify it's gone
@@ -92,6 +126,7 @@ def test_patch_update_node_config(temp_workspace, client: TestClient) -> None:
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
         json={
+            "base_revision": _head_sha(),
             "operations": [
                 {
                     "op": "updateNodeConfig",
@@ -115,6 +150,7 @@ def test_patch_add_edge(temp_workspace, client: TestClient) -> None:
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
         json={
+            "base_revision": _head_sha(),
             "operations": [
                 {"op": "addNode", "node": {"id": "edge-target", "type": "log.message"}},
                 {"op": "addEdge", "from": "transform", "to": "edge-target"},
@@ -130,6 +166,7 @@ def test_patch_move_node(temp_workspace, client: TestClient) -> None:
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
         json={
+            "base_revision": _head_sha(),
             "operations": [
                 {
                     "op": "moveNode",
@@ -153,6 +190,7 @@ def test_patch_multiple_operations(temp_workspace, client: TestClient) -> None:
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
         json={
+            "base_revision": _head_sha(),
             "operations": [
                 {"op": "addNode", "node": {"id": "multi-1", "type": "log.message"}},
                 {"op": "addNode", "node": {"id": "multi-2", "type": "log.message"}},
@@ -170,6 +208,7 @@ def test_patch_invalid_operation_returns_400(temp_workspace, client: TestClient)
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
         json={
+            "base_revision": _head_sha(),
             "operations": [
                 {"op": "addNode", "node": {"id": "transform"}}  # duplicate ID
             ]
@@ -182,7 +221,8 @@ def test_patch_unknown_operation_returns_400(temp_workspace, client: TestClient)
     """An unknown operation type returns 400."""
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"operations": [{"op": "doMagic"}]},
+        json={"base_revision": _head_sha(),
+              "operations": [{"op": "doMagic"}]},
     )
     assert r.status_code == 400
 
@@ -191,7 +231,8 @@ def test_patch_cycle_rejected(temp_workspace, client: TestClient) -> None:
     """A patch that introduces a cycle returns 400."""
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"operations": [{"op": "addEdge", "from": "route-by-region", "to": "transform"}]},
+        json={"base_revision": _head_sha(),
+              "operations": [{"op": "addEdge", "from": "route-by-region", "to": "transform"}]},
     )
     assert r.status_code == 400
 
@@ -199,7 +240,7 @@ def test_patch_cycle_rejected(temp_workspace, client: TestClient) -> None:
 def test_patch_404_unknown_project(client: TestClient) -> None:
     r = client.patch(
         "/api/v1/projects/nonexistent/flows/x",
-        json={"operations": []},
+        json={"base_revision": "any", "operations": []},
     )
     assert r.status_code == 404
 
@@ -207,7 +248,7 @@ def test_patch_404_unknown_project(client: TestClient) -> None:
 def test_patch_404_unknown_flow(temp_workspace, client: TestClient) -> None:
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/nonexistent",
-        json={"operations": []},
+        json={"base_revision": _head_sha(), "operations": []},
     )
     assert r.status_code == 404
 
@@ -216,7 +257,38 @@ def test_patch_empty_operations(temp_workspace, client: TestClient) -> None:
     """An empty operations list is a no-op."""
     r = client.patch(
         "/api/v1/projects/order-to-s4/flows/order-to-s4",
-        json={"operations": []},
+        json={"base_revision": _head_sha(), "operations": []},
     )
     assert r.status_code == 200
     assert r.json()["applied"] == 0
+
+
+# ---------------------------------------------------------------------------
+# WP-04 Task 6: new tests for baseRevision enforcement
+# ---------------------------------------------------------------------------
+
+
+def test_patch_missing_base_revision_returns_409(temp_workspace, client: TestClient) -> None:
+    """WP-04 Task 6: missing baseRevision returns 409 (was 200 before)."""
+    r = client.patch(
+        "/api/v1/projects/order-to-s4/flows/order-to-s4",
+        json={"operations": [{"op": "addNode", "node": {"id": "x", "type": "log.message"}}]},
+    )
+    assert r.status_code == 409 or r.status_code == 422  # 422 if pydantic rejects first
+
+
+def test_patch_stale_base_revision_returns_409(temp_workspace, client: TestClient) -> None:
+    """WP-04 Task 6: stale baseRevision returns 409 Conflict."""
+    r = client.patch(
+        "/api/v1/projects/order-to-s4/flows/order-to-s4",
+        json={
+            "base_revision": "stalesha1",
+            "operations": [{"op": "addNode", "node": {"id": "x", "type": "log.message"}}],
+        },
+    )
+    assert r.status_code == 409
+    body = r.json()
+    detail = body.get("detail", {})
+    if isinstance(detail, dict):
+        assert detail.get("code") == "BASE_REVISION_CONFLICT"
+        assert detail.get("clientRevision") == "stalesha1"

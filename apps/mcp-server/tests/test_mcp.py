@@ -227,11 +227,29 @@ def test_unknown_tool_returns_error() -> None:
 
 
 def test_flow_patch_adds_node(tmp_path: Path) -> None:
-    """Test flow.patch by copying the example to a temp dir and patching it."""
+    """Test flow.patch by copying the example to a temp dir and patching it.
+
+    WP-04 Task 6: baseRevision is now required — we init a git repo in
+    the temp dir so the handler can read a real HEAD sha.
+    """
     import shutil
+    import subprocess
 
     dest = tmp_path / "order-to-s4"
     shutil.copytree(EXAMPLES / "order-to-s4", dest)
+    # Init git so _tool_flow_patch can read HEAD (WP-04 Task 6)
+    subprocess.run(["git", "init", "-q"], cwd=dest, check=True)
+    subprocess.run(["git", "-C", str(dest), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(dest), "commit", "-q", "-m", "test fixture"],
+        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
+             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com"},
+        check=True,
+    )
+    head = subprocess.run(
+        ["git", "-C", str(dest), "rev-parse", "--short", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
     old = os.environ.get("OIW_WORKSPACE")
     os.environ["OIW_WORKSPACE"] = str(tmp_path)
     try:
@@ -240,6 +258,7 @@ def test_flow_patch_adds_node(tmp_path: Path) -> None:
             {
                 "projectId": "order-to-s4",
                 "flowId": "order-to-s4",
+                "baseRevision": head,
                 "operations": [
                     {
                         "op": "addNode",
@@ -260,6 +279,76 @@ def test_flow_patch_adds_node(tmp_path: Path) -> None:
         data2 = json.loads(result2)
         node_ids = [n["id"] for n in data2["spec"]["nodes"]]
         assert "mcp-added" in node_ids
+    finally:
+        if old is not None:
+            os.environ["OIW_WORKSPACE"] = old
+        else:
+            os.environ.pop("OIW_WORKSPACE", None)
+
+
+def test_flow_patch_missing_base_revision_rejected(tmp_path: Path) -> None:
+    """WP-04 Task 6: flow.patch without baseRevision returns JSON-RPC -32602."""
+    import shutil
+
+    dest = tmp_path / "order-to-s4"
+    shutil.copytree(EXAMPLES / "order-to-s4", dest)
+    old = os.environ.get("OIW_WORKSPACE")
+    os.environ["OIW_WORKSPACE"] = str(tmp_path)
+    try:
+        result = dispatch_tool(
+            "flow.patch",
+            {
+                "projectId": "order-to-s4",
+                "flowId": "order-to-s4",
+                "operations": [
+                    {"op": "addNode", "node": {"id": "x", "type": "log.message"}},
+                ],
+            },
+        )
+        data = json.loads(result)
+        assert data.get("code") == -32602
+        assert data.get("applied") == 0
+        assert "baseRevision" in data.get("error", "")
+    finally:
+        if old is not None:
+            os.environ["OIW_WORKSPACE"] = old
+        else:
+            os.environ.pop("OIW_WORKSPACE", None)
+
+
+def test_flow_patch_stale_base_revision_conflict(tmp_path: Path) -> None:
+    """WP-04 Task 6: stale baseRevision returns CONFLICT."""
+    import shutil
+    import subprocess
+
+    dest = tmp_path / "order-to-s4"
+    shutil.copytree(EXAMPLES / "order-to-s4", dest)
+    subprocess.run(["git", "init", "-q"], cwd=dest, check=True)
+    subprocess.run(["git", "-C", str(dest), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(dest), "commit", "-q", "-m", "fixture"],
+        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
+             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com"},
+        check=True,
+    )
+    old = os.environ.get("OIW_WORKSPACE")
+    os.environ["OIW_WORKSPACE"] = str(tmp_path)
+    try:
+        result = dispatch_tool(
+            "flow.patch",
+            {
+                "projectId": "order-to-s4",
+                "flowId": "order-to-s4",
+                "baseRevision": "stalesha1",
+                "operations": [
+                    {"op": "addNode", "node": {"id": "x", "type": "log.message"}},
+                ],
+            },
+        )
+        data = json.loads(result)
+        assert data.get("code") == -32602
+        assert data.get("status") == "CONFLICT"
+        assert data.get("clientRevision") == "stalesha1"
     finally:
         if old is not None:
             os.environ["OIW_WORKSPACE"] = old

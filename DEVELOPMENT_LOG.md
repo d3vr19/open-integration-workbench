@@ -362,3 +362,69 @@ Append new entries below. Newest at the bottom. Format:
 - Files touched: DEVELOPMENT_LOG.md, README.md, docs/compatibility/matrix.md, docs/security/threat-model.md, docs/architecture/README.md, apps/web/README.md, apps/server/README.md, apps/mcp-server/README.md, services/model-gateway/README.md, services/runtime-worker/README.md, services/emg-worker/README.md
 
 ---
+
+
+### 2026-08-02 — WP-04: LLM-Driven Agent Pipeline & Trajectory Instrumentation
+
+- Implemented WP-04 Tasks 1–7 (8 deferred). New package `apps/cli/oiw/agent/`.
+- **Task 1**: LLM-driven `interpret_requirement()` with keyword fallback. System
+  prompt in `apps/cli/oiw/agent/prompts/interpreter.md`. Returns
+  `NormalizedRequirement` with `intent`, `archetype`, `protocols`, `operations`,
+  `components`, `constraints`, `confidence`. Emits `OIW-W014` on fallback.
+- **Task 2**: LLM-driven `plan_implementation()` with hardcoded fallback.
+  `TOOL_DEFINITIONS` passed as function-calling tools. Planner enforces
+  `baseRevision` injection on every `flow.patch` step (defensive — even if the
+  LLM omits it, the parser injects HEAD).
+- **Task 3**: LLM-driven `execute_plan()` with bounded correction (max 2
+  retries per failed step, spec §15.13). Pre-dispatch `baseRevision` validation
+  returns `CONFLICT` status. Trajectory records every attempt.
+- **Task 4**: `TrajectoryRecorder` persists to `.oiw/trajectories/{traj_id}.yaml`.
+  Action normalization (spec §15.4): `(tool, op, componentType,
+  semanticTarget, paramClass)`. Observation normalization (spec §15.5).
+  Redaction (spec §15.17): regex patterns + key-based redaction (stricter than
+  spec — catches `{"password": "pw"}` that regex misses).
+- **Task 5**: `ModelGatewayClient` async HTTP client. Calls the gateway's
+  actual `/api/v1/llm/chat` endpoint (not the aspirational
+  `/v1/chat/completions` from WP-04 §3). `health()` returns False on network
+  failure (never raises).
+- **Task 6**: `baseRevision` now REQUIRED across all three layers:
+  - MCP `flow.patch` schema lists `baseRevision` in `required` array;
+    handler returns JSON-RPC `-32602` on missing/stale revision.
+  - REST `PATCH /flows/{flowId}` returns HTTP 409 Conflict with structured
+    body `{code: "BASE_REVISION_CONFLICT", clientRevision, serverRevision}`.
+  - Agent executor validates `baseRevision` before dispatching; returns
+    `CONFLICT` status on mismatch.
+  - Existing `plan_implementation()` in
+    `apps/server-python-prototype/oiw_server/agent.py` now accepts
+    `base_revision` param and injects it into every `flow.patch` step.
+  - Agent REST routes (`/agents:plan`, `/agents:implement`) now capture HEAD
+    at planning time and pass it to the planner.
+- **Task 7**: `run_agent()` orchestrator chains interpret → plan → (approve)
+  → execute → trajectory. Two modes: `co-pilot` (default; approval callback)
+  and `autonomous`. Computes reward vector
+  `{structural_correctness, completion, corrections_needed, conflict_count}`.
+- **Task 8 (Eval Harness)**: Deferred — requires spec §27 benchmark suite.
+- **Task 9 (Co-Pilot UI)**: Deferred — React/Playwright work exceeds scope.
+- **Corrections to WP-04 §2 "Current State" table** (see WP-04 §10.2):
+  - `apps/cli/oiw/patch/` → actually `apps/cli/oiw/patch.py` (single file).
+  - `apps/cli/oiw/agent/` → did not exist; legacy pipeline at
+    `apps/server-python-prototype/oiw_server/agent.py`.
+  - `apps/cli/oiw/agent/executor.py` → did not exist; was a function in the
+    legacy agent.py.
+  - baseRevision status → was accurate ("❌ Not passed by planner"); now fixed
+    by Task 6.
+- **Deviations** (see WP-04 §10.3):
+  - DEV-010: Trajectory `normalized` tuple persisted as list for YAML compat.
+  - DEV-011: Gateway client uses actual `/api/v1/llm/chat` endpoint, not
+    aspirational `/v1/chat/completions`.
+  - DEV-012: Redactor adds key-based redaction (stricter than spec §15.17).
+  - DEV-013: Fallback planner wraps legacy `plan_implementation()` in
+    `_map_intent_to_legacy()` to translate intent taxonomies.
+- **Tests**: 294 total (153 CLI + 20 MCP + 78 server + 43 gateway).
+  Baseline was 223. Delta: +71 (WP-04 required ≥35). CI: pending.
+- **Open work items**:
+  - OW-019: WP-04 Task 8 (Eval Harness) — author spec §27 benchmarks.
+  - OW-020: WP-04 Task 9 (Co-Pilot UI) — React components + Playwright E2E.
+  - OW-021: Wire `oiw agent` CLI command to `run_agent()` orchestrator.
+  - OW-022: Add `oiw trajectory show` and `oiw trajectory export` CLI commands.
+

@@ -196,11 +196,17 @@ def interpret_requirement(raw_requirement: str) -> NormalizedRequirement:
 
 
 def plan_implementation(
-    requirement: NormalizedRequirement, project_id: str, flow_id: str | None = None
+    requirement: NormalizedRequirement, project_id: str, flow_id: str | None = None,
+    base_revision: str | None = None,
 ) -> ImplementationPlan:
     """Produce a step-by-step implementation plan.
 
     Spec §12.2: "Integration Planner ← produces step-by-step implementation plan"
+    WP-04 Task 2 (fallback): every flow.patch step MUST include baseRevision
+    matching HEAD. If `base_revision` is None the caller (typically the
+    REST route) is expected to supply HEAD; we leave it None here so the
+    MCP handler's required-field check rejects the patch loudly rather
+    than silently applying with a fake revision.
     """
     steps: list[PlanStep] = []
     assumptions: list[str] = []
@@ -220,6 +226,7 @@ def plan_implementation(
                 arguments={
                     "projectId": project_id,
                     "flowId": flow_id or "new-flow",
+                    "baseRevision": base_revision,
                     "operations": [
                         {
                             "op": "addNode",
@@ -262,6 +269,7 @@ def plan_implementation(
                 arguments={
                     "projectId": project_id,
                     "flowId": flow_id or "order-to-s4",
+                    "baseRevision": base_revision,
                     "operations": [
                         {
                             "op": "addNode",
