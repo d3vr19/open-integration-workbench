@@ -3,11 +3,16 @@
 Spec ref: §9.4 (`script.groovy`, fidelity=simulated), §9.6 (Groovy Sandbox),
 §16.1 threat 2 (hostile Groovy script -> RCE).
 
-DEV-003 (see DEVELOPMENT_LOG.md): the current Python prototype does NOT
+**CRITICAL LIMITATION (DEV-003)**: The current Python prototype does NOT
 execute Groovy. It runs a constrained Python-based DSL that emulates the
 commonly-used Groovy primitives (header/property manipulation, JSON slurp,
-XML parse). Full Groovy execution with process isolation, seccomp, and
-network namespace isolation is Phase 2 work (services/runtime-worker).
+XML parse). This is a **stub** — real Groovy scripts will NOT produce correct
+output. Full Groovy execution with process isolation, seccomp, and network
+namespace isolation is Phase 2 work (OW-003 / services/runtime-worker).
+
+**Do not rely on Groovy step results for correctness validation.** A flow
+that depends on Groovy script output (e.g., dynamic header values set by
+the script) will see the stub's default behavior, not the real Groovy output.
 
 The script content is statically scanned against the §9.6 blocked list
 before any execution attempt. Forbidden constructs cause an exception.

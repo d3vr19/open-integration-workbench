@@ -31,8 +31,8 @@ Every entry MUST link to a fixture (spec §8.5) and a test that proves the claim
 |------|----------|-------|
 | `modifier.content` | Compatible-subset | Headers, properties, body. Supports `${header.X}`, `${property.Y}`, `${body}` interpolation. |
 | `validator.json-schema` | Compatible-subset | Draft-07 JSON Schema. |
-| `script.groovy` | Simulated | **DEV-003**: stub interpreter supports `message.setHeader/setProperty/setBody` only. Full Groovy execution deferred to Phase 2 (services/runtime-worker with seccomp isolation). |
-| `transform.xslt` | Compatible-subset | **DEV-003**: Python prototype uses XSLT 1.0 (lxml). XSLT 2.0 subset via Saxon-HE is Phase 2. |
+| `script.groovy` | Simulated | **CRITICAL LIMITATION (DEV-003)**: Python stub does NOT execute Groovy. Only `message.setHeader/setProperty/setBody` are emulated. Real Groovy scripts will NOT produce correct output. Full Groovy execution in process-isolated JVM is Phase 2 (OW-003). **Do not rely on Groovy step results for correctness validation.** |
+| `transform.xslt` | Simulated | **DEV-003**: Python prototype uses XSLT 1.0 (lxml). XSLT 2.0/3.0 features (`xsl:for-each-group`, `xsl:function`, `xsl:analyze-string`, `xsl:perform-sort`, sequence types) are **unsupported**. Saxon-HE XSLT 2.0 subset via subprocess is Phase 2 (OW-003). Downgraded from "compatible-subset" to "simulated" per spec §4.3 — the 1.0-only limitation means we cannot honestly claim compatible-subset for real SAP CPI mappings that routinely use XSLT 2.0. |
 | `converter.json-to-xml` | Compatible-subset | Simple JSON→XML with configurable root element. |
 | `converter.xml-to-json` | Compatible-subset | Simple XML→JSON; optional `rootElement` wrapper. |
 | `router.content-based` | Compatible-subset | Simple `${property.X} == 'value'` and `true`/`false` expressions. |

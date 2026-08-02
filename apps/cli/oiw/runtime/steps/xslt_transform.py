@@ -68,9 +68,15 @@ class XsltTransform(StepPlugin):
 
     def compatibility(self) -> dict[str, Any]:
         return {
-            "fidelity": "compatible-subset",
+            "fidelity": "simulated",
             "target_profiles": ["sap-cloud-integration-2026-07"],
-            "note": "Python prototype uses XSLT 1.0 (lxml). XSLT 2.0 subset via Saxon-HE is Phase 2.",
+            "note": (
+                "Python prototype uses XSLT 1.0 (lxml). XSLT 2.0/3.0 features "
+                "are unsupported. Saxon-HE XSLT 2.0 subset via subprocess is "
+                "Phase 2 (OW-003). Fidelity downgraded from 'compatible-subset' "
+                "to 'simulated' per spec §4.3 — XSLT 1.0-only is not a compatible "
+                "subset of real SAP CPI mappings that routinely use XSLT 2.0."
+            ),
         }
 
     def security_classification(self) -> str:

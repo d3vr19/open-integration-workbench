@@ -63,3 +63,27 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def main() -> None:
+    """Entry point for the oiw-server console script.
+
+    Security (spec §16.2): binds to 127.0.0.1 by default — the API has no
+    authentication in local mode. Set OIW_HOST=0.0.0.0 for team mode (requires
+    auth — not yet implemented, OW-005).
+    """
+    import os
+    import warnings
+
+    import uvicorn
+
+    host = os.environ.get("OIW_HOST", "127.0.0.1")
+    port = int(os.environ.get("OIW_SERVER_PORT", "8000"))
+    if host != "127.0.0.1":
+        warnings.warn(
+            f"OIW server binding to {host} — this exposes the API without authentication. "
+            "Only use this in trusted network environments (spec §16.2). "
+            "Set OIW_HOST=127.0.0.1 to restrict to localhost.",
+            stacklevel=2,
+        )
+    uvicorn.run(app, host=host, port=port)

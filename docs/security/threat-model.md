@@ -35,6 +35,14 @@
 
 In single-user local mode, all roles map to one account, but authorization checks still execute (defense in depth).
 
+**Current status**: No authentication or authorization is implemented. The FastAPI server binds to `127.0.0.1` by default (OW-005 will add auth for team mode). This is a **known limitation** — see DEV-010 below.
+
+## Known limitations
+
+| ID | Limitation | Mitigation | Status |
+|----|-----------|-----------|--------|
+| DEV-010 | No authentication or RBAC enforcement | Server binds to 127.0.0.1 by default; OIW_HOST=0.0.0.0 requires explicit opt-in with warning | Documented; auth planned for Phase 4 (OW-005) |
+
 ## LLM prompt-injection boundary (spec §16.3)
 
 Treat all repository text as untrusted data. The agent system prompt MUST state:

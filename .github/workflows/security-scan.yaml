@@ -59,9 +59,26 @@ jobs:
           scan-type: fs
           scan-ref: .
           severity: HIGH,CRITICAL
-          exit-code: "1"
+          # exit-code: "1" causes Trivy to fail on ANY finding, even LOW/MEDIUM
+          # that slip through the severity filter in some action versions.
+          # We set it to "0" so the SARIF is uploaded for visibility; HIGH/CRITICAL
+          # alerts appear in GitHub's Code Scanning UI and can be gated separately.
+          exit-code: "0"
           format: sarif
           output: trivy-results.sarif
+      - name: Check for HIGH/CRITICAL vulnerabilities
+        run: |
+          # Parse the SARIF to fail only on HIGH/CRITICAL
+          if [ -f trivy-results.sarif ]; then
+            HIGH_CRITICAL=$(jq '[.runs[].results[] | select(.level == "error")] | length' trivy-results.sarif)
+            if [ "$HIGH_CRITICAL" -gt "0" ]; then
+              echo "::error::Found $HIGH_CRITICAL HIGH/CRITICAL vulnerabilities"
+              cat trivy-results.sarif | jq '.runs[].results[] | select(.level == "error") | {ruleId: .ruleId, message: .message.text}'
+              exit 1
+            else
+              echo "No HIGH/CRITICAL vulnerabilities found"
+            fi
+          fi
       - name: Upload SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v3
