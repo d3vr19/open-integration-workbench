@@ -580,3 +580,40 @@ Append new entries below. Newest at the bottom. Format:
   - OW-029: Full SPA decomposition (extract FlowCanvas, PropertiesPanel,
     PalettePanel from App.tsx — separate work package).
 
+
+### 2026-08-02 (cont. 3) — CI green + OW-026/027/028 complete
+
+- **CI fully green** on commit `ffa1963` — all 4 workflows pass:
+  - Security Scan: success
+  - Validate PR: success (all 9 jobs: OIW validate, schema self-check,
+    CLI pytest, API pytest, MCP pytest, gateway pytest, ruff lint, SPA
+    build, DEVELOPMENT_LOG check)
+  - Agent Eval: success (bench-001 PASS, bench-002 FAIL, bench-003 PARTIAL)
+  - E2E Tests: success (2 Playwright tests pass)
+- **CI fix history** (8 passes to resolve all issues):
+  1. httpx missing from CLI dependencies
+  2. pytest-asyncio missing from CLI [dev] extras
+  3. ruff 0.5.7 format compatibility (UP038, SIM102, SIM108, BLE001, etc.)
+  4. Agent-eval runner exit code (bench-002 FAIL is expected, not an error)
+  5. E402 noqa for sys.path-gated imports in eval harness
+  6. ruff-formatted files not staged (agent source, agent tests, server-prototype)
+  7. PYTHONPATH missing from CI CLI pytest job (executor tests need MCP server)
+  8. --forbid-flaky not supported in installed Playwright version
+- **OW-026 complete**: E2E CI workflow (`.github/workflows/e2e.yaml`) runs
+  Playwright tests on every PR/push. Sets up Python API server + Vite dev
+  server + chromium. Both co-pilot tests pass in CI.
+- **OW-027 complete**: POST /agents:implement now returns `trajectoryId`.
+  The route wraps the legacy executor in a TrajectoryRecorder, persists
+  the trajectory YAML, and returns the ID. CoPilotPanel surfaces it in
+  the TrajectoryIndicator tooltip. +2 server tests.
+- **OW-028 complete**: PatchPreviewDialog now fetches the real semantic
+  diff from GET /projects/{id}/diff instead of deriving from stepResults.
+  Falls back to derived diff on error. Shows trajectory ID badge.
+- **Test count**: 313 → 317 (315 unit/integration + 2 E2E). All green in CI.
+- **CI checks**: 12 required checks across 3 workflows (validate-on-pr,
+  agent-eval, e2e).
+- **DEV-020 resolved** (trajectory ID surfaced) by OW-027.
+- **DEV-021 resolved** (real semantic diff) by OW-028.
+- **DEV-022 resolved** (Playwright E2E in CI) by OW-026.
+- **Remaining open work**: OW-029 (full SPA decomposition — separate WP).
+
