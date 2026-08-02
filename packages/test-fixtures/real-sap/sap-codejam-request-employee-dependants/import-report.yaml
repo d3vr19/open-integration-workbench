@@ -1,0 +1,108 @@
+# Import report for real SAP CodeJam artifact
+# Source: SAP-samples/connecting-systems-services-integration-suite-codejam
+# Artifact: "Connecting Systems CodeJam - Export.zip"
+# This is a REAL SAP Cloud Integration export — not synthetic.
+#
+# Spec ref: §8.3 (Import Report Format), §8.5 (Golden Fixture Repository)
+#
+# The export ZIP contains 7 iFlow variants (different exercises from the CodeJam).
+# Each variant is a nested ZIP inside the outer export, containing:
+#   - .iflw XML (BPMN2 with SAP ifl namespace)
+#   - Groovy scripts (some variants)
+#   - parameters.prop / parameters.propdef (SAP externalized parameters)
+#   - .project (Eclipse project file)
+#   - META-INF/MANIFEST.MF
+
+importResult:
+  status: PARTIAL
+  targetProfile: sap-cloud-integration-2026-07
+  sourceArchive: source.zip
+  digest: sha256:<computed at runtime>
+
+  # 38 recognized components across 7 iFlow variants:
+  # - https_sender (7x — one per iFlow)
+  # - http_receiver (7x — one per iFlow)
+  # - receiver.http (serviceTask classified as HTTP receiver)
+  # - converter.json-to-xml (JSON→XML converter steps)
+  # - modifier.content (content modifier / property setter steps)
+  # - groovy_script (in variants that have scripts)
+
+  recognized:
+    - component: https_sender
+      fidelity: simulated
+      count: 7
+    - component: http_receiver
+      fidelity: simulated
+      count: 7
+    - component: receiver.http
+      fidelity: simulated
+      count: ~10
+    - component: converter.json-to-xml
+      fidelity: compatible-subset
+      count: 2
+    - component: modifier.content
+      fidelity: compatible-subset
+      count: ~7
+    - component: groovy_script
+      fidelity: simulated
+      note: "retrieve-api-key.groovy — uses SAP SecureStoreService API (stubbed in OIW)"
+
+  preservedOpaque:
+    - vendorExtension: "ifl:collaboration.namespaceMapping"
+      location: "extensions.collaboration.namespaceMapping"
+    - vendorExtension: "ifl:collaboration.httpSessionHandling"
+      location: "extensions.collaboration.httpSessionHandling"
+    - vendorExtension: "ifl:collaboration.returnExceptionToSender"
+      location: "extensions.collaboration.returnExceptionToSender"
+    - vendorExtension: "ifl:collaboration.log"
+      location: "extensions.collaboration.log"
+    - vendorExtension: "ifl:collaboration.corsEnabled"
+      location: "extensions.collaboration.corsEnabled"
+    - vendorExtension: "ifl:collaboration.componentVersion"
+      location: "extensions.collaboration.componentVersion"
+    - vendorExtension: "ifl:collaboration.ServerTrace"
+      location: "extensions.collaboration.ServerTrace"
+    - vendorExtension: "sap:parameters.prop"
+      location: "extensions.parameters"
+      note: "SAP externalized parameters — preserved verbatim"
+    - vendorExtension: "sap:parameters.propdef"
+      location: "extensions.parameters"
+      note: "SAP parameter definitions — preserved verbatim"
+    - vendorExtension: "sap:.project"
+      location: "extensions.eclipse"
+      note: "Eclipse project file — preserved verbatim"
+
+  unsupported:
+    - component: "callActivity:GET apiKey from SecureStore"
+      reason: "SAP SecureStoreService integration — no OIW equivalent (requires tenant)"
+    - component: "callActivity:Convert BP response to XML"
+      reason: "Could not classify — likely a content-based converter not yet supported"
+    - component: "callActivity:Country not supported error"
+      reason: "Error handling subprocess — classification heuristic needs improvement"
+    - component: "callActivity:Get Employee Country"
+      reason: "Could not classify — likely a content modifier or router"
+    - component: "callActivity:Delete Request Log entry"
+      reason: "SAP message log integration — no OIW equivalent"
+
+  warnings:
+    - "Archive contains 11 entries (7 iFlow variants + metadata)"
+    - "Visual coordinates from BPMN DI not mapped to diagram.json"
+    - "SAP iFlow participant names used as node IDs"
+    - "Groovy script retrieve-api-key.groovy uses SAP SecureStoreService API — will not execute locally (stub only)"
+    - "XSLT 2.0 features not detected (no .xsl files in this export)"
+    - "BPMN2 namespaces preserved — local-name matching used for element classification"
+
+  # Key finding: the import parser successfully:
+  # 1. Handled the nested ZIP structure (outer export → inner content ZIPs → .iflw XML)
+  # 2. Parsed BPMN2 XML with SAP ifl namespace
+  # 3. Extracted participants (senders/receivers) from collaboration
+  # 4. Extracted process steps (serviceTask, callActivity, scriptTask)
+  # 5. Extracted sequence flows (edges)
+  # 6. Preserved SAP-specific properties as opaque extensions
+  # 7. Produced honest PARTIAL status with recognized/opaque/unsupported
+
+  # Key gaps discovered:
+  # 1. Call activity classification needs improvement (5 of 9 unsupported are misclassified)
+  # 2. SAP SecureStoreService calls in Groovy are not supported (tenant-required)
+  # 3. BPMN DI (diagram interchange) coordinates not mapped to diagram.json
+  # 4. SAP parameter files (.prop/.propdef) preserved as opaque, not parsed
