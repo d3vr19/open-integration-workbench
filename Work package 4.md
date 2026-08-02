@@ -1148,6 +1148,58 @@ Interpretation:
    reject path — clicking Reject closes the dialog without applying
    patches. This is bonus coverage beyond the spec.
 
+### 10.8 DEV-024: Eval Harness Location (Repo Root vs apps/cli/tests/)
+
+**Deviation**: The agent evaluation harness lives at `tests/agent_eval/`
+(repo root), not at `apps/cli/tests/agent_eval/` (alongside the agent
+pipeline unit tests).
+
+**Spec prescription**: WP-04 §3 Task 8 says "New directory:
+`tests/agent-eval/`". The spec's path is ambiguous about whether this
+is a repo-root `tests/` directory or an app-level one. The
+implementation interpreted it as repo-root, which is consistent with
+the spec's literal text.
+
+**Why this is a deviation worth documenting**:
+1. The agent pipeline code lives at `apps/cli/oiw/agent/`, and its
+   unit tests live at `apps/cli/tests/agent/`. The eval harness tests
+   the agent pipeline but lives at `tests/agent_eval/` (repo root) —
+   a different location from the unit tests for the same code.
+2. The CI workflow (`agent-eval.yaml`) installs the CLI package and
+   then runs `python -m tests.agent_eval.runner` from the repo root.
+   This works, but it means the eval harness is not packaged with
+   the CLI — `pip install oiw-cli` does not install the eval harness.
+3. The `tests/__init__.py` file (added to make `tests.agent_eval`
+   importable as a module) is a new top-level package that didn't
+   exist before. This could conflict with future repo-root test
+   directories.
+
+**Rationale for the chosen location**:
+- The eval harness is a **benchmark suite**, not a unit test suite.
+  It runs the agent end-to-end against benchmark tasks and produces
+  a YAML report. It's invoked from CI as `python -m tests.agent_eval.runner`,
+  not as `pytest apps/cli/tests/agent_eval/`.
+- Placing it at the repo root makes it clear that it's a
+  cross-cutting concern (it exercises the CLI + MCP server + Python
+  API server + agent pipeline together), not a unit test of any
+  single package.
+- The spec's literal text says `tests/agent-eval/` (repo root), so
+  the implementation follows the spec.
+
+**Migration path (if needed)**: If a future work package wants the
+eval harness packaged with the CLI, the migration is:
+1. `mv tests/agent_eval apps/cli/tests/agent_eval`
+2. Update `tests/agent_eval/runner.py` sys.path inserts (remove
+   the REPO_ROOT/apps/cli insertion since it's now implicit).
+3. Update `.github/workflows/agent-eval.yaml` to run
+   `pytest apps/cli/tests/agent_eval/` instead of
+   `python -m tests.agent_eval.runner`.
+4. Update the WP-04 §10.5 baseline path reference.
+5. Remove `tests/__init__.py` if no other repo-root tests exist.
+
+**Status**: Tracked. No action needed unless the eval harness needs
+to be distributed with the CLI package.
+
 ---
 
 *End of Work Package WP-04*

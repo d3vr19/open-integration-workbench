@@ -227,7 +227,22 @@ Format: `ADR-<seq>: <decision>` — decisions superseding spec defaults are mark
 | DEV-006 | EMG subsystem not yet implemented | §13 | Medium (Phase 5 blocker) | OW-006 | Tracked |
 | DEV-007 | ~~Visual designer not yet implemented~~ — DONE (React 19 + React Flow 12 + Monaco) | §10 | ~~Medium~~ Resolved | ~~OW-007~~ | Done |
 | DEV-008 | Rego (OPA) policies not yet wired into validator; Semgrep rules authored but not enforced in CLI | §14.2, §14.3 | Low | OW-008 | Tracked; GitHub Actions runs Semgrep |
-| DEV-009 | Agent pipeline is rule-based, not LLM-driven (no model gateway integration yet for planning) | §12.2 | Low | None | Active; rule-based interpreter is a functional baseline; LLM-assisted planning will use the model gateway |
+| DEV-009 | ~~Agent pipeline is rule-based, not LLM-driven~~ — RESOLVED by WP-04 (LLM-driven interpreter + planner + executor with keyword fallback) | §12.2 | ~~Low~~ Resolved | None | Done; see WP-04 §10.1 |
+| DEV-010 | Trajectory `normalized` tuple persisted as list for YAML compat | §15.4 | Low | None | Tracked; see WP-04 §10.3 |
+| DEV-011 | Gateway client uses actual `/api/v1/llm/chat` endpoint, not aspirational `/v1/chat/completions` | §14 | Low | None | Tracked; see WP-04 §10.3 |
+| DEV-012 | Redactor adds key-based redaction (stricter than spec §15.17) | §15.17 | Low | None | Tracked; see WP-04 §10.3 |
+| DEV-013 | Fallback planner wraps legacy `plan_implementation()` in `_map_intent_to_legacy()` | §12.2 | Low | None | Tracked; see WP-04 §10.3 |
+| DEV-014 | `tests/agent-eval/` → `tests/agent_eval/` (hyphen→underscore; Python module naming) | §27 | Low | None | Tracked; see WP-04 §10.6 |
+| DEV-015 | 5 benchmarks defined but only 3 run in CI (bench-004/005 require LLM) | §27 | Low | None | Tracked; see WP-04 §10.6 |
+| DEV-016 | Regression gate enforces bench-001 PASS (stricter than spec) | §27 | Low | None | Tracked; see WP-04 §10.6 |
+| DEV-017 | `policy_violations` metric counts "ERROR" lines (coarse approximation) | §27 | Low | OW-024 | Tracked; see WP-04 §10.6 |
+| DEV-018 | `test_pass_rate` metric parses "X/Y tests passed" text (fragile) | §27 | Low | OW-024 | Tracked; see WP-04 §10.6 |
+| DEV-019 | No full SPA decomposition (only co-pilot components extracted) | §10 | Low | OW-029 | Tracked; see WP-04 §10.7 |
+| DEV-020 | Trajectory ID not surfaced in UI (REST API doesn't return it) | §15.2 | Low | OW-027 | Tracked; see WP-04 §10.7 |
+| DEV-021 | PatchPreviewDialog diff derived from stepResults, not `flow.semantic_diff` | §12.6 | Low | OW-028 | Tracked; see WP-04 §10.7 |
+| DEV-022 | Playwright E2E not yet in CI (requires both Vite + Python server) | §10 | Medium | OW-026 | Tracked; see WP-04 §10.7 |
+| DEV-023 | Bonus reject test (spec requires 1 E2E, implementation has 2) | §27 | Low | None | Tracked; see WP-04 §10.7 |
+| DEV-024 | Eval harness at repo-root `tests/agent_eval/`, not `apps/cli/tests/agent_eval/` | §27 | Low | None | Tracked; see WP-04 §10.8. Rationale: eval harness is a cross-cutting benchmark suite, not a unit test; follows spec's literal `tests/agent-eval/` path. Migration path documented in WP-04 §10.8. |
 
 ---
 
