@@ -428,3 +428,77 @@ Append new entries below. Newest at the bottom. Format:
   - OW-021: Wire `oiw agent` CLI command to `run_agent()` orchestrator.
   - OW-022: Add `oiw trajectory show` and `oiw trajectory export` CLI commands.
 
+
+### 2026-08-02 (cont.) — WP-04 Task 8: Agent Evaluation Harness
+
+- Implemented WP-04 Task 8 (Agent Evaluation Harness). 4 commits, 19 new tests.
+- **Commit 1** (`6caf9e5`): benchmark definitions. `tests/agent_eval/benchmarks.py`
+  defines 5 benchmarks (bench-001..005):
+  - bench-001: Add schema validation (modify-flow, fast, CI)
+  - bench-002: Create REST-to-HTTP flow (create-flow, CI)
+  - bench-003: Fix receiver timeout (fix-flow, fast, CI)
+  - bench-004: Add error handling subprocess (requires_llm)
+  - bench-005: Refactor: extract common transform (requires_llm)
+  - `ci_benchmarks()` returns bench-001..003 for the CI job.
+- **Commit 2** (`5aa479f`): benchmark runner + metrics collection.
+  `tests/agent_eval/metrics.py` defines `BenchmarkMetrics` (9 fields per
+  spec §27: structural_correctness, test_pass_rate, policy_violations,
+  human_corrections, token_cost, latency_ms, hallucinated_components,
+  secret_handling_violations, trajectory_id) and `BenchmarkResult` with
+  PASS/PARTIAL/FAIL classifier (thresholds: >=0.9 PASS, >=0.5 PARTIAL).
+  `tests/agent_eval/runner.py` implements `run_benchmark_fallback()`
+  (executes one benchmark via the orchestrator with gateway mocked
+  unhealthy) and `run_ci_suite()` (runs bench-001..003 and emits a YAML
+  report). CLI entry: `python -m tests.agent_eval.runner`.
+- **Commit 3** (`8cb09af`): eval harness tests. 19 tests total, including
+  the 2 mandatory WP-04 tests:
+  - `test_benchmark_001_without_llm`: fallback planner passes bench-001
+  - `test_benchmark_001_with_mock`: mock gateway returns valid plan,
+    bench-001 still passes
+  Bonus coverage: classifier thresholds (8 tests), benchmark catalogue
+  (6 tests), CI suite runner (2 tests), serialization (1 test).
+- **Commit 4** (`a1385fc`): CI workflow. `.github/workflows/agent-eval.yaml`
+  with two jobs:
+  - `agent-eval-fallback`: runs pytest on the harness, then runs the CI
+    suite (bench-001..003), then enforces a regression gate (bench-001
+    MUST PASS; bench-002/003 may FAIL/PARTIAL; no benchmark may EROR).
+    Uploads the YAML report + .oiw/agent-eval/ workspaces as artifacts
+    (30-day retention). Runs on every PR/push + nightly at 03:00 UTC.
+  - `agent-eval-aggregate`: required status check for branch protection.
+  Updated `.github/workflows/validate-on-pr.yaml` aggregate job to note
+  that branch protection should require BOTH `validate-pr (aggregate)`
+  AND `agent-eval (aggregate)`.
+- **Baseline metrics** captured at
+  `tests/agent_eval/baselines/baseline-fallback-2026-08-02.yaml`:
+  - bench-001: PASS (structural=1.00, tests=1.00, latency=1419ms, tokens=0)
+  - bench-002: FAIL (structural=0.20, tests=0.00, latency=22ms, tokens=0)
+  - bench-003: PARTIAL (structural=0.75, tests=1.00, latency=26ms, tokens=0)
+  These are the expected fallback limitations — the LLM planner should
+  close the bench-002 and bench-003 gaps when wired in.
+- **Deviations** (see WP-04 §10.6):
+  - DEV-014: `tests/agent-eval/` → `tests/agent_eval/` (Python module
+    naming; hyphen not allowed).
+  - DEV-015: 5 benchmarks defined but only 3 run in CI (bench-004/005
+    require LLM; matches spec's "CI runs 001-003, nightly runs full").
+  - DEV-016: Regression gate enforces bench-001 PASS (stricter than
+    spec, which doesn't specify a gate).
+  - DEV-017: `policy_violations` metric counts "ERROR" lines in
+    `oiw validate --strict` output (coarse; future: parse structured
+    diagnostics).
+  - DEV-018: `test_pass_rate` metric parses "X/Y tests passed" from
+    `oiw test --all` output (fragile; future: use TestResult objects).
+- **Test count**: 294 → 313 (+19). CI: 10 existing jobs + 1 new
+  `agent-eval` job = 11 total.
+- **Process note acknowledged**: Future work packages will use smaller
+  commits (one per task or logical unit). Task 8 was committed in 4
+  smaller commits (benchmarks, runner+metrics, tests, CI) plus a 5th
+  for docs/baseline — much more bisect-friendly than the 30-file Task
+  1-7 commit.
+- **Open work items**:
+  - OW-023: Wire the LLM planner into bench-002 and bench-003 to close
+    the fallback gaps (bench-002 FAIL→PASS, bench-003 PARTIAL→PASS).
+  - OW-024: Replace the coarse `policy_violations` and `test_pass_rate`
+    metric parsers with structured-diagnostic readers.
+  - OW-025: Add bench-004 and bench-005 to the nightly LLM suite
+    (requires OIW_MODEL_GATEWAY_KEY in CI secrets).
+
