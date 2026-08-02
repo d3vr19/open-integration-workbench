@@ -22,26 +22,26 @@ import yaml
 
 # Make the oiw packages importable.
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-import sys
+import sys  # noqa: E402
 
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(REPO_ROOT / "apps" / "mcp-server"))
 sys.path.insert(0, str(REPO_ROOT / "apps" / "server-python-prototype"))
 
-from oiw.agent.gateway_client import ChatResponse, ModelGatewayClient
+from oiw.agent.gateway_client import ChatResponse, ModelGatewayClient  # noqa: E402
 
-from tests.agent_eval.benchmarks import (
+from tests.agent_eval.benchmarks import (  # noqa: E402
     BENCHMARKS,
     ci_benchmarks,
     fast_benchmarks,
     get_benchmark,
 )
-from tests.agent_eval.metrics import (
+from tests.agent_eval.metrics import (  # noqa: E402
     BenchmarkMetrics,
     BenchmarkResult,
     classify_status,
 )
-from tests.agent_eval.runner import (
+from tests.agent_eval.runner import (  # noqa: E402
     run_benchmark_fallback,
     run_ci_suite,
 )

@@ -36,12 +36,21 @@ sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(REPO_ROOT / "apps" / "mcp-server"))
 sys.path.insert(0, str(REPO_ROOT / "apps" / "server-python-prototype"))
 
-from oiw.agent.gateway_client import ModelGatewayClient
-from oiw.agent.orchestrator import run_agent
-from oiw.agent.redaction import Redactor
+from oiw.agent.gateway_client import ModelGatewayClient  # noqa: E402
+from oiw.agent.orchestrator import run_agent  # noqa: E402
+from oiw.agent.redaction import Redactor  # noqa: E402
 
-from .benchmarks import BENCHMARKS, Benchmark, ci_benchmarks, get_benchmark
-from .metrics import BenchmarkMetrics, BenchmarkResult, classify_status
+from .benchmarks import (  # noqa: E402
+    BENCHMARKS,
+    Benchmark,
+    ci_benchmarks,
+    get_benchmark,
+)
+from .metrics import (  # noqa: E402
+    BenchmarkMetrics,
+    BenchmarkResult,
+    classify_status,
+)
 
 # Registered OIW step types (used to detect hallucinated components).
 REGISTERED_STEP_TYPES = {
