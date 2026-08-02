@@ -414,6 +414,11 @@ jobs:
 
   # -------------------------------------------------------------------
   # Job 6: Aggregate — used as a required status check on branch protection.
+  # Includes the agent-eval job from .github/workflows/agent-eval.yaml
+  # via workflow_run trigger (the agent-eval workflow runs in parallel).
+  # For simplicity in MVP, we list the agent-eval job inline below as
+  # a dependency hint — branch protection should require both
+  # `validate-pr (aggregate)` and `agent-eval (aggregate)`.
   # -------------------------------------------------------------------
   validate-pr-aggregate:
     name: validate-pr (aggregate)
@@ -445,3 +450,8 @@ jobs:
             exit 1
           fi
           echo "all validation jobs passed"
+          echo ""
+          echo "NOTE: agent-eval (WP-04 Task 8) runs in a separate workflow"
+          echo "(.github/workflows/agent-eval.yaml). Branch protection should"
+          echo "require both 'validate-pr (aggregate)' AND 'agent-eval (aggregate)'"
+          echo "as status checks."

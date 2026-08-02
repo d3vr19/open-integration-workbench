@@ -1,0 +1,142 @@
+# Agent Evaluation Harness — runs WP-04 Task 8 benchmarks in CI.
+# Spec ref: §27 (Benchmark Tasks & Evaluation Metrics), §14.4 (CI Pipeline).
+# WP-04 Task 8: 'CI integration: Add a agent-eval job to the CI workflow
+# that runs benchmarks 001-003 (the fast ones) with a mock gateway.'
+#
+# This workflow runs the agent evaluation harness in fallback mode
+# (no LLM, no API key) against benchmarks bench-001, bench-002, bench-003.
+# The harness produces a YAML report with metrics per benchmark.
+#
+# Pass criteria: bench-001 must PASS (the fallback planner handles it).
+# bench-002 and bench-003 are expected to FAIL/PARTIAL in fallback mode —
+# they serve as regression baselines that the LLM planner must improve on.
+# The job fails only if bench-001 does not PASS, or if the harness itself
+# errors out.
+
+name: Agent Eval
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+  schedule:
+    # Nightly full run (incl. LLM benchmarks, if a gateway key is configured).
+    # 03:00 UTC daily.
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent-eval-fallback:
+    name: Agent Eval (fallback mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Download Groovy JARs + compile GroovyRunner
+        run: bash services/runtime-worker-jvm/setup.sh
+
+      - name: Install oiw CLI + MCP server + server prototype
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e apps/cli
+          pip install -e apps/mcp-server
+          pip install -e apps/server-python-prototype
+          pip install pyyaml httpx pytest pytest-asyncio
+
+      - name: Run pytest for the eval harness itself
+        run: |
+          pytest tests/agent_eval/ -v \
+            --import-mode=importlib \
+            --junitxml=pytest-agent-eval.xml
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}/apps/mcp-server:${{ github.workspace }}/apps/server-python-prototype:${{ github.workspace }}
+
+      - name: Run the CI benchmark suite (bench-001..003, fallback mode)
+        run: |
+          python -m tests.agent_eval.runner \
+            --output agent-eval-report.yaml
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}/apps/mcp-server:${{ github.workspace }}/apps/server-python-prototype:${{ github.workspace }}
+
+      - name: Verify bench-001 PASSed (regression gate)
+        run: |
+          # bench-001 must PASS in fallback mode — this is the regression gate.
+          # bench-002 and bench-003 may FAIL/PARTIAL (known fallback limitations).
+          python - <<'PY'
+          import yaml, sys
+          with open("agent-eval-report.yaml") as f:
+              report = yaml.safe_load(f)
+          print(f"Suite: {report['total']} benchmarks, "
+                f"{report['passed']} passed, "
+                f"{report['partial']} partial, "
+                f"{report['failed']} failed, "
+                f"{report['errored']} errored")
+          for r in report["results"]:
+              m = r["metrics"]
+              print(f"  {r['benchmarkId']}  {r['status']:8s}  "
+                    f"structural={m['structural_correctness']:.2f}  "
+                    f"tests={m['test_pass_rate']:.2f}  "
+                    f"latency={m['latency_ms']}ms  "
+                    f"tokens={m['token_cost']}")
+          # Regression gate: bench-001 must PASS
+          bench_001 = next(r for r in report["results"] if r["benchmarkId"] == "bench-001")
+          if bench_001["status"] != "PASS":
+              print(f"::error::bench-001 must PASS in fallback mode (got {bench_001['status']}). "
+                    "The fallback planner regressed — investigate.")
+              sys.exit(1)
+          # Hard error if any benchmark ERRORED (harness failure, not agent failure)
+          if report["errored"] > 0:
+              print(f"::error::{report['errored']} benchmark(s) ERRORED — harness itself failed.")
+              sys.exit(1)
+          print("Regression gate: PASS (bench-001 OK, no errors)")
+          PY
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-eval-report
+          path: |
+            agent-eval-report.yaml
+            pytest-agent-eval.xml
+            .oiw/agent-eval/
+          retention-days: 30
+
+  # Aggregate job — required status check for branch protection.
+  agent-eval-aggregate:
+    name: agent-eval (aggregate)
+    runs-on: ubuntu-latest
+    needs: [agent-eval-fallback]
+    if: always()
+    steps:
+      - name: Aggregate
+        run: |
+          echo "agent-eval-fallback: ${{ needs.agent-eval-fallback.result }}"
+          if [[ "${{ needs.agent-eval-fallback.result }}" != "success" ]]; then
+            echo "::error::agent-eval-fallback job failed"
+            exit 1
+          fi
+          echo "agent-eval suite passed"
