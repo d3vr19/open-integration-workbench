@@ -28,8 +28,13 @@ def temp_workspace(tmp_path: Path):
     subprocess.run(["git", "-C", str(dest), "add", "."], check=True)
     subprocess.run(
         ["git", "-C", str(dest), "commit", "-q", "-m", "test fixture"],
-        env={**os.environ, "GIT_AUTHOR_NAME": "test", "GIT_AUTHOR_EMAIL": "test@example.com",
-             "GIT_COMMITTER_NAME": "test", "GIT_COMMITTER_EMAIL": "test@example.com"},
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "test",
+            "GIT_AUTHOR_EMAIL": "test@example.com",
+            "GIT_COMMITTER_NAME": "test",
+            "GIT_COMMITTER_EMAIL": "test@example.com",
+        },
         check=True,
     )
     old = os.environ.get("OIW_WORKSPACE")
@@ -251,3 +256,49 @@ def test_implement_404(client: TestClient) -> None:
         json={"requirement": "test"},
     )
     assert r.status_code == 404
+
+
+def test_implement_returns_trajectory_id(temp_workspace, client: TestClient) -> None:
+    """OW-027: POST /agents:implement returns a trajectoryId.
+
+    The trajectory ID should be a non-empty string starting with 'traj-'
+    so the UI can link to `oiw trajectory show --id <id>`.
+    """
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:implement",
+        json={
+            "requirement": "Add validation to the order flow",
+            "flowId": "order-to-s4",
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert "trajectoryId" in body
+    assert body["trajectoryId"] is not None
+    assert body["trajectoryId"].startswith("traj-")
+
+    # Verify the trajectory file was persisted
+    import os
+    from pathlib import Path
+
+    workspace = os.environ["OIW_WORKSPACE"]
+    traj_dir = Path(workspace) / "order-to-s4" / ".oiw" / "trajectories"
+    traj_files = list(traj_dir.glob("traj-*.yaml"))
+    assert len(traj_files) >= 1
+    # The trajectory ID in the response matches a persisted file
+    assert any(f.name == f"{body['trajectoryId']}.yaml" for f in traj_files)
+
+
+def test_implement_dry_run_returns_null_trajectory_id(temp_workspace, client: TestClient) -> None:
+    """OW-027: dry run returns trajectoryId=None (no execution, no trajectory)."""
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:implement",
+        json={
+            "requirement": "Add validation to the order flow",
+            "flowId": "order-to-s4",
+            "dryRun": True,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["trajectoryId"] is None

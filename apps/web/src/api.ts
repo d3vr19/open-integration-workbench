@@ -275,4 +275,5 @@ export interface AgentImplementResponse {
   stepResults: StepResult[];
   success: boolean;
   errors: string[];
+  trajectoryId?: string | null;
 }

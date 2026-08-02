@@ -58,6 +58,7 @@ export function CoPilotPanel({ projectId, flowId, onApplied }: CoPilotPanelProps
   const [input, setInput] = useState('');
   const [state, setState] = useState<PanelState>({ kind: 'idle' });
   const [trajectoryStatus, setTrajectoryStatus] = useState<TrajectoryStatus>('idle');
+  const [trajectoryId, setTrajectoryId] = useState<string | undefined>(undefined);
   const [history, setHistory] = useState<Array<{ requirement: string; success: boolean; timestamp: number }>>([]);
 
   const disabled = !projectId || state.kind === 'planning' || state.kind === 'executing';
@@ -88,6 +89,7 @@ export function CoPilotPanel({ projectId, flowId, onApplied }: CoPilotPanelProps
       const result = await api.implement(projectId, requirement, flowId ?? undefined);
       setState({ kind: 'applied', result });
       setTrajectoryStatus(result.success ? 'recorded' : 'failed');
+      setTrajectoryId(result.trajectoryId ?? undefined);
       setHistory((h) => [...h, { requirement, success: result.success, timestamp: Date.now() }]);
       if (result.success && onApplied) {
         onApplied();
@@ -129,7 +131,7 @@ export function CoPilotPanel({ projectId, flowId, onApplied }: CoPilotPanelProps
     <div className="copilot-panel">
       <div className="copilot-panel__header">
         <h3 className="copilot-panel__title">Co-Pilot</h3>
-        <TrajectoryIndicator status={trajectoryStatus} />
+        <TrajectoryIndicator status={trajectoryStatus} trajectoryId={trajectoryId} />
       </div>
 
       {/* Requirement input */}
