@@ -9,7 +9,7 @@
 [![CI: Validate PR](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml/badge.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 [![Security Scan](https://github.com/hehenaice/open-integration-workbench/actions/workflows/security-scan.yaml/badge.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/security-scan.yaml)
 [![Status: Phase 3](https://img.shields.io/badge/Status-Phase%203%20(Substantially%20Complete)-green.svg)](DEVELOPMENT_LOG.md)
-[![Tests: 214](https://img.shields.io/badge/Tests-214%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
+[![Tests: 216](https://img.shields.io/badge/Tests-216%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 
 ## What this is
 
@@ -96,8 +96,12 @@ oiw diff HEAD~1
 
 ### Start the visual designer
 
+> **Security note:** The API server has **no authentication** in local mode (spec §16.2).
+> It binds to `127.0.0.1` by default. Do not expose the API port to untrusted networks.
+> Set `OIW_HOST=0.0.0.0` only in trusted team environments (auth not yet implemented — OW-005).
+
 ```bash
-# Terminal 1: API server
+# Terminal 1: API server (binds to 127.0.0.1 by default)
 pip install -e apps/cli -e apps/server-python-prototype -e apps/mcp-server
 OIW_WORKSPACE=$(pwd)/examples uvicorn oiw_server.main:app --reload --port 8000
 
@@ -168,11 +172,11 @@ See spec §20 for the full target structure.
 
 | Package | Tests | Description |
 |---------|-------|-------------|
-| `apps/cli` | 77 | CLI, validators, patch engine, runtime steps, archive safety |
+| `apps/cli` | 79 | CLI, validators, patch engine, runtime steps, archive safety, error subprocess |
 | `apps/server-python-prototype` | 76 | REST API, PATCH endpoints, simulate, resources, diff, agent pipeline |
 | `apps/mcp-server` | 18 | MCP protocol, 11 tools |
 | `services/model-gateway-python` | 43 | Redaction, budget, circuit breaker, prompts, API |
-| **Total** | **214** | All pass in CI |
+| **Total** | **216** | All pass in CI |
 
 CI runs 10 required checks (validate-pr aggregate): OIW validate+test+build, schema self-check, CLI pytest, API pytest, MCP pytest, gateway pytest, ruff lint, SPA build, DEVELOPMENT_LOG.md present.
 

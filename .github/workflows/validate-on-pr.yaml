@@ -356,14 +356,17 @@ jobs:
           retention-days: 7
 
   # -------------------------------------------------------------------
-  # Job 5: DEVELOPMENT_LOG.md must exist and have a recent entry.
-  # Spec ref: project-level convention (single source of truth).
+  # Job 5: DEVELOPMENT_LOG.md must exist + Human-Approver trailer check.
+  # Spec ref: project-level convention (single source of truth) + §13.2
+  # (provenance: Human-Approver must be filled, not "pending").
   # -------------------------------------------------------------------
   log-check:
-    name: DEVELOPMENT_LOG.md present
+    name: DEVELOPMENT_LOG + provenance check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need commit history for trailer check
       - name: Check DEVELOPMENT_LOG.md exists
         run: |
           if [ ! -f DEVELOPMENT_LOG.md ]; then
@@ -371,6 +374,17 @@ jobs:
             exit 1
           fi
           echo "DEVELOPMENT_LOG.md: OK ($(wc -l < DEVELOPMENT_LOG.md) lines)"
+      - name: Check Human-Approver trailer is not pending
+        run: |
+          # Get the commit message of the latest commit on this branch
+          COMMIT_MSG=$(git log -1 --format='%B')
+          if echo "$COMMIT_MSG" | grep -q 'Human-Approver: (pending'; then
+            echo "::error::Commit contains 'Human-Approver: (pending PR review)' — fill in the approver before merging (spec §13.2)."
+            echo "::error::Commit message:"
+            echo "$COMMIT_MSG"
+            exit 1
+          fi
+          echo "Provenance check: OK (no pending Human-Approver trailer)"
 
   # -------------------------------------------------------------------
   # Job 6: Aggregate — used as a required status check on branch protection.
