@@ -19,6 +19,7 @@ import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, Te
 import { toReactFlowNodes, toReactFlowEdges, fidelityColor } from './flow-utils';
 import { ResourceEditor } from './ResourceEditor';
 import { DiffViewer } from './DiffViewer';
+import { CoPilotPanel } from './components/llm/CoPilotPanel';
 
 // Available step types for the palette (spec §9.4)
 const PALETTE_STEPS = [
@@ -101,6 +102,20 @@ function App() {
       setFlow(f);
       setRfNodes(toReactFlowNodes(f));
       setRfEdges(toReactFlowEdges(f));
+    }).catch((e) => setError(String(e)));
+  }, [selectedProject, selectedFlow]);
+
+  // Refresh the current flow after an external mutation (e.g. the
+  // co-pilot agent applied a patch). Re-fetches the flow IR and
+  // syncs the ReactFlow canvas.
+  const refreshFlow = useCallback(() => {
+    if (!selectedProject || !selectedFlow) return;
+    api.getFlow(selectedProject, selectedFlow).then((f) => {
+      setFlow(f);
+      setRfNodes(toReactFlowNodes(f));
+      setRfEdges(toReactFlowEdges(f));
+      setPendingOps([]);
+      setDirty(false);
     }).catch((e) => setError(String(e)));
   }, [selectedProject, selectedFlow]);
 
@@ -560,6 +575,14 @@ function App() {
         </main>
 
         <aside className="sidebar sidebar--right">
+          {/* WP-04 Task 9: Co-Pilot panel (LLM-driven agent interface) */}
+          <div className="sidebar__section sidebar__section--copilot">
+            <CoPilotPanel
+              projectId={selectedProject}
+              flowId={selectedFlow}
+              onApplied={refreshFlow}
+            />
+          </div>
           {selectedNode && (
             <div className="sidebar__section">
               <h3 className="sidebar__title">Node Properties</h3>
