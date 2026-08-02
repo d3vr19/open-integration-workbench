@@ -211,8 +211,11 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -e apps/cli[dev]
+          pip install -e apps/mcp-server
       - name: Run pytest
         run: pytest apps/cli/tests/ -v --junitxml=pytest.xml
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}/apps/mcp-server:${{ github.workspace }}/apps/server-python-prototype
       - name: Upload pytest results
         if: always()
         uses: actions/upload-artifact@v4

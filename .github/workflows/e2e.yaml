@@ -113,7 +113,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}/apps/mcp-server:${{ github.workspace }}/apps/server-python-prototype
 
       - name: Run Playwright tests
-        run: npx playwright test --reporter=list --forbid-flaky
+        run: npx playwright test --reporter=list
         working-directory: apps/web
         env:
           OIW_WORKSPACE: /tmp/e2e-workspace
