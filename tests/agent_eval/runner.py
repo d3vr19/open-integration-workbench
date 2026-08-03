@@ -18,8 +18,8 @@ Spec ref: §27 (Benchmark Tasks & Evaluation Metrics).
 from __future__ import annotations
 
 import asyncio
+import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -320,7 +320,10 @@ def _first_flow_id(project_path: Path) -> str | None:
 
 
 def _run_validation(project_path: Path) -> bool:
-    """Run `oiw validate --strict` and return True if 0 errors."""
+    """Run `oiw validate --strict --json` and return True if 0 errors.
+
+    WP-05 OW-024: uses structured JSON output instead of text parsing.
+    """
     try:
         result = subprocess.run(
             [
@@ -329,6 +332,7 @@ def _run_validation(project_path: Path) -> bool:
                 "oiw.cli",
                 "validate",
                 "--strict",
+                "--json",
                 "--project",
                 str(project_path),
             ],
@@ -337,13 +341,23 @@ def _run_validation(project_path: Path) -> bool:
             text=True,
             timeout=30,
         )
-        return result.returncode == 0
+        if result.returncode == 0:
+            return True
+        # Parse JSON to check if it's a real validation failure vs a crash
+        try:
+            data = json.loads(result.stdout)
+            return data.get("passed", False)
+        except (json.JSONDecodeError, ValueError):
+            return False
     except Exception:  # noqa: BLE001
         return False
 
 
 def _run_tests(project_path: Path, flow_id: str) -> bool:
-    """Run `oiw test --all` and return True if all tests pass."""
+    """Run `oiw test --all --json` and return True if all tests pass.
+
+    WP-05 OW-024: uses structured JSON output instead of text parsing.
+    """
     try:
         result = subprocess.run(
             [
@@ -352,6 +366,7 @@ def _run_tests(project_path: Path, flow_id: str) -> bool:
                 "oiw.cli",
                 "test",
                 "--all",
+                "--json",
                 "--project",
                 str(project_path),
             ],
@@ -360,7 +375,13 @@ def _run_tests(project_path: Path, flow_id: str) -> bool:
             text=True,
             timeout=30,
         )
-        return result.returncode == 0
+        if result.returncode == 0:
+            return True
+        try:
+            data = json.loads(result.stdout)
+            return data.get("passed", False)
+        except (json.JSONDecodeError, ValueError):
+            return False
     except Exception:  # noqa: BLE001
         return False
 
@@ -427,7 +448,10 @@ def _compute_metrics(
 
 
 def _compute_test_pass_rate(project_path: Path, flow_id: str | None) -> float:
-    """Run oiw test and parse the pass rate."""
+    """Run oiw test --json and parse the pass rate.
+
+    WP-05 OW-024: uses structured JSON output instead of text parsing.
+    """
     if not flow_id:
         return 0.0
     try:
@@ -438,6 +462,7 @@ def _compute_test_pass_rate(project_path: Path, flow_id: str | None) -> float:
                 "oiw.cli",
                 "test",
                 "--all",
+                "--json",
                 "--project",
                 str(project_path),
             ],
@@ -446,19 +471,23 @@ def _compute_test_pass_rate(project_path: Path, flow_id: str | None) -> float:
             text=True,
             timeout=30,
         )
-        # Parse "X/Y tests passed" from output
-        match = re.search(r"(\d+)\s*/\s*(\d+)\s+tests?\s+passed", result.stdout)
-        if match:
-            passed, total = int(match.group(1)), int(match.group(2))
-            return passed / total if total > 0 else 0.0
-        # Fallback: return code based
-        return 1.0 if result.returncode == 0 else 0.0
+        # WP-05 OW-024: parse structured JSON instead of regex on text output
+        try:
+            data = json.loads(result.stdout)
+            return data.get("pass_rate", 0.0)
+        except (json.JSONDecodeError, ValueError):
+            # Fallback: return code based
+            return 1.0 if result.returncode == 0 else 0.0
     except Exception:  # noqa: BLE001
         return 0.0
 
 
 def _count_policy_violations(project_path: Path) -> int:
-    """Run oiw validate --strict and count error diagnostics."""
+    """Run oiw validate --strict --json and count error diagnostics.
+
+    WP-05 OW-024: uses structured JSON output instead of counting
+    'ERROR' lines in text output.
+    """
     try:
         result = subprocess.run(
             [
@@ -467,6 +496,7 @@ def _count_policy_violations(project_path: Path) -> int:
                 "oiw.cli",
                 "validate",
                 "--strict",
+                "--json",
                 "--project",
                 str(project_path),
             ],
@@ -475,12 +505,15 @@ def _count_policy_violations(project_path: Path) -> int:
             text=True,
             timeout=30,
         )
-        # Count lines containing "ERROR" or "error:"
-        return sum(
-            1
-            for line in result.stdout.splitlines()
-            if "ERROR" in line.upper() or line.lower().startswith("error:")
-        )
+        # WP-05 OW-024: parse structured JSON to get exact error count
+        try:
+            data = json.loads(result.stdout)
+            return data.get("error_count", 0)
+        except (json.JSONDecodeError, ValueError):
+            # Fallback: count ERROR lines in stderr (old behavior)
+            return sum(
+                1 for line in result.stderr.splitlines() if "ERROR" in line.upper()
+            )
     except Exception:  # noqa: BLE001
         return 0
 
