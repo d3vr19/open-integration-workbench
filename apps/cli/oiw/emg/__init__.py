@@ -1,6 +1,6 @@
-"""Experience Memory Graph (EMG) package (WP-05 Tasks 8-15).
+"""Experience Memory Graph (EMG) package (WP-05 Tasks 8-15 + retrieval).
 
-Spec ref: §15.3-15.9 (EMG Phase B: Intra-Task Correction).
+Spec ref: §15.3-15.12 (EMG Phase B: Intra-Task Correction + Retrieval).
 
 The EMG converts recorded EngineeringTrajectories into reusable
 intra-task correction memory through:
@@ -10,6 +10,7 @@ intra-task correction memory through:
   4. Insight compilation (Task 13)
   5. Memory promotion workflow (Task 14)
   6. Reward vector extension (Task 15)
+  7. Retrieval + injection (mechanics-first loop)
 """
 
 from __future__ import annotations
