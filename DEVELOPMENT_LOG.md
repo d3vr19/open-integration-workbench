@@ -11,11 +11,11 @@
 | Spec source | `spec/Untitled_6.md` (uploaded by user; canonical copy at upload time) |
 | Repo | `https://github.com/hehenaice/open-integration-workbench` |
 | License | Apache-2.0 |
-| Current phase | Phase 3 — LLM-Assisted Engineering (substantially complete) |
-| Phase exit criteria | See spec §19 |
-| Last updated | 2026-08-01 |
-| Total tests | 214 (77 CLI + 76 API + 18 MCP + 43 gateway) |
-| CI checks | 10 required (validate-pr aggregate) |
+| Current phase | Phase 4 — Tenant Sync & CI/CD (substantially complete) + EMG Phase B (intra-task correction) |
+| Phase exit criteria | See spec §22 |
+| Last updated | 2026-08-03 |
+| Total tests | 388 (234 CLI + 20 MCP + 80 Server + 43 Gateway + 30 Agent Eval + 2 E2E - 1 skipped) |
+| CI checks | 12 required across 3 workflows (validate-pr, agent-eval, e2e) — all green |
 
 ---
 
