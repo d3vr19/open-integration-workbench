@@ -663,3 +663,28 @@ Append new entries below. Newest at the bottom. Format:
 - **WP-05 acceptance criteria**: 12/17 met (Tasks 16-17 deferred).
   Core pipeline + EMG Phase B fully functional.
 
+
+### 2026-08-03 (cont.) — WP-05 Task 17: OW-023 + OW-024 complete
+
+- **OW-024**: Added `--json` flag to `oiw validate` and `oiw test` commands.
+  Structured JSON output: `{passed, errors[], error_count}` for validate,
+  `{passed, pass_rate, total, results[]}` for test. Eval harness now
+  parses JSON instead of regex on text output. Closes DEV-017 + DEV-018.
+- **OW-023**: LLM-backed benchmark runner (`tests/agent_eval/llm_runner.py`)
+  using the z-ai CLI (`z-ai chat`). Sends a structured prompt with
+  requirement + project context + HEAD sha, parses the JSON plan response,
+  and executes via the orchestrator. Verified locally:
+  - bench-003 (Fix receiver timeout): PARTIAL, structural=0.75, latency=6s
+  - bench-002 (Create REST-to-HTTP flow): FAIL, structural=0.20, latency=19s
+  bench-002 still fails because the new-project scaffold doesn't have a
+  flow to patch — needs a 'create flow' MCP tool (future work).
+- **Test count**: 371 → 382 (+11 from OW-023/024 tests).
+  - Agent Eval: 19 → 30 (+11: 5 prompt building + plan parsing, 1 z-ai
+    CLI integration, 2 structured metric parity, 3 LLM runner plumbing)
+- **z-ai SDK**: Used the `z-ai chat` CLI from Python via subprocess.
+  The ZAI SDK is available in this environment (confirmed working).
+  LLM benchmarks are NOT in CI (require network access); they run
+  manually via `python -m tests.agent_eval.llm_runner -b bench-003`.
+- **WP-05 status**: Tasks 1-15 + Task 17 complete. Only Task 16 (full
+  SPA decomposition, OW-029) remains deferred.
+

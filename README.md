@@ -9,7 +9,7 @@
 [![CI: Validate PR](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml/badge.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 [![Security Scan](https://github.com/hehenaice/open-integration-workbench/actions/workflows/security-scan.yaml/badge.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/security-scan.yaml)
 [![Status: Phase 3](https://img.shields.io/badge/Status-Phase%203%20(Substantially%20Complete)-green.svg)](DEVELOPMENT_LOG.md)
-[![Tests: 371](https://img.shields.io/badge/Tests-371%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
+[![Tests: 382](https://img.shields.io/badge/Tests-382%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 
 ## What this is
 
@@ -178,9 +178,9 @@ See spec §20 for the full target structure.
 | `apps/server-python-prototype` | 80 | REST API, PATCH endpoints, simulate, resources, diff, agent pipeline, trajectoryId (OW-027) |
 | `apps/mcp-server` | 20 | MCP protocol, 11 tools, baseRevision enforcement (WP-04 Task 6) |
 | `services/model-gateway-python` | 43 | Redaction, budget, circuit breaker, prompts, API |
-| `tests/agent_eval` | 19 | Agent evaluation harness (WP-04 Task 8): benchmarks, runner, metrics |
+| `tests/agent_eval` | 30 | Agent evaluation harness (WP-04 Task 8): benchmarks, runner, metrics, **LLM runner** (OW-023), **structured metrics** (OW-024) |
 | `apps/web/e2e` | 2 | Playwright E2E: co-pilot suggest+apply, reject (WP-04 Task 9) |
-| **Total** | **371** | 369 unit/integration + 2 E2E; **all green in CI** ✅ |
+| **Total** | **382** | 380 unit/integration + 2 E2E; **all green in CI** ✅ |
 
 CI runs 12 required checks across 3 workflows: **validate-on-pr** (OIW validate+test+build, schema self-check, CLI pytest, API pytest, MCP pytest, gateway pytest, ruff lint, SPA build, DEVELOPMENT_LOG check), **agent-eval** (WP-04 Task 8 benchmark suite), **e2e** (OW-026 Playwright co-pilot tests).
 
