@@ -67,7 +67,10 @@ def init(path: Path, archetype: str) -> None:
     help="Project root (default: cwd).",
 )
 @click.option("--strict", is_flag=True, help="Treat warnings as errors.")
-def validate(project_path: Path, strict: bool) -> None:
+@click.option(
+    "--json", "json_output", is_flag=True, default=False, help="Output structured JSON (WP-05 OW-024)."
+)
+def validate(project_path: Path, strict: bool, json_output: bool) -> None:
     """Validate project, flows, and tests against IR schemas and rule engine.
 
     Spec ref: §14.
@@ -105,12 +108,28 @@ def validate(project_path: Path, strict: bool) -> None:
         errors.extend(warnings)
         warnings = []
 
-    for e in errors:
-        click.secho(f"ERROR: {e}", fg="red", err=True)
-    for w in warnings:
-        click.secho(f"WARN:  {w}", fg="yellow")
+    if json_output:
+        # WP-05 OW-024: structured JSON output for programmatic consumers
+        import json as _json
 
-    click.echo(f"validation: {len(errors)} error(s), {len(warnings)} warning(s)")
+        click.echo(
+            _json.dumps(
+                {
+                    "passed": len(errors) == 0,
+                    "errors": errors,
+                    "warnings": warnings,
+                    "error_count": len(errors),
+                    "warning_count": len(warnings),
+                },
+                indent=2,
+            )
+        )
+    else:
+        for e in errors:
+            click.secho(f"ERROR: {e}", fg="red", err=True)
+        for w in warnings:
+            click.secho(f"WARN:  {w}", fg="yellow")
+        click.echo(f"validation: {len(errors)} error(s), {len(warnings)} warning(s)")
     if errors:
         sys.exit(1)
 
@@ -129,8 +148,16 @@ def validate(project_path: Path, strict: bool) -> None:
 @click.option(
     "--junit", "junit_path", type=click.Path(path_type=Path), default=None, help="Write JUnit XML report."
 )
+@click.option(
+    "--json", "json_output", is_flag=True, default=False, help="Output structured JSON (WP-05 OW-024)."
+)
 def test(
-    project_path: Path, all_tests: bool, flow_id: str | None, test_name: str | None, junit_path: Path | None
+    project_path: Path,
+    all_tests: bool,
+    flow_id: str | None,
+    test_name: str | None,
+    junit_path: Path | None,
+    json_output: bool,
 ) -> None:
     """Run flow tests.
 
@@ -155,14 +182,42 @@ def test(
 
     passed = sum(1 for r in results if r.passed)
     failed = len(results) - passed
-    for r in results:
-        symbol = "PASS" if r.passed else "FAIL"
-        color = "green" if r.passed else "red"
-        click.secho(f"{symbol}  {r.flow_id} :: {r.test_name}  ({r.duration_ms} ms)", fg=color)
-        if not r.passed:
-            for f in r.failures:
-                click.echo(f"      - {f}")
-    click.echo(f"tests: {passed}/{len(results)} passed, {failed} failed")
+
+    if json_output:
+        # WP-05 OW-024: structured JSON output for programmatic consumers
+        import json as _json
+
+        click.echo(
+            _json.dumps(
+                {
+                    "passed": failed == 0,
+                    "total": len(results),
+                    "passed_count": passed,
+                    "failed_count": failed,
+                    "pass_rate": passed / len(results) if results else 0.0,
+                    "results": [
+                        {
+                            "flow_id": r.flow_id,
+                            "test_name": r.test_name,
+                            "passed": r.passed,
+                            "duration_ms": r.duration_ms,
+                            "failures": r.failures,
+                        }
+                        for r in results
+                    ],
+                },
+                indent=2,
+            )
+        )
+    else:
+        for r in results:
+            symbol = "PASS" if r.passed else "FAIL"
+            color = "green" if r.passed else "red"
+            click.secho(f"{symbol}  {r.flow_id} :: {r.test_name}  ({r.duration_ms} ms)", fg=color)
+            if not r.passed:
+                for f in r.failures:
+                    click.echo(f"      - {f}")
+        click.echo(f"tests: {passed}/{len(results)} passed, {failed} failed")
     if junit_path:
         _write_junit(results, junit_path)
         click.echo(f"junit: {junit_path}")
