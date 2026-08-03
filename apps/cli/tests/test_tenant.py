@@ -62,7 +62,7 @@ def mock_adapter(tmp_path: Path) -> MockSapCiTenantAdapter:
 
 def _run(coro):
     """Run an async coroutine synchronously for tests."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------

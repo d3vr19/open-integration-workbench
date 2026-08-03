@@ -41,12 +41,12 @@ def env_vars():
 def adapter(tmp_path: Path, env_vars) -> MockSapCiTenantAdapter:
     a = MockSapCiTenantAdapter(state_dir=tmp_path / "mock")
     profile = load_profile(EXAMPLE, "dev")
-    asyncio.get_event_loop().run_until_complete(a.connect(profile))
+    asyncio.run(a.connect(profile))
     return a
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def test_no_tenant_artifact_safe_to_upload(adapter: MockSapCiTenantAdapter) -> None:
