@@ -1,17 +1,19 @@
 # `apps/mcp-server` — MCP protocol server (Phase 3)
 
 > **Status: SUBSTANTIALLY COMPLETE.**
-> Python implementation (ADR-PY-003). 11 MCP tools, 20 tests. JSON-RPC 2.0 over stdio.
+> Python implementation (ADR-PY-003). 12 MCP tools, 20 tests. JSON-RPC 2.0 over stdio.
 > WP-04 Task 6: `flow.patch` tool now requires `baseRevision` (returns JSON-RPC -32602 on missing/stale).
+> WP-05: `flow.create` tool added for creating new flows from scratch.
 
 Exposes OIW's operations as MCP tools for external agents (Claude, Cursor, Windsurf).
 
-## MCP tools (11)
+## MCP tools (12)
 
 | Tool | Description |
 |------|-------------|
 | `project.list` | List all projects in the workspace |
 | `flow.get` | Get full flow IR (nodes, edges, diagram) |
+| `flow.create` | Create a new integration flow with optional initial nodes/edges |
 | `flow.patch` | Apply typed patch operations (§12.5) |
 | `flow.validate` | Run schema + graph + rule validation |
 | `flow.simulate` | Run local simulation, return trace + status |
