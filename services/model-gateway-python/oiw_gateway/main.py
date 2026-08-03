@@ -116,7 +116,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         state = _breaker.get_state(config.name)
         raise HTTPException(
             status_code=503,
-            detail=f"circuit breaker open for provider '{config.name}' " f"(failures={state.failure_count})",
+            detail=f"circuit breaker open for provider '{config.name}' (failures={state.failure_count})",
         )
 
     # 4. Redact secrets from messages (spec §12.7)
