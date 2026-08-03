@@ -1,0 +1,83 @@
+# OIW Deploy — reusable GitHub Actions workflow template.
+# WP-05 Task 5 / spec §18 (Tenant Connectivity).
+#
+# This workflow is triggered manually (workflow_dispatch) with inputs:
+#   - profile: dev, test, stage, or prod
+#   - package_id: the package ID to deploy
+#
+# It runs the full deployment pipeline:
+#   drift check → build → upload → deploy → verify
+#
+# Required secrets (set in GitHub repo Settings → Environments):
+#   SAP_CLIENT_SECRET  — OAuth2 client secret for the tenant
+#   SAP_TENANT_URL     — tenant base URL (or set in EnvironmentProfile)
+#   SAP_TOKEN_URL      — OAuth2 token URL (or set in EnvironmentProfile)
+#   SAP_CLIENT_ID      — OAuth2 client ID (or set in EnvironmentProfile)
+#
+# Environment protection rules should require approval for prod.
+
+name: OIW Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "Environment profile (dev, test, stage, prod)"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - test
+          - stage
+          - prod
+      package_id:
+        description: "Package ID to deploy"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.profile }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install OIW CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e apps/cli
+      - name: Check drift
+        run: oiw deploy --profile ${{ github.event.inputs.profile }} --package ${{ github.event.inputs.package_id }} --check-drift
+        env:
+          SAP_TENANT_URL: ${{ secrets.SAP_TENANT_URL }}
+          SAP_TOKEN_URL: ${{ secrets.SAP_TOKEN_URL }}
+          SAP_CLIENT_ID: ${{ secrets.SAP_CLIENT_ID }}
+      - name: Build
+        run: oiw build --project . --target sap-cloud-integration-2026-07
+      - name: Propose deployment
+        run: oiw deploy --profile ${{ github.event.inputs.profile }} --package ${{ github.event.inputs.package_id }} --propose
+      - name: Approve deployment
+        run: oiw deploy --profile ${{ github.event.inputs.profile }} --package ${{ github.event.inputs.package_id }} --approve --approver ${{ github.actor }}
+      - name: Upload to tenant
+        run: oiw deploy --profile ${{ github.event.inputs.profile }} --package ${{ github.event.inputs.package_id }} --upload
+        env:
+          SAP_CLIENT_SECRET: ${{ secrets.SAP_CLIENT_SECRET }}
+      - name: Deploy
+        run: oiw deploy --profile ${{ github.event.inputs.profile }} --package ${{ github.event.inputs.package_id }} --execute
+      - name: Verify (smoke test)
+        run: oiw deploy --profile ${{ github.event.inputs.profile }} --package ${{ github.event.inputs.package_id }} --verify
+      - name: Upload deployment state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-state-${{ github.event.inputs.profile }}
+          path: .oiw/deployments/
+          retention-days: 30

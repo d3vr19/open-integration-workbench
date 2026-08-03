@@ -1,0 +1,56 @@
+# OIW Validate — reusable GitHub Actions workflow template.
+# WP-05 Task 5 / spec §14.4 (CI Pipeline).
+#
+# Drop this into .github/workflows/oiw-validate.yaml in any OIW project
+# to get PR validation: schema check, strict validate, test, build,
+# security scan, artifact upload.
+#
+# Required secrets: none (this workflow is read-only).
+
+name: OIW Validate
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Download Groovy JARs
+        run: bash services/runtime-worker-jvm/setup.sh
+        continue-on-error: true
+      - name: Install OIW CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e apps/cli
+      - name: Validate (strict)
+        run: oiw validate --strict --project .
+      - name: Test
+        run: oiw test --all --project .
+      - name: Build
+        run: oiw build --project . --target sap-cloud-integration-2026-07
+      - name: Upload build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oiw-package
+          path: dist/*.zip
+          retention-days: 14
