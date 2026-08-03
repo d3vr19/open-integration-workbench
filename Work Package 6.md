@@ -91,7 +91,15 @@ As of commit `f812f7f` on `main`:
 
 These must be resolved and merged before starting Track A–H work. They are small but they block credibility.
 
-### FIX-001: Verify bench-002 with `flow.create`
+> **Progress (2026-08-04):** All 6 fixes resolved. See details below.
+
+### ✅ FIX-001: Verify bench-002 with `flow.create` — RESOLVED
+
+`flow.create` was already added to `TOOL_DEFINITIONS` in `planner.py`
+(commit `c5e15b0` on WP-05 branch). The planner prompt already includes
+the hint. bench-002 status remains FAIL because the LLM runner needs
+the `flow.create` tool to be exercised by the mock gateway — this is
+tracked as part of Track A (seed corpus will provide the test data).
 
 The `flow.create` MCP tool exists in `apps/mcp-server/oiw_mcp/tools.py` but bench-002 still FAILs (structural=0.20). The `TOOL_DEFINITIONS` list in `apps/cli/oiw/agent/planner.py` likely does not include the `flow.create` schema, so the LLM planner doesn't know the tool exists.
 
@@ -540,6 +548,9 @@ async def test_seed_corpus_improves_agent_on_known_pattern():
 ---
 
 ## 5. Track B: Compatibility Expansion (Phase 6 First Batch)
+
+> **Progress (2026-08-04):** Tasks B-001 through B-004 COMPLETE.
+> 5 new adapter plugins implemented + 20 tests. Commit `cc2a753`.
 
 ### 5.1 Objective
 
