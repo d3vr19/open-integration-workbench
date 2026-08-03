@@ -1,0 +1,19 @@
+apiVersion: oiw.dev/v1alpha1
+kind: EnvironmentProfile
+metadata:
+  name: test
+spec:
+  target: sap-cloud-integration-2026-07
+  tenantUrl: ${TEST_TENANT_URL}
+  auth:
+    method: oauth2-client-credentials
+    tokenUrl: ${TEST_TOKEN_URL}
+    clientId: ${TEST_CLIENT_ID}
+    credentialRef: sap-test-api-client
+  externalizedParameters:
+    S4_BASE_URL: https://s4-test.example.com
+  deploymentPolicy:
+    requiresApproval: true
+    approvers: [integration-lead, qa-lead]
+    autoVerify: true
+    approvalTtlHours: 12
