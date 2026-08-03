@@ -59,7 +59,14 @@
               "type": "array",
               "items": { "type": "string" }
             },
-            "autoVerify": { "type": "boolean" }
+            "autoVerify": { "type": "boolean" },
+            "approvalTtlHours": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 168,
+              "default": 24,
+              "description": "Hours before an approval expires and must be re-requested."
+            }
           }
         }
       }
