@@ -90,7 +90,7 @@ def scaffold_project(target: Path, archetype: str) -> None:
     # policies/
     (target / "policies").mkdir(exist_ok=True)
     (target / "policies" / "integration-policy.yaml").write_text(
-        "# Project-level policy overrides. See packages/policy-rules/ for defaults.\n" "# Spec ref: §14.\n",
+        "# Project-level policy overrides. See packages/policy-rules/ for defaults.\n# Spec ref: §14.\n",
         encoding="utf-8",
     )
 
