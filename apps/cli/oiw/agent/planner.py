@@ -111,6 +111,24 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "flow.create",
+            "description": "Create a new integration flow. Use this BEFORE flow.patch when creating a brand-new flow.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "projectId": {"type": "string"},
+                    "flowId": {"type": "string"},
+                    "name": {"type": "string"},
+                    "initialNodes": {"type": "array", "items": {"type": "object"}},
+                    "initialEdges": {"type": "array", "items": {"type": "object"}},
+                },
+                "required": ["projectId", "flowId", "name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "flow.patch",
             "description": "Apply typed patch operations to an integration flow.",
             "parameters": {

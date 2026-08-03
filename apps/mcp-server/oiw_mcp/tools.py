@@ -75,6 +75,54 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "flow.create",
+            "description": (
+                "Create a new integration flow in a project (spec §9.4, WP-05 fix for bench-002). "
+                "Creates the flow directory + flow.yaml skeleton + diagram.json. "
+                "The agent uses this before flow.patch when creating a brand-new flow."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": {"type": "string"},
+                    "flowId": {
+                        "type": "string",
+                        "description": "The flow ID (also the directory name under flows/).",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Human-readable flow name.",
+                    },
+                    "initialNodes": {
+                        "type": "array",
+                        "description": "Optional initial set of nodes to add.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "type": {"type": "string"},
+                                "config": {"type": "object"},
+                                "fidelity": {"type": "string"},
+                            },
+                        },
+                    },
+                    "initialEdges": {
+                        "type": "array",
+                        "description": "Optional initial edges between nodes.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "from": {"type": "string"},
+                                "to": {"type": "string"},
+                                "condition": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+                "required": ["projectId", "flowId", "name"],
+            },
+        },
+        {
             "name": "flow.validate",
             "description": "Run full validation (schema + graph + rules) on a project. Returns diagnostics.",
             "inputSchema": {
@@ -280,6 +328,83 @@ def _tool_flow_get(args: dict[str, Any]) -> str:
                 "edges": edges,
             },
             "diagram": flow.diagram,
+        },
+        indent=2,
+    )
+
+
+def _tool_flow_create(args: dict[str, Any]) -> str:
+    """Create a new flow in a project (WP-05 fix for bench-002).
+
+    Creates the flow directory + flow.yaml skeleton + diagram.json.
+    Optionally populates initial nodes + edges.
+    """
+    import yaml
+
+    project = _load_project(args["projectId"])
+    flow_id = args["flowId"]
+    flow_name = args.get("name", flow_id)
+
+    flow_dir = project.root / "flows" / flow_id
+    if flow_dir.exists():
+        return json.dumps(
+            {"error": f"flow '{flow_id}' already exists", "flowId": flow_id},
+            indent=2,
+        )
+    flow_dir.mkdir(parents=True)
+
+    # Build initial flow YAML
+    initial_nodes = args.get("initialNodes", [])
+    initial_edges = args.get("initialEdges", [])
+
+    flow_data = {
+        "apiVersion": "oiw.dev/v1alpha1",
+        "kind": "IntegrationFlow",
+        "metadata": {"id": flow_id, "name": flow_name, "version": 1, "labels": {}},
+        "spec": {
+            "entrypoints": [],
+            "nodes": [
+                {
+                    "id": n.get("id", f"node-{i}"),
+                    "type": n.get("type", "log.message"),
+                    "config": n.get("config", {}),
+                    "fidelity": n.get("fidelity", "simulated"),
+                }
+                for i, n in enumerate(initial_nodes)
+            ],
+            "edges": [{"from": e.get("from", ""), "to": e.get("to", "")} for e in initial_edges],
+            "extensions": {},
+        },
+    }
+
+    flow_yaml = yaml.safe_dump(flow_data, sort_keys=True, default_flow_style=False, allow_unicode=True)
+    (flow_dir / "flow.yaml").write_text(flow_yaml, encoding="utf-8")
+
+    # Create empty tests dir
+    (flow_dir / "tests").mkdir(exist_ok=True)
+
+    # Create diagram.json
+    import json as _json
+
+    diagram = {
+        "nodes": [
+            {"id": n.get("id", f"node-{i}"), "position": {"x": 100 + i * 200, "y": 100}}
+            for i, n in enumerate(initial_nodes)
+        ],
+        "edges": [{"from": e.get("from", ""), "to": e.get("to", "")} for e in initial_edges],
+    }
+    (flow_dir / "diagram.json").write_text(
+        _json.dumps(diagram, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    return json.dumps(
+        {
+            "created": True,
+            "flowId": flow_id,
+            "name": flow_name,
+            "nodeCount": len(initial_nodes),
+            "edgeCount": len(initial_edges),
         },
         indent=2,
     )
@@ -603,6 +728,7 @@ def _tool_git_status(args: dict[str, Any]) -> str:
 _HANDLERS: dict[str, ToolHandler] = {
     "project.list": _tool_project_list,
     "flow.get": _tool_flow_get,
+    "flow.create": _tool_flow_create,
     "flow.patch": _tool_flow_patch,
     "flow.validate": _tool_flow_validate,
     "flow.simulate": _tool_flow_simulate,

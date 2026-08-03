@@ -81,8 +81,9 @@ async def run_agent(
     gateway: ModelGatewayClient | None = None,
     approval_callback: ApprovalCallback | None = None,
     persist_dir: Path | str | None = None,
+    emg_retriever: Any = None,
 ) -> AgentResult:
-    """Run the full agent pipeline: interpret → plan → (approve) → execute.
+    """Run the full agent pipeline: interpret → (retrieve EMG) → plan → (approve) → execute.
 
     Args:
         requirement: Natural-language requirement.
@@ -98,6 +99,11 @@ async def run_agent(
             the proposed plan. Defaults to "always approve" (autonomous).
         persist_dir: Optional override for trajectory persistence dir
             (used by tests to write to tmp_path).
+        emg_retriever: Optional EMGRetriever. If provided, the orchestrator
+            checks the EMG insight store for a matching expert trajectory
+            BEFORE invoking the LLM/keyword planner. If a match is found,
+            the expert's successful_workflow is injected directly into the
+            plan (mechanics-first, no LLM call needed). Spec §15.11-15.12.
 
     Returns:
         AgentResult with status, plan, execution, trajectory_id, warnings.
@@ -132,16 +138,62 @@ async def run_agent(
 
         trajectory.set_query(requirement, normalized)
 
-        # 2. Plan
-        if gw_healthy:
-            try:
-                plan = await plan_implementation(normalized, project_context, gateway, flow_id=flow_id)
-            except Exception as exc:
-                warnings.append(f"{OIW_W014_PLANNER} (cause: {exc})")
+        # 1.5. EMG retrieval (mechanics-first loop, spec §15.11-15.12)
+        emg_used = False
+        if emg_retriever is not None:
+            from ..emg.retrieval import inject_insight_into_plan
+
+            retrieval = emg_retriever.retrieve(
+                requirement=normalized,
+                project_id=project_context.project_id,
+            )
+            if retrieval.found and retrieval.insight is not None:
+                # Inject the expert's successful_workflow into the plan
+                injected_steps = inject_insight_into_plan(
+                    insight=retrieval.insight,
+                    base_revision=base_revision,
+                    project_id=project_context.project_id,
+                    flow_id=flow_id,
+                )
+                if injected_steps:
+                    from .planner import PlanStep
+
+                    plan_steps = [
+                        PlanStep(
+                            order=s["order"],
+                            tool=s["tool"],
+                            arguments=s["arguments"],
+                            rationale=s["rationale"],
+                            depends_on=s.get("depends_on", []),
+                        )
+                        for s in injected_steps
+                    ]
+                    plan = ImplementationPlan(
+                        requirement=normalized,
+                        steps=plan_steps,
+                        assumptions=[
+                            f"EMG-retrieved from expert trajectory (confidence={retrieval.confidence:.2f})"
+                        ],
+                        risks=[],
+                        estimated_patches=sum(1 for s in plan_steps if s.tool == "flow.patch"),
+                        base_revision=base_revision,
+                    )
+                    emg_used = True
+                    warnings.append(
+                        f"OIW-I001: EMG insight retrieved (confidence={retrieval.confidence:.2f}); using expert workflow instead of LLM planner"
+                    )
+
+        # 2. Plan (only if EMG didn't provide one)
+        if not emg_used:
+            if gw_healthy:
+                try:
+                    plan = await plan_implementation(normalized, project_context, gateway, flow_id=flow_id)
+                except Exception as exc:
+                    warnings.append(f"{OIW_W014_PLANNER} (cause: {exc})")
+                    plan = plan_implementation_fallback(normalized, project_context, flow_id=flow_id)
+            else:
+                warnings.append(OIW_W014_PLANNER)
                 plan = plan_implementation_fallback(normalized, project_context, flow_id=flow_id)
-        else:
-            warnings.append(OIW_W014_PLANNER)
-            plan = plan_implementation_fallback(normalized, project_context, flow_id=flow_id)
 
         # 3. Approval (co-pilot mode)
         if mode == "co-pilot":
