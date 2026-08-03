@@ -1,43 +1,16 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
-import ReactFlow, {
-  Background,
-  Controls,
-  MiniMap,
-  addEdge as rfAddEdge,
-  type Connection,
-  type Edge,
-  type Node,
-  type NodeMouseHandler,
-  type OnNodesDelete,
-  type OnEdgesDelete,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+import type { Connection, Edge, Node, NodeMouseHandler, OnNodesDelete, OnEdgesDelete } from 'reactflow';
 import './App.css';
 
 import { api } from './api';
 import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus, SimulationResult, TraceEntry, ResourceSummary, StructuredDiff } from './api';
-import { toReactFlowNodes, toReactFlowEdges, fidelityColor } from './flow-utils';
+import { toReactFlowNodes, toReactFlowEdges } from './flow-utils';
 import { ResourceEditor } from './ResourceEditor';
 import { DiffViewer } from './DiffViewer';
 import { CoPilotPanel } from './components/llm/CoPilotPanel';
-
-// Available step types for the palette (spec §9.4)
-const PALETTE_STEPS = [
-  { type: 'modifier.content', name: 'Content Modifier', fidelity: 'compatible-subset' },
-  { type: 'validator.json-schema', name: 'JSON Schema Validator', fidelity: 'compatible-subset' },
-  { type: 'script.groovy', name: 'Groovy Script', fidelity: 'simulated' },
-  { type: 'transform.xslt', name: 'XSLT Transform', fidelity: 'compatible-subset' },
-  { type: 'router.content-based', name: 'Content Router', fidelity: 'compatible-subset' },
-  { type: 'filter', name: 'Filter', fidelity: 'compatible-subset' },
-  { type: 'converter.json-to-xml', name: 'JSON → XML', fidelity: 'compatible-subset' },
-  { type: 'converter.xml-to-json', name: 'XML → JSON', fidelity: 'compatible-subset' },
-  { type: 'encoder.base64', name: 'Base64 Encoder', fidelity: 'compatible-subset' },
-  { type: 'splitter.general', name: 'Splitter', fidelity: 'simulated' },
-  { type: 'gather', name: 'Gather', fidelity: 'simulated' },
-  { type: 'receiver.http', name: 'HTTP Receiver', fidelity: 'simulated' },
-  { type: 'receiver.sftp', name: 'SFTP Receiver', fidelity: 'simulated' },
-  { type: 'log.message', name: 'Log', fidelity: 'compatible-subset' },
-];
+import { PalettePanel } from './components/canvas/PalettePanel';
+import { FlowCanvas } from './components/canvas/FlowCanvas';
+import { PropertiesPanel } from './components/canvas/PropertiesPanel';
 
 let nodeIdCounter = 0;
 function genNodeId(type: string): string {
@@ -71,12 +44,10 @@ function App() {
   const [diff, setDiff] = useState<StructuredDiff | null>(null);
   const dragType = useRef<string | null>(null);
 
-  // Load project list on mount
   useEffect(() => {
     api.listProjects().then(setProjects).catch((e) => setError(String(e)));
   }, []);
 
-  // Load flows when a project is selected
   useEffect(() => {
     if (!selectedProject) return;
     setFlows([]);
@@ -91,7 +62,6 @@ function App() {
     api.listResources(selectedProject).then(setResources).catch((e) => setError(String(e)));
   }, [selectedProject]);
 
-  // Load flow when selected — sync RF nodes/edges
   useEffect(() => {
     if (!selectedProject || !selectedFlow) return;
     setFlow(null);
@@ -105,9 +75,6 @@ function App() {
     }).catch((e) => setError(String(e)));
   }, [selectedProject, selectedFlow]);
 
-  // Refresh the current flow after an external mutation (e.g. the
-  // co-pilot agent applied a patch). Re-fetches the flow IR and
-  // syncs the ReactFlow canvas.
   const refreshFlow = useCallback(() => {
     if (!selectedProject || !selectedFlow) return;
     api.getFlow(selectedProject, selectedFlow).then((f) => {
@@ -119,178 +86,119 @@ function App() {
     }).catch((e) => setError(String(e)));
   }, [selectedProject, selectedFlow]);
 
-  // --- React Flow callbacks ---
-
   const onNodeClick: NodeMouseHandler = useCallback((_, node) => {
     setSelectedNode(node);
   }, []);
 
   const onNodeDragStop: NodeMouseHandler = useCallback((_, node) => {
-    // Record a moveNode op
-    setPendingOps((prev) => [
-      ...prev,
-      { op: 'moveNode', nodeId: node.id, position: node.position },
-    ]);
+    setRfNodes((nds) => nds.map((n) => (n.id === node.id ? node : n)));
+  }, []);
+
+  const onConnect = useCallback((connection: Connection) => {
+    const source = connection.source;
+    const target = connection.target;
+    if (!source || !target) return;
+    setRfEdges((eds) => [...eds, { id: `${source}-${target}`, source, target }]);
+    setPendingOps((ops) => [...ops, { op: 'addEdge', from: source, to: target }]);
     setDirty(true);
   }, []);
 
-  const onConnect = useCallback((conn: Connection) => {
-    setRfEdges((eds) => rfAddEdge({ ...conn, animated: false }, eds));
-    if (conn.source && conn.target) {
-      setPendingOps((prev) => [
-        ...prev,
-        { op: 'addEdge', from: conn.source, to: conn.target },
-      ]);
-      setDirty(true);
-    }
+  const onNodesDelete: OnNodesDelete = useCallback((nodes) => {
+    const ids = new Set(nodes.map((n) => n.id));
+    setRfNodes((nds) => nds.filter((n) => !ids.has(n.id)));
+    setRfEdges((eds) => eds.filter((e) => !ids.has(e.source) && !ids.has(e.target)));
+    setPendingOps((ops) => [...ops, ...nodes.map((n) => ({ op: 'removeNode', nodeId: n.id }))]);
+    setDirty(true);
   }, []);
 
-  const onNodesDelete: OnNodesDelete = useCallback((nodes: Node[]) => {
-    for (const node of nodes) {
-      setPendingOps((prev) => [...prev, { op: 'removeNode', nodeId: node.id }]);
-    }
-    if (nodes.length > 0) setDirty(true);
-    setSelectedNode(null);
+  const onEdgesDelete: OnEdgesDelete = useCallback((edges) => {
+    const keys = new Set(edges.map((e) => `${e.source}-${e.target}`));
+    setRfEdges((eds) => eds.filter((e) => !keys.has(`${e.source}-${e.target}`)));
+    setPendingOps((ops) => [...ops, ...edges.map((e) => ({ op: 'removeEdge', from: e.source, to: e.target }))]);
+    setDirty(true);
   }, []);
 
-  const onEdgesDelete: OnEdgesDelete = useCallback((edges: Edge[]) => {
-    for (const edge of edges) {
-      if (edge.source && edge.target) {
-        setPendingOps((prev) => [
-          ...prev,
-          { op: 'removeEdge', from: edge.source, to: edge.target },
-        ]);
-      }
-    }
-    if (edges.length > 0) setDirty(true);
-  }, []);
-
-  // --- Drag-and-drop from palette ---
-
-  const onDragStart = (e: React.DragEvent, stepType: string) => {
+  const onDragStart = useCallback((e: React.DragEvent, stepType: string) => {
     dragType.current = stepType;
     e.dataTransfer.effectAllowed = 'move';
-  };
+  }, []);
 
-  const onDragOver = (e: React.DragEvent) => {
+  const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-  };
+  }, []);
 
-  const onDrop = (e: React.DragEvent) => {
+  const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const stepType = dragType.current;
-    dragType.current = null;
     if (!stepType || !flow) return;
-
-    const position = {
-      x: e.clientX - 300, // approximate offset for left sidebar
-      y: e.clientY - 50,  // approximate offset for header
-    };
-
     const nodeId = genNodeId(stepType);
-    const paletteEntry = PALETTE_STEPS.find((s) => s.type === stepType);
-    const fidelity = paletteEntry?.fidelity || 'simulated';
-
+    const position = { x: e.clientX - 200, y: e.clientY - 100 };
     const newNode: Node = {
       id: nodeId,
       type: 'default',
       position,
-      data: {
-        label: nodeId,
-        stepType,
-        fidelity,
-        config: {},
-      },
-      className: `oiw-node oiw-node--${stepType.replace(/\./g, '-')}`,
+      data: { label: stepType, stepType, fidelity: 'simulated', config: {} },
     };
-
     setRfNodes((nds) => [...nds, newNode]);
-    setPendingOps((prev) => [
-      ...prev,
-      {
-        op: 'addNode',
-        node: { id: nodeId, type: stepType, config: {}, fidelity },
-        position,
-      },
-    ]);
+    setPendingOps((ops) => [...ops, { op: 'addNode', node: { id: nodeId, type: stepType, config: {}, fidelity: 'simulated' } }]);
     setDirty(true);
-    setSelectedNode(newNode);
-  };
+    dragType.current = null;
+  }, [flow]);
 
-  // --- Save (PATCH) ---
+  const updateNodeId = useCallback((oldId: string, newId: string) => {
+    setRfNodes((nds) => nds.map((n) => (n.id === oldId ? { ...n, id: newId } : n)));
+    setRfEdges((eds) => eds.map((e) => ({
+      ...e,
+      source: e.source === oldId ? newId : e.source,
+      target: e.target === oldId ? newId : e.target,
+    })));
+    setSelectedNode((sn) => (sn && sn.id === oldId ? { ...sn, id: newId } : sn));
+    setDirty(true);
+  }, []);
 
-  const save = async () => {
+  const updateNodeConfig = useCallback((nodeId: string, key: string, value: string) => {
+    setRfNodes((nds) => nds.map((n) => {
+      if (n.id !== nodeId) return n;
+      const data = n.data as { config?: Record<string, unknown> };
+      return { ...n, data: { ...data, config: { ...data.config, [key]: value } } };
+    }));
+    setDirty(true);
+  }, []);
+
+  const save = useCallback(async () => {
     if (!selectedProject || !selectedFlow || pendingOps.length === 0) return;
     setLoading(true);
     setError(null);
     try {
-      await api.patchFlow(selectedProject, selectedFlow, pendingOps, gitStatus?.head_sha || undefined);
-      // Reload the flow to get the server's canonical view
-      const f = await api.getFlow(selectedProject, selectedFlow);
-      setFlow(f);
-      setRfNodes(toReactFlowNodes(f));
-      setRfEdges(toReactFlowEdges(f));
+      const headResp = await fetch(`/api/v1/projects/${selectedProject}/git/status`).then((r) => r.json());
+      const baseRevision = headResp.head_sha || 'unknown';
+      await api.patchFlow(selectedProject, selectedFlow, pendingOps as unknown[], baseRevision);
       setPendingOps([]);
       setDirty(false);
+      await refreshFlow();
     } catch (e) {
       setError(String(e));
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedProject, selectedFlow, pendingOps, refreshFlow]);
 
-  // --- Properties panel editing ---
-
-  const updateNodeConfig = (nodeId: string, key: string, value: string) => {
-    // Update local RF state
-    setRfNodes((nds) =>
-      nds.map((n) => {
-        if (n.id !== nodeId) return n;
-        const config = { ...(n.data as { config?: Record<string, unknown> }).config };
-        config[key] = value;
-        return { ...n, data: { ...n.data, config } };
-      })
-    );
-    // Update selected node if it's the one being edited
-    setSelectedNode((prev) => {
-      if (!prev || prev.id !== nodeId) return prev;
-      const config = { ...(prev.data as { config?: Record<string, unknown> }).config };
-      config[key] = value;
-      return { ...prev, data: { ...prev.data, config } };
-    });
-    // Queue patch op
-    setPendingOps((prev) => [
-      ...prev,
-      { op: 'updateNodeConfig', nodeId, config: { [key]: value } },
-    ]);
-    setDirty(true);
-  };
-
-  const updateNodeId = (nodeId: string, newId: string) => {
-    setRfNodes((nds) =>
-      nds.map((n) => (n.id === nodeId ? { ...n, id: newId, data: { ...n.data, label: newId } } : n))
-    );
-    setSelectedNode((prev) => (prev && prev.id === nodeId ? { ...prev, id: newId, data: { ...prev.data, label: newId } } : prev));
-  };
-
-  // --- Action buttons ---
-
-  const runValidate = async () => {
+  const runValidate = useCallback(async () => {
     if (!selectedProject) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await api.validate(selectedProject, true);
+      const result = await api.validate(selectedProject);
       setValidation(result);
     } catch (e) {
       setError(String(e));
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedProject]);
 
-  const runTests = async () => {
+  const runTests = useCallback(async () => {
     if (!selectedProject) return;
     setLoading(true);
     setError(null);
@@ -302,68 +210,61 @@ function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedProject, selectedFlow]);
 
-  const runBuild = async () => {
+  const runBuild = useCallback(async () => {
     if (!selectedProject) return;
     setLoading(true);
     setError(null);
     try {
       const result = await api.build(selectedProject, 'sap-cloud-integration-2026-07');
       setBuild(result);
-      const gs = await api.gitStatus(selectedProject);
-      setGitStatus(gs);
     } catch (e) {
       setError(String(e));
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedProject]);
 
-  const loadGitStatus = async () => {
-    if (!selectedProject) return;
-    try {
-      const gs = await api.gitStatus(selectedProject);
-      setGitStatus(gs);
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-
-  const viewDiff = async () => {
-    if (!selectedProject) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.getDiff(selectedProject, 'HEAD~1');
-      setDiff(result);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runSimulation = async () => {
+  const runSimulation = useCallback(async () => {
     if (!selectedProject || !selectedFlow) return;
     setSimulating(true);
     setError(null);
-    setSimulation(null);
     try {
-      const result = await api.simulate(selectedProject, selectedFlow, {
-        body_inline: '{"orderId":"ORD-001","customerId":"CUST-42","region":"EU","items":[{"sku":"SKU-A","quantity":2}]}',
-        headers: { 'Content-Type': 'application/json' },
-        mocks: [
-          { target: 'receiver-s4-eu', respond: { status: 201, body: '{"id":"4711"}' } },
-        ],
-      });
+      const result = await api.simulate(selectedProject, selectedFlow, { body_inline: '{}' });
       setSimulation(result);
     } catch (e) {
       setError(String(e));
     } finally {
       setSimulating(false);
     }
-  };
+  }, [selectedProject, selectedFlow]);
+
+  const viewDiff = useCallback(async () => {
+    if (!selectedProject) return;
+    setLoading(true);
+    try {
+      const result = await api.getDiff(selectedProject);
+      setDiff(result);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProject]);
+
+  const loadGitStatus = useCallback(async () => {
+    if (!selectedProject) return;
+    setLoading(true);
+    try {
+      const result = await api.gitStatus(selectedProject);
+      setGitStatus(result);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedProject]);
 
   return (
     <div className="app">
@@ -388,7 +289,7 @@ function App() {
               {gitStatus.dirty && <span className="badge badge--warn">dirty</span>}
               {gitStatus.last_build_digest && (
                 <span className="badge badge--success badge--mono">
-                  build: {gitStatus.last_build_digest.substring(7, 14)}
+                  {gitStatus.last_build_digest.slice(0, 12)}
                 </span>
               )}
             </div>
@@ -397,6 +298,7 @@ function App() {
       </header>
 
       <div className="app__body">
+        {/* LEFT SIDEBAR: Projects, Flows, Palette, Resources, Actions */}
         <aside className="sidebar sidebar--left">
           <div className="sidebar__section">
             <h3 className="sidebar__title">Projects</h3>
@@ -409,107 +311,75 @@ function App() {
                 >
                   <div className="project-list__name">{p.name}</div>
                   <div className="project-list__meta">
-                    {p.flow_count} flow(s) · {p.test_count} test(s)
+                    <span className="badge badge--mono">{p.flow_count} flows</span>
+                    <span className="badge badge--mono">{p.test_count} tests</span>
                   </div>
                 </li>
               ))}
             </ul>
           </div>
 
-          {flows.length > 0 && (
-            <div className="sidebar__section">
-              <h3 className="sidebar__title">Flows</h3>
-              <ul className="project-list">
-                {flows.map((f) => (
-                  <li
-                    key={f.id}
-                    className={`project-list__item ${selectedFlow === f.id ? 'project-list__item--active' : ''}`}
-                    onClick={() => setSelectedFlow(f.id)}
-                  >
-                    <div className="project-list__name">{f.name}</div>
-                    <div className="project-list__meta">
-                      v{f.version} · {f.node_count} node(s)
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {flow && (
-            <div className="sidebar__section">
-              <h3 className="sidebar__title">Palette</h3>
-              <p className="palette__hint">Drag onto canvas</p>
-              <div className="palette">
-                {PALETTE_STEPS.map((step) => (
-                  <div
-                    key={step.type}
-                    className="palette__item"
-                    draggable
-                    onDragStart={(e) => onDragStart(e, step.type)}
-                  >
-                    <span
-                      className="palette__dot"
-                      style={{ background: fidelityColor(step.fidelity) }}
-                    />
-                    <span className="palette__name">{step.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {resources.length > 0 && (
-            <div className="sidebar__section">
-              <h3 className="sidebar__title">Resources</h3>
-              <ul className="resource-list">
-                {resources.map((res) => (
-                  <li
-                    key={res.path}
-                    className={`resource-list__item ${selectedResource?.path === res.path ? 'resource-list__item--active' : ''}`}
-                    onClick={() => {
-                      setSelectedResource(res);
-                      setViewMode('resource');
-                    }}
-                  >
-                    <div className="resource-list__name">{res.name}</div>
-                    <div className="resource-list__meta">
-                      <span className="badge badge--mono">{res.language}</span>
-                      <span className="resource-list__size">{res.size}B</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
           {selectedProject && (
-            <div className="sidebar__section">
-              <h3 className="sidebar__title">Actions</h3>
-              <div className="action-buttons">
-                <button onClick={runValidate} disabled={loading} className="btn btn--primary">
-                  Validate
-                </button>
-                <button onClick={runTests} disabled={loading} className="btn btn--primary">
-                  Run Tests
-                </button>
-                <button onClick={runBuild} disabled={loading} className="btn btn--primary">
-                  Build
-                </button>
-                <button onClick={runSimulation} disabled={simulating || !selectedFlow} className="btn btn--primary">
-                  {simulating ? 'Simulating…' : 'Simulate'}
-                </button>
-                <button onClick={viewDiff} disabled={loading} className="btn btn--secondary">
-                  View Diff
-                </button>
-                <button onClick={loadGitStatus} disabled={loading} className="btn btn--secondary">
-                  Git Status
-                </button>
+            <>
+              <div className="sidebar__section">
+                <h3 className="sidebar__title">Flows</h3>
+                <ul className="project-list">
+                  {flows.map((f) => (
+                    <li
+                      key={f.id}
+                      className={`project-list__item ${selectedFlow === f.id ? 'project-list__item--active' : ''}`}
+                      onClick={() => setSelectedFlow(f.id)}
+                    >
+                      <div className="project-list__name">{f.name}</div>
+                      <div className="project-list__meta">
+                        <span className="badge badge--mono">{f.node_count} nodes</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
+
+              <PalettePanel onDragStart={onDragStart} visible={!!selectedFlow} />
+
+              {resources.length > 0 && (
+                <div className="sidebar__section">
+                  <h3 className="sidebar__title">Resources</h3>
+                  <ul className="resource-list">
+                    {resources.map((res) => (
+                      <li
+                        key={res.path}
+                        className={`resource-list__item ${selectedResource?.path === res.path ? 'resource-list__item--active' : ''}`}
+                        onClick={() => { setSelectedResource(res); setViewMode('resource'); }}
+                      >
+                        <div className="resource-list__name">{res.name}</div>
+                        <div className="resource-list__meta">
+                          <span className="badge badge--mono">{res.language}</span>
+                          <span className="resource-list__size">{res.size}B</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="sidebar__section">
+                <h3 className="sidebar__title">Actions</h3>
+                <div className="action-buttons">
+                  <button onClick={runValidate} disabled={loading} className="btn btn--primary">Validate</button>
+                  <button onClick={runTests} disabled={loading} className="btn btn--primary">Run Tests</button>
+                  <button onClick={runBuild} disabled={loading} className="btn btn--primary">Build</button>
+                  <button onClick={runSimulation} disabled={simulating || !selectedFlow} className="btn btn--primary">
+                    {simulating ? 'Simulating…' : 'Simulate'}
+                  </button>
+                  <button onClick={viewDiff} disabled={loading} className="btn btn--secondary">View Diff</button>
+                  <button onClick={loadGitStatus} disabled={loading} className="btn btn--secondary">Git Status</button>
+                </div>
+              </div>
+            </>
           )}
         </aside>
 
+        {/* MAIN: Canvas area */}
         <main className="canvas-area">
           {error && (
             <div className="error-banner">
@@ -522,10 +392,7 @@ function App() {
             <ResourceEditor
               projectId={selectedProject}
               resource={selectedResource}
-              onClose={() => {
-                setSelectedResource(null);
-                setViewMode('canvas');
-              }}
+              onClose={() => { setSelectedResource(null); setViewMode('canvas'); }}
             />
           ) : flow ? (
             <>
@@ -545,27 +412,17 @@ function App() {
                   </button>
                 )}
               </div>
-              <div className="canvas-container" onDragOver={onDragOver} onDrop={onDrop}>
-                <ReactFlow
-                  nodes={rfNodes}
-                  edges={rfEdges}
-                  onNodeClick={onNodeClick}
-                  onNodeDragStop={onNodeDragStop}
-                  onConnect={onConnect}
-                  onNodesDelete={onNodesDelete}
-                  onEdgesDelete={onEdgesDelete}
-                  deleteKeyCode={['Delete', 'Backspace']}
-                  fitView
-                  attributionPosition="bottom-left"
-                >
-                  <Background color="#2e3344" gap={20} />
-                  <Controls />
-                  <MiniMap
-                    nodeColor={(n) => fidelityColor((n.data as { fidelity?: string })?.fidelity ?? '')}
-                    maskColor="rgba(15, 17, 23, 0.8)"
-                  />
-                </ReactFlow>
-              </div>
+              <FlowCanvas
+                nodes={rfNodes}
+                edges={rfEdges}
+                onNodeClick={onNodeClick}
+                onNodeDragStop={onNodeDragStop}
+                onConnect={onConnect}
+                onNodesDelete={onNodesDelete}
+                onEdgesDelete={onEdgesDelete}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
+              />
             </>
           ) : (
             <div className="canvas-placeholder">
@@ -574,8 +431,8 @@ function App() {
           )}
         </main>
 
+        {/* RIGHT SIDEBAR: Co-Pilot, Properties, Validation, Tests, Build, Diff, Simulation */}
         <aside className="sidebar sidebar--right">
-          {/* WP-04 Task 9: Co-Pilot panel (LLM-driven agent interface) */}
           <div className="sidebar__section sidebar__section--copilot">
             <CoPilotPanel
               projectId={selectedProject}
@@ -584,46 +441,12 @@ function App() {
             />
           </div>
           {selectedNode && (
-            <div className="sidebar__section">
-              <h3 className="sidebar__title">Node Properties</h3>
-              <div className="properties">
-                <div className="properties__row">
-                  <span className="properties__label">ID</span>
-                  <input
-                    className="properties__input"
-                    value={selectedNode.id}
-                    onChange={(e) => updateNodeId(selectedNode.id, e.target.value)}
-                  />
-                </div>
-                <div className="properties__row">
-                  <span className="properties__label">Type</span>
-                  <span className="properties__value">
-                    {(selectedNode.data as { stepType?: string }).stepType}
-                  </span>
-                </div>
-                <div className="properties__row">
-                  <span className="properties__label">Fidelity</span>
-                  <span
-                    className="properties__value"
-                    style={{
-                      color: fidelityColor((selectedNode.data as { fidelity?: string }).fidelity ?? ''),
-                    }}
-                  >
-                    {(selectedNode.data as { fidelity?: string }).fidelity}
-                  </span>
-                </div>
-                <div className="properties__row properties__row--config">
-                  <span className="properties__label">Config</span>
-                  <ConfigEditor
-                    nodeId={selectedNode.id}
-                    config={(selectedNode.data as { config?: Record<string, unknown> }).config || {}}
-                    onChange={updateNodeConfig}
-                  />
-                </div>
-              </div>
-            </div>
+            <PropertiesPanel
+              selectedNode={selectedNode}
+              onUpdateNodeId={updateNodeId}
+              onUpdateNodeConfig={updateNodeConfig}
+            />
           )}
-
           {validation && (
             <div className="sidebar__section">
               <h3 className="sidebar__title">
@@ -638,72 +461,37 @@ function App() {
                 ) : (
                   <>
                     {validation.errors.map((e, i) => (
-                      <div key={`e${i}`} className="validation-item validation-item--error">
-                        {e}
-                      </div>
+                      <div key={`e${i}`} className="validation-item validation-item--error">{e}</div>
                     ))}
                     {validation.warnings.map((w, i) => (
-                      <div key={`w${i}`} className="validation-item validation-item--warn">
-                        {w}
-                      </div>
+                      <div key={`w${i}`} className="validation-item validation-item--warn">{w}</div>
                     ))}
                   </>
                 )}
               </div>
             </div>
           )}
-
           {tests && (
             <div className="sidebar__section">
-              <h3 className="sidebar__title">Test Results</h3>
-              <div className="test-results">
-                {tests.map((t, i) => (
-                  <div
-                    key={i}
-                    className={`test-result ${t.passed ? 'test-result--pass' : 'test-result--fail'}`}
-                  >
-                    <div className="test-result__header">
-                      <span className="test-result__symbol">{t.passed ? '✓' : '✗'}</span>
-                      <span className="test-result__name">{t.test_name}</span>
-                      <span className="test-result__time">{t.duration_ms}ms</span>
-                    </div>
-                    {!t.passed && (
-                      <ul className="test-result__failures">
-                        {t.failures.map((f, j) => (
-                          <li key={j}>{f}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <h3 className="sidebar__title">Tests</h3>
+              {tests.map((t, i) => (
+                <div key={i} className={`test-item ${t.passed ? 'test-item--pass' : 'test-item--fail'}`}>
+                  <span className="test-item__name">{t.flow_id} :: {t.test_name}</span>
+                  <span className="badge badge--mono">{t.duration_ms}ms</span>
+                </div>
+              ))}
             </div>
           )}
-
           {build && (
             <div className="sidebar__section">
-              <h3 className="sidebar__title">Build Result</h3>
+              <h3 className="sidebar__title">Build</h3>
               <div className="build-result">
-                <div className="properties__row">
-                  <span className="properties__label">Digest</span>
-                  <span className="properties__value properties__value--mono">{build.digest}</span>
-                </div>
-                <div className="properties__row">
-                  <span className="properties__label">Target</span>
-                  <span className="properties__value">{build.target_profile}</span>
-                </div>
-                <div className="properties__row">
-                  <span className="properties__label">Compiler</span>
-                  <span className="properties__value">{build.compiler_version}</span>
-                </div>
-                <div className="properties__row">
-                  <span className="properties__label">Entries</span>
-                  <span className="properties__value">{build.entry_count}</span>
-                </div>
+                <div><span className="properties__label">Digest:</span> {build.digest}</div>
+                <div><span className="properties__label">Target:</span> {build.target_profile}</div>
+                <div><span className="properties__label">Entries:</span> {build.entry_count}</div>
               </div>
             </div>
           )}
-
           {diff && (
             <div className="sidebar__section">
               <h3 className="sidebar__title">
@@ -713,7 +501,6 @@ function App() {
               <DiffViewer diff={diff} />
             </div>
           )}
-
           {simulation && (
             <div className="sidebar__section">
               <h3 className="sidebar__title">
@@ -748,40 +535,6 @@ function App() {
           )}
         </aside>
       </div>
-    </div>
-  );
-}
-
-/** Inline config editor — renders each key as a label + text input. */
-function ConfigEditor({
-  nodeId,
-  config,
-  onChange,
-}: {
-  nodeId: string;
-  config: Record<string, unknown>;
-  onChange: (nodeId: string, key: string, value: string) => void;
-}) {
-  const keys = Object.keys(config);
-  if (keys.length === 0) {
-    return <p className="muted">No config. Add keys via YAML or the API.</p>;
-  }
-  return (
-    <div className="config-editor">
-      {keys.map((key) => {
-        const value = config[key];
-        const strValue = typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
-        return (
-          <div key={key} className="config-editor__row">
-            <label className="config-editor__label">{key}</label>
-            <input
-              className="config-editor__input"
-              value={strValue}
-              onChange={(e) => onChange(nodeId, key, e.target.value)}
-            />
-          </div>
-        );
-      })}
     </div>
   );
 }
