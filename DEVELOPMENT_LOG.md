@@ -617,3 +617,49 @@ Append new entries below. Newest at the bottom. Format:
 - **DEV-022 resolved** (Playwright E2E in CI) by OW-026.
 - **Remaining open work**: OW-029 (full SPA decomposition — separate WP).
 
+
+### 2026-08-03 — WP-05: Tenant Deployment Pipeline + EMG Phase B
+
+- Implemented WP-05 Tasks 1-15 (Tasks 16-17 deferred). 7 commits.
+- **Track A (Tenant Deployment Pipeline):**
+  - Task 1: EnvironmentProfile loader + validator (8 tests)
+  - Task 2: TenantAdapter Protocol + MockSapCiTenantAdapter + stub (12 tests)
+  - Task 3: DeploymentStateMachine (8 tests)
+  - Task 4: DriftDetector (5 tests)
+  - Task 5: CI/CD templates (oiw-validate.yaml, oiw-deploy.yaml) + docs
+  - Task 6: 'oiw deploy' CLI command (7 subcommands: check-drift, propose,
+    approve, upload, execute, verify, status) (5 tests)
+  - Task 7: post-deployment smoke test (verify command → VERIFIED)
+- **Track B (EMG Phase B — Intra-Task Correction):**
+  - Task 8: ActionDecisionGraphBuilder (5 tests)
+  - Task 9: ExactMatcher (4 tests)
+  - Task 10: RuleBasedMatcher (4 tests)
+  - Task 11: CommonSubgraphExtractor (3 tests)
+  - Task 12: GraphEditPathExtractor (4 tests)
+  - Task 13: IntraTaskInsightCompiler (3 tests)
+  - Task 14: MemoryPromotionWorkflow (8 tests)
+  - Task 15: RewardVector extension to 9 dimensions (6 tests)
+- **Test count**: 317 → 371 (+54). All passing.
+  - CLI: 153 → 228 (+75, includes 38 WP-04 agent + 37 WP-05)
+  - MCP: 20 (unchanged)
+  - Server: 80 (unchanged)
+  - Gateway: 43 (unchanged)
+  - Agent Eval: 19 (unchanged)
+  - E2E: 2 (unchanged)
+- **CI fixes during WP-05:**
+  - Added networkx to CLI dependencies (Task 8 imports it)
+  - Replaced asyncio.get_event_loop() with asyncio.run() (Python 3.12 compat)
+  - Added approvalTtlHours to EnvironmentProfile JSON Schema
+- **New packages:**
+  - apps/cli/oiw/environments.py — profile loading
+  - apps/cli/oiw/tenant/ — adapter interface + mock + stub
+  - apps/cli/oiw/deploy/ — state machine + drift detector
+  - apps/cli/oiw/emg/ — graph builder, matching, subgraph, insight, promotion, reward
+  - packages/ci-templates/ — reusable GitHub Actions workflows
+  - docs/ci-cd/github-actions.md — setup guide
+- **Deferred:**
+  - Task 16 (Full SPA decomposition, OW-029) — separate work package
+  - Task 17 (Eval harness LLM integration, OW-023/024) — requires live LLM
+- **WP-05 acceptance criteria**: 12/17 met (Tasks 16-17 deferred).
+  Core pipeline + EMG Phase B fully functional.
+
