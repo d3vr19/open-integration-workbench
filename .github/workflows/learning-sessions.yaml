@@ -1,0 +1,80 @@
+# Learning Sessions CI (WP-07 Track B-006).
+#
+# Runs nightly to verify that all recorded learning sessions remain
+# reproducible and that their correction insights stay retrievable.
+# Fails if any previously-verified correction becomes unretrievable
+# (regression detection).
+#
+# Spec ref: §15.7 (Expert Trajectory Eligibility), §15.10 (Memory Promotion).
+# Acceptance: WP-07 Task B-006.
+
+name: Learning Sessions
+
+on:
+  schedule:
+    # Nightly at 04:30 UTC (offset from seed-corpus's 04:00 to avoid spike).
+    - cron: "30 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: learning-sessions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  learning-sessions:
+    name: Replay learning session verifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install CLI + dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e apps/cli
+          pip install pyyaml httpx pytest-asyncio networkx
+
+      - name: Run learning session batch tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}/packages/seed-corpus:${{ github.workspace }}
+        run: |
+          pytest packages/seed-corpus/test_run_learning_sessions.py \
+                 packages/seed-corpus/test_cross_task_pipeline.py \
+                 packages/seed-corpus/test_negative_knowledge.py \
+                 packages/seed-corpus/test_provenance.py \
+                 packages/seed-corpus/test_emg_report.py \
+                 -v \
+                 --import-mode=importlib \
+                 --junitxml=pytest-learning-sessions.xml
+
+      - name: Generate fresh knowledge report
+        run: |
+          oiw emg report --output docs/emg/knowledge-report-wp07.yaml
+          cat docs/emg/knowledge-report-wp07.yaml
+
+      - name: Run provenance audit
+        run: |
+          # Regenerate the seed corpus data first
+          python -m packages.seed-corpus.run_learning_sessions > /tmp/sessions-summary.yaml
+          python -m packages.seed-corpus.negative_knowledge > /tmp/neg-summary.yaml
+          oiw emg provenance
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: learning-sessions-results
+          path: |
+            pytest-learning-sessions.xml
+            docs/emg/knowledge-report-wp07.yaml
+            /tmp/sessions-summary.yaml
+            /tmp/neg-summary.yaml
+          retention-days: 14
