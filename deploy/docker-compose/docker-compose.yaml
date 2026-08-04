@@ -141,3 +141,43 @@ volumes:
   pg-data:
   minio-data:
   gitea-data:
+
+  # -------------------------------------------------------------------
+  # Beta profile (WP-06 Track F-001)
+  # -------------------------------------------------------------------
+  # Full stack: API server + Web UI + Mock tenant adapter
+  # Usage: docker compose --profile beta up -d
+  oiw-server-beta:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.server
+    profiles: ["beta"]
+    ports:
+      - "8000:8000"
+    environment:
+      - OIW_WORKSPACE=/data/workspace
+      - PYTHONPATH=/app/apps/cli:/app/apps/mcp-server:/app/apps/server-python-prototype
+    volumes:
+      - workspace-beta:/data/workspace
+      - emg-store:/data/emg
+    command: >
+      python -m uvicorn oiw_server.main:app
+      --host 0.0.0.0 --port 8000
+
+  oiw-web-beta:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-compose/Dockerfile.web
+    profiles: ["beta"]
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_PROXY=http://oiw-server-beta:8000
+    depends_on:
+      - oiw-server-beta
+    command: >
+      sh -c "cd /app && npm run preview -- --host 0.0.0.0 --port 5173"
+
+volumes:
+  workspace-beta:
+  emg-store:

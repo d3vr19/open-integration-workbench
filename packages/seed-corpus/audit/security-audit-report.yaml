@@ -1,0 +1,12 @@
+status: PASS
+filesScanned: 1
+secretsFound: 0
+customerDataFound: 1
+findings:
+- file: flow.yaml
+  type: customer_url
+  count: 1
+  examples:
+  - ''
+auditDate: '2026-08-04T09:18:49.844608'
+auditor: automated-security-audit

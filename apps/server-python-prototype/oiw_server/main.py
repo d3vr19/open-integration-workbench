@@ -16,6 +16,7 @@ from .routes import (
     archive,
     builds,
     diff,
+    emg,
     flows,
     git,
     patches,
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(diff.router)
     app.include_router(git.router)
     app.include_router(archive.router)
+    app.include_router(emg.router)
 
     return app
 
