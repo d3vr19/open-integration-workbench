@@ -8,6 +8,8 @@ import { toReactFlowNodes, toReactFlowEdges } from './flow-utils';
 import { ResourceEditor } from './ResourceEditor';
 import { DiffViewer } from './DiffViewer';
 import { CoPilotPanel } from './components/llm/CoPilotPanel';
+import { EmgInsightPanel } from './components/emg/EmgInsightPanel';
+import { DeployPanel } from './components/deploy/DeployPanel';
 import { PalettePanel } from './components/canvas/PalettePanel';
 import { FlowCanvas } from './components/canvas/FlowCanvas';
 import { PropertiesPanel } from './components/canvas/PropertiesPanel';
@@ -439,6 +441,14 @@ function App() {
               flowId={selectedFlow}
               onApplied={refreshFlow}
             />
+          </div>
+          {/* WP-06 E-003: EMG Insight Panel */}
+          <div className="sidebar__section">
+            <EmgInsightPanel projectId={selectedProject} emgUsed={false} />
+          </div>
+          {/* WP-06 E-002: Deploy Panel */}
+          <div className="sidebar__section">
+            <DeployPanel projectId={selectedProject} />
           </div>
           {selectedNode && (
             <PropertiesPanel
