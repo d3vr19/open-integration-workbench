@@ -36,14 +36,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e apps/cli
-          pip install pyyaml networkx
+          pip install pyyaml networkx httpx pytest-asyncio
       - name: Run EMG tests
         run: |
           pytest apps/cli/tests/emg/ -v \
             --import-mode=importlib \
             --junitxml=pytest-emg.xml
         env:
-          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}
+          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}/apps/mcp-server:${{ github.workspace }}/apps/server-python-prototype:${{ github.workspace }}
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v5

@@ -36,14 +36,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e apps/cli
-          pip install pyyaml
+          pip install pyyaml httpx pytest-asyncio networkx
       - name: Run seed corpus tests
         run: |
           pytest packages/seed-corpus/ -v \
             --import-mode=importlib \
             --junitxml=pytest-seed-corpus.xml
         env:
-          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}
+          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}/packages/seed-corpus:${{ github.workspace }}
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v5
