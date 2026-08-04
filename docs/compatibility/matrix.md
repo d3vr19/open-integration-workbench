@@ -1,7 +1,7 @@
 # OIW Compatibility Matrix
 
 > Spec ref: §4.3 (Explicit Fidelity), §8 (Compatibility Compiler), §9.4 (Initial Step Coverage).
-> Last updated: 2026-08-01. Reflects 15 step plugins across Phases 0–3.
+> Last updated: 2026-08-04. Reflects 20 step plugins across Phases 0–6 (WP-06 Track B).
 
 This matrix records the **current** fidelity level of each supported component.
 Every entry MUST link to a fixture (spec §8.5) and a test that proves the claim.
@@ -21,6 +21,7 @@ Every entry MUST link to a fixture (spec §8.5) and a test that proves the claim
 | Step | Fidelity | Notes |
 |------|----------|-------|
 | `sender.http` | Simulated | Test harness provides the request body and headers (spec §9.4). |
+| `sender.soap` | Simulated | **WP-06 B-001**: Parses SOAP envelope, extracts operation from Body. Mock response injection. |
 | `sender.timer` | Simulated | Cron expression; fires immediately in test. Planned. |
 | `sender.jms` | Unsupported | Preserved as opaque metadata. Planned for Phase 6. |
 | `sender.sftp` | Unsupported | Planned for Phase 6. |
@@ -52,7 +53,10 @@ Every entry MUST link to a fixture (spec §8.5) and a test that proves the claim
 |------|----------|-------|
 | `receiver.http` | Simulated | Mocked via FlowTest `mocks` block. WireMock backing in Phase 2. |
 | `receiver.sftp` | Simulated | Mocked via FlowTest `mocks` block. Records outbound SFTP "call" (sftp:// URL + body) for assertions. Real SFTP support is Phase 6. |
-| `receiver.odata-v4` | Unsupported | Planned for Phase 6 (OW-014 depends on this). |
+| `receiver.soap` | Simulated | **WP-06 B-001**: Generates SOAP response envelope, SOAPAction header. Mock injection. |
+| `receiver.odata-v4` | Simulated | **WP-06 B-002**: OData V4 GET/POST/PUT/PATCH/DELETE, pagination (@odata.nextLink), $filter/$select. maxPages enforcement. OIW-W001 on missing timeout. |
+| `receiver.idoc` | Simulated | **WP-06 B-003**: IDoc XML segment parsing, known type validation (ORDERS05, MATMAS05, etc.), OIW-W002 on unknown type, acknowledgment generation. |
+| `receiver.mail` | Simulated | **WP-06 B-004**: SMTP email sending, HTML/plain text, mock injection, SMTP status codes. |
 | `receiver.jdbc` | Unsupported | Planned for Phase 6. |
 
 ## Target profiles
