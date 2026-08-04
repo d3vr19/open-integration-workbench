@@ -1,0 +1,53 @@
+# EMG evaluation CI job (WP-06 Task C-008).
+# Runs on every PR + nightly. Verifies the EMG cross-task retrieval
+# pipeline produces correct results and doesn't regress.
+
+name: EMG Eval
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  schedule:
+    # Nightly full evaluation at 05:00 UTC.
+    - cron: "0 5 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emg-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emg-eval:
+    name: EMG cross-task retrieval evaluation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e apps/cli
+          pip install pyyaml networkx
+      - name: Run EMG tests
+        run: |
+          pytest apps/cli/tests/emg/ -v \
+            --import-mode=importlib \
+            --junitxml=pytest-emg.xml
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: emg-eval-results
+          path: pytest-emg.xml
+          retention-days: 14

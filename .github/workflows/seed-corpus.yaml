@@ -1,0 +1,53 @@
+# Seed Corpus CI job (WP-06 Task A-006).
+# Runs on every PR + nightly. Synthesizes + promotes seed trajectories
+# and verifies the retrieval integration test passes.
+
+name: Seed Corpus
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  schedule:
+    # Nightly full corpus run at 04:00 UTC.
+    - cron: "0 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seed-corpus-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  seed-corpus:
+    name: Seed corpus synthesis + promotion + retrieval
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e apps/cli
+          pip install pyyaml
+      - name: Run seed corpus tests
+        run: |
+          pytest packages/seed-corpus/ -v \
+            --import-mode=importlib \
+            --junitxml=pytest-seed-corpus.xml
+        env:
+          PYTHONPATH: ${{ github.workspace }}/apps/cli:${{ github.workspace }}
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: seed-corpus-results
+          path: pytest-seed-corpus.xml
+          retention-days: 14
