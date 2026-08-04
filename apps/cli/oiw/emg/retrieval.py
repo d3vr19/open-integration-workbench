@@ -18,7 +18,7 @@ patterns) and more reliable (expert trajectories have verified outcomes).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..agent.interpreter import NormalizedRequirement
@@ -35,12 +35,14 @@ class RetrievalResult:
         insight: the matched IntraTaskInsight (None if not found)
         confidence: 0.0–1.0 match confidence
         reason: why this insight was selected (or why none was found)
+        cross_task_insights: cross-task insights from Phase C (empty if not enabled)
     """
 
     found: bool = False
     insight: IntraTaskInsight | None = None
     confidence: float = 0.0
     reason: str = ""
+    cross_task_insights: list[Any] = field(default_factory=list)
 
 
 class EMGRetriever:
@@ -51,18 +53,35 @@ class EMGRetriever:
     insights' provenance. This is the "graph retrieval" part of the
     TurboVLA-style architecture — deterministic, fast, and auditable.
 
-    Spec ref: §15.11 (Retrieval).
+    When a TaskMemoryNodeStore + CrossTaskEdgeStore are provided (Phase C),
+    the retriever also searches for cross-task insights — reusable patterns
+    from similar but different tasks.
+
+    Spec ref: §15.11 (Retrieval), §15.13 (Cross-Task Transfer).
     """
 
-    def __init__(self, store: InMemoryInsightStore | None = None):
+    def __init__(
+        self,
+        store: InMemoryInsightStore | None = None,
+        task_store: Any = None,
+        edge_store: Any = None,
+    ):
         self.store = store or InMemoryInsightStore()
+        self.task_store = task_store
+        self.edge_store = edge_store
+        # Lazy-init embedder only if task_store is provided
+        self._embedder = None
+        if self.task_store is not None:
+            from .embedding import RequirementEmbedder
+
+            self._embedder = RequirementEmbedder()
 
     def retrieve(
         self,
         requirement: NormalizedRequirement,
         project_id: str | None = None,
     ) -> RetrievalResult:
-        """Find the best matching PROJECT_APPROVED insight.
+        """Find matching insights from both intra-task and cross-task memory.
 
         Args:
             requirement: the normalized requirement to match against.
@@ -70,8 +89,38 @@ class EMGRetriever:
 
         Returns:
             RetrievalResult with the best match (or found=False).
+            If cross-task stores are configured, cross_task_insights is populated.
         """
-        # Only retrieve PROJECT_APPROVED insights (spec §15.10)
+        # 1. Intra-task retrieval (existing Phase B behavior)
+        intra_result = self._retrieve_intra_task(requirement, project_id)
+
+        # 2. Cross-task retrieval (Phase C — only if task_store + edge_store configured)
+        cross_insights: list[Any] = []
+        cross_reason = "not configured"
+        if self.task_store is not None and self.edge_store is not None and self._embedder is not None:
+            cross_insights, cross_reason = self._retrieve_cross_task(requirement, project_id)
+
+        # 3. Merge results
+        found = intra_result.found or len(cross_insights) > 0
+        best_confidence = intra_result.confidence
+        if cross_insights:
+            best_cross = max(cross_insights, key=lambda i: i.confidence)
+            best_confidence = max(best_confidence, best_cross.confidence)
+
+        return RetrievalResult(
+            found=found,
+            insight=intra_result.insight,
+            confidence=best_confidence,
+            reason=f"intra: {intra_result.reason}; cross: {cross_reason}",
+            cross_task_insights=cross_insights,
+        )
+
+    def _retrieve_intra_task(
+        self,
+        requirement: NormalizedRequirement,
+        project_id: str | None,
+    ) -> RetrievalResult:
+        """Existing intra-task retrieval (Phase B)."""
         candidates = self.store.list(
             project_id=project_id,
             state=MemoryPromotionState.PROJECT_APPROVED,
@@ -83,7 +132,6 @@ class EMGRetriever:
                 reason="no PROJECT_APPROVED insights in store",
             )
 
-        # Score each candidate by similarity to the requirement
         best_score = 0.0
         best_insight = None
         for record in candidates:
@@ -105,6 +153,83 @@ class EMGRetriever:
             insight=best_insight,
             confidence=best_score,
             reason=f"matched with score {best_score:.2f}",
+        )
+
+    def _retrieve_cross_task(
+        self,
+        requirement: NormalizedRequirement,
+        project_id: str | None,
+    ) -> tuple[list[Any], str]:
+        """Retrieve cross-task insights for a requirement.
+
+        Returns (insights, reason).
+        """
+        # 1. Embed the requirement
+        embedding = self._embedder.embed(requirement)
+
+        # 2. Find similar task memory nodes
+        similar_nodes = self.task_store.search_similar(
+            embedding=embedding.vector,
+            top_k=5,
+            min_similarity=0.3,
+            project_id=project_id,
+        )
+
+        if not similar_nodes:
+            return [], "no similar task memory nodes found"
+
+        # 3. For each similar node, get cross-task edges
+        insights: list[Any] = []
+        for node, _sim in similar_nodes:
+            if self.edge_store is None:
+                break
+            edges = self.edge_store.get_edges_for_task(
+                task_id=node.task_id,
+                min_confidence=0.3,
+                max_edges=3,
+            )
+            for edge in edges:
+                # Check if the insight applies to this requirement
+                if self._insight_applies(edge.insight, requirement):
+                    insights.append(edge.insight)
+
+        if not insights:
+            return [], f"found {len(similar_nodes)} similar nodes but no applicable cross-task insights"
+
+        # 4. Deduplicate by insight ID
+        seen_ids: set[str] = set()
+        unique = []
+        for ins in insights:
+            if ins.id not in seen_ids:
+                seen_ids.add(ins.id)
+                unique.append(ins)
+
+        # 5. Rank by confidence
+        unique.sort(key=lambda i: i.confidence, reverse=True)
+
+        return unique[:3], f"found {len(unique)} cross-task insights"
+
+    def _insight_applies(self, insight: Any, requirement: NormalizedRequirement) -> bool:
+        """Check if a cross-task insight applies to a requirement."""
+        applies_when = insight.applies_when
+        # Check archetype match
+        if (
+            applies_when.get("archetype")
+            and requirement.archetype
+            and applies_when["archetype"] != requirement.archetype
+        ):
+            return False
+        # Check protocol match
+        if (
+            applies_when.get("sourceProtocol")
+            and requirement.source_protocol
+            and applies_when["sourceProtocol"] != requirement.source_protocol
+        ):
+            return False
+        return not (
+            applies_when.get("targetProtocol")
+            and requirement.target_protocol
+            and applies_when["targetProtocol"] != requirement.target_protocol
         )
 
     def _score_match(
