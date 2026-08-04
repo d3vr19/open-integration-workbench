@@ -194,7 +194,6 @@ class TestImportParserIntegration:
     def test_import_codejam_zip_with_enhanced_parser(self) -> None:
         """The enhanced import parser can process CodeJam ZIPs."""
         from oiw.compiler.import_parser import import_archive
-        from oiw.project import Project
 
         codejam_zip = Path(
             "/tmp/sap-codejam/assets/cloud-integration/Request Employee Dependants - Cloud Connector.zip"
