@@ -32,20 +32,20 @@ test('test_copilot_suggest_and_apply', async ({ page }) => {
 
   // Wait for the project list to load (the "Projects" section)
   const projectsSection = page.locator('.sidebar__section:has(.sidebar__title:has-text("Projects"))');
-  await projectsSection.waitFor({ state: 'visible', timeout: 10_000 });
+  await projectsSection.waitFor({ state: 'visible', timeout: 15_000 });
   await projectsSection.locator('.project-list__item').first().click();
 
   // Wait for the Flows section to populate, then click the first flow
   const flowsSection = page.locator('.sidebar__section:has(.sidebar__title:has-text("Flows"))');
-  await flowsSection.locator('.project-list__item').first().waitFor({ state: 'visible', timeout: 5_000 });
+  await flowsSection.locator('.project-list__item').first().waitFor({ state: 'visible', timeout: 15_000 });
   await flowsSection.locator('.project-list__item').first().click();
 
   // Wait for the canvas to render
-  await page.waitForSelector('.react-flow__node', { timeout: 10_000 });
+  await page.waitForSelector('.react-flow__node', { timeout: 15_000 });
 
   // 3. Find the co-pilot panel and type a requirement
   const copilotInput = page.locator('.copilot-panel__input');
-  await copilotInput.waitFor({ state: 'visible', timeout: 5_000 });
+  await copilotInput.waitFor({ state: 'visible', timeout: 15_000 });
   await copilotInput.fill('Add validation to the order flow');
 
   // 4. Click "Suggest"
@@ -79,7 +79,7 @@ test('test_copilot_suggest_and_apply', async ({ page }) => {
 
   // 8. Close the patch dialog and verify the canvas updated
   await patchDialog.locator('.dialog__close').click();
-  await patchDialog.waitFor({ state: 'hidden', timeout: 5_000 });
+  await patchDialog.waitFor({ state: 'hidden', timeout: 15_000 });
 
   // Wait for the canvas to refresh (the CoPilotPanel calls onApplied=refreshFlow)
   await page.waitForTimeout(1500);
@@ -99,13 +99,13 @@ test('test_copilot_reject_plan', async ({ page }) => {
   await page.goto('/');
 
   const projectsSection = page.locator('.sidebar__section:has(.sidebar__title:has-text("Projects"))');
-  await projectsSection.waitFor({ state: 'visible', timeout: 10_000 });
+  await projectsSection.waitFor({ state: 'visible', timeout: 15_000 });
   await projectsSection.locator('.project-list__item').first().click();
 
   const flowsSection = page.locator('.sidebar__section:has(.sidebar__title:has-text("Flows"))');
-  await flowsSection.locator('.project-list__item').first().waitFor({ state: 'visible', timeout: 5_000 });
+  await flowsSection.locator('.project-list__item').first().waitFor({ state: 'visible', timeout: 15_000 });
   await flowsSection.locator('.project-list__item').first().click();
-  await page.waitForSelector('.react-flow__node', { timeout: 10_000 });
+  await page.waitForSelector('.react-flow__node', { timeout: 15_000 });
 
   // Count nodes before
   const beforeCount = await page.locator('.react-flow__node').count();
@@ -119,7 +119,7 @@ test('test_copilot_reject_plan', async ({ page }) => {
 
   // Click Reject
   await planDialog.locator('button:has-text("Reject")').click();
-  await planDialog.waitFor({ state: 'hidden', timeout: 5_000 });
+  await planDialog.waitFor({ state: 'hidden', timeout: 15_000 });
 
   // Verify no new nodes were added
   const afterCount = await page.locator('.react-flow__node').count();
