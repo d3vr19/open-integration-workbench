@@ -34,7 +34,7 @@ export function DeployPanel({ projectId }: DeployPanelProps) {
     if (!projectId) return;
     setLoading(true);
     fetch(`/api/v1/projects/${projectId}/deployments/${profile}/status`)
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : null)
       .then(s => setState(s))
       .catch(() => setState(null))
       .finally(() => setLoading(false));
@@ -43,7 +43,7 @@ export function DeployPanel({ projectId }: DeployPanelProps) {
   const checkDrift = () => {
     if (!projectId) return;
     fetch(`/api/v1/projects/${projectId}/deployments/${profile}/drift`)
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : null)
       .then(d => setDrift(d))
       .catch(() => setDrift(null));
   };

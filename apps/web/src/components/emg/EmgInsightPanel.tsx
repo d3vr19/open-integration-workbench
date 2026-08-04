@@ -40,8 +40,8 @@ export function EmgInsightPanel({ projectId, emgUsed }: EmgInsightPanelProps) {
     if (!projectId) return;
     setLoading(true);
     Promise.all([
-      fetch(`/api/v1/projects/${projectId}/emg/insights`).then(r => r.json()).catch(() => []),
-      fetch(`/api/v1/emg/stats`).then(r => r.json()).catch(() => null),
+      fetch(`/api/v1/projects/${projectId}/emg/insights`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`/api/v1/emg/stats`).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([ins, st]) => {
       setInsights(ins);
       setStats(st);
