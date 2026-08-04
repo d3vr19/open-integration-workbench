@@ -205,7 +205,6 @@ class TestImportParserIntegration:
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            project = Project.load(Path("examples/order-to-s4"))
             report = import_archive(Path(tmpdir), codejam_zip, "sap-cloud-integration-2026-07")
             # Should at least find some recognized components
             assert len(report.recognized) > 0 or report.status in ("PARTIAL", "FULL")
