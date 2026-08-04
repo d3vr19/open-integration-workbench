@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import click
+import yaml
 
 from . import __version__
 from .archive import ArchiveSafetyError, inspect_archive
@@ -809,6 +810,86 @@ def deploy_status(project_path: Path, profile: str, package_id: str) -> None:
     click.echo(f"History ({len(sm.get_history())} transitions):")
     for record in sm.get_history():
         click.echo(f"  {record.from_state} → {record.to_state} by {record.actor} at {record.timestamp}")
+
+
+# --------------------------------------------------------------------------- #
+# oiw emg — EMG knowledge management (WP-07 Track D-003)
+# --------------------------------------------------------------------------- #
+
+
+@main.group()
+def emg() -> None:
+    """EMG knowledge base management (WP-07)."""
+
+
+@emg.command("report")
+@click.option(
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Output YAML path. Defaults to docs/emg/knowledge-report-wp07.yaml.",
+)
+@click.option(
+    "--seed-corpus-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Seed corpus directory. Defaults to packages/seed-corpus/.",
+)
+def emg_report(output: Path | None, seed_corpus_dir: Path | None) -> None:
+    """Generate the EMG knowledge report (WP-07 Task D-003).
+
+    Summarizes the EMG knowledge base: corpus counts, insights, coverage,
+    retrieval stats, and learning metrics. Saves a YAML report.
+    """
+    # Add packages/seed-corpus to sys.path so we can import the report generator
+    _seed_corpus_dir = (
+        seed_corpus_dir or Path(__file__).resolve().parent.parent.parent.parent / "packages" / "seed-corpus"
+    )
+    if str(_seed_corpus_dir) not in sys.path:
+        sys.path.insert(0, str(_seed_corpus_dir))
+
+    from emg_report import generate_report, save_report  # type: ignore[import-not-found]
+
+    report = generate_report(seed_corpus_dir=_seed_corpus_dir)
+    out = save_report(report, output_path=output)
+
+    click.echo(f"EMG knowledge report saved to: {out}")
+    click.echo("---")
+    click.echo(yaml.safe_dump(report, sort_keys=False, default_flow_style=False))
+
+
+@emg.command("provenance")
+@click.option(
+    "--seed-corpus-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Seed corpus directory.",
+)
+def emg_provenance(seed_corpus_dir: Path | None) -> None:
+    """Audit provenance across all EMG knowledge (WP-07 Task E-001)."""
+    _seed_corpus_dir = (
+        seed_corpus_dir or Path(__file__).resolve().parent.parent.parent.parent / "packages" / "seed-corpus"
+    )
+    if str(_seed_corpus_dir) not in sys.path:
+        sys.path.insert(0, str(_seed_corpus_dir))
+
+    from provenance import verify_provenance  # type: ignore[import-not-found]
+
+    result = verify_provenance(
+        learning_sessions_dir=_seed_corpus_dir / "learning-sessions",
+        avoid_patterns_yaml=_seed_corpus_dir / "negative-knowledge.yaml",
+    )
+
+    click.echo(f"Total artifacts:   {result.total_artifacts}")
+    click.echo(f"With provenance:   {result.with_provenance}")
+    click.echo(f"Missing provenance: {result.missing_provenance}")
+    click.echo(f"Real:              {result.real_count}")
+    click.echo(f"Synthetic:         {result.synthetic_count}")
+    click.echo(f"By source:         {result.by_source}")
+    if result.missing_fields:
+        click.echo("Missing fields:")
+        for mf in result.missing_fields:
+            click.echo(f"  {mf}")
 
 
 if __name__ == "__main__":
