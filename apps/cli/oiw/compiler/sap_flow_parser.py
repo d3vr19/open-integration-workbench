@@ -215,20 +215,19 @@ def parse_bpmn2_iflw(content: bytes | str) -> dict[str, Any]:
                     elif "ODATA" in channel_name:
                         adapter_type = "ODATA_V4"
                     result["sender"] = {"type": adapter_type, "parameters": _extract_ifl_params(elem)}
-            elif "RECEIVER" in channel_name or "OUTBOUND" in channel_name or result["receiver"] is None:
-                if result["receiver"] is None:
-                    adapter_type = "HTTP"
-                    if "SOAP" in channel_name:
-                        adapter_type = "SOAP"
-                    elif "ODATA" in channel_name:
-                        adapter_type = "ODATA_V4"
-                    elif "IDOC" in channel_name:
-                        adapter_type = "IDOC"
-                    elif "MAIL" in channel_name or "SMTP" in channel_name:
-                        adapter_type = "MAIL"
-                    elif "SFTP" in channel_name:
-                        adapter_type = "SFTP"
-                    result["receiver"] = {"type": adapter_type, "parameters": _extract_ifl_params(elem)}
+            elif ("RECEIVER" in channel_name or "OUTBOUND" in channel_name) and result["receiver"] is None:
+                adapter_type = "HTTP"
+                if "SOAP" in channel_name:
+                    adapter_type = "SOAP"
+                elif "ODATA" in channel_name:
+                    adapter_type = "ODATA_V4"
+                elif "IDOC" in channel_name:
+                    adapter_type = "IDOC"
+                elif "MAIL" in channel_name or "SMTP" in channel_name:
+                    adapter_type = "MAIL"
+                elif "SFTP" in channel_name:
+                    adapter_type = "SFTP"
+                result["receiver"] = {"type": adapter_type, "parameters": _extract_ifl_params(elem)}
 
         # ServiceTask with name (BPMN2 processing step)
         elif tag_lower == "servicetask" and elem.get("name"):
