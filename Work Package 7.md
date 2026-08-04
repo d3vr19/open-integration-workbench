@@ -471,4 +471,605 @@ oiw agent "Set maxPages to 100 on the OData receiver" \
   --mode autonomous
 
 # 6. Record the correction
-oiw learn record-correction --session f
+oiw learn record-correction --session fm-001-session-1 \
+  --actions '[{"tool":"flow.patch","op":"updateNodeConfig","nodeId":"receiver-odata","config":{"pagination":{"maxPages":100}}}]'
+
+# 7. Finalize
+oiw learn finalize --session fm-001-session-1
+
+# 8. Extract edit path
+oiw learn extract --session fm-001-session-1
+
+# 9. Verify learning
+oiw learn verify --session fm-001-session-1
+# Expected: agent retrieves correction, adds maxPages on first try
+```
+
+**Run 10 sessions covering:**
+- fm-001: Missing pagination bound
+- fm-002: Retry without idempotency
+- fm-003: Missing error subprocess
+- fm-004: Inline secret
+- fm-005: Missing schema resource
+- fm-006: Wrong edge target
+- fm-007: Groovy sandbox violation
+- fm-008: Missing timeout
+- fm-009: Content-Type mismatch
+- fm-010: Hardcoded URL
+
+**SDK LLM usage during sessions:**
+- If the agent doesn't naturally produce the expected failure, ask the LLM to generate a requirement that's likely to trigger it.
+- If the correction is complex, ask the LLM to suggest the optimal correction path.
+- If verification fails, ask the LLM to analyze why the retrieval didn't match.
+
+**Acceptance:**
+- [ ] 10 learning sessions completed
+- [ ] Each session has a failed trajectory and an expert trajectory
+- [ ] Each session produces a graph edit path
+- [ ] Each edit path is stored as a correction insight
+- [ ] Verification passes for ≥ 8 of 10 sessions (agent retrieves correction on retry)
+- [ ] All sessions recorded in `packages/seed-corpus/learning-sessions/`
+
+### Task B-004: Guided Learning Sessions (Batch 2 — 10 More, Diverse Archetypes)
+
+Run 10 more sessions, but this time targeting **different archetypes** to build cross-task diversity:
+
+- 2 sessions: api-to-erp patterns
+- 2 sessions: file-to-api patterns
+- 2 sessions: paginated-api-ingestion patterns
+- 2 sessions: event-driven/webhook patterns
+- 2 sessions: error-handling patterns
+
+**Acceptance:**
+- [ ] 10 more sessions completed
+- [ ] Sessions cover ≥ 4 different archetypes
+- [ ] All sessions produce edit paths
+- [ ] Verification passes for ≥ 8 of 10
+
+### Task B-005: Guided Learning Sessions (Batch 3 — 10 More, Complex Scenarios)
+
+Run 10 more sessions with **multi-step corrections** (the agent fails in multiple ways, and the correction requires multiple actions):
+
+- 3 sessions: corrections requiring 3+ typed actions
+- 3 sessions: corrections requiring resource creation + flow patching
+- 2 sessions: corrections requiring edge rewiring
+- 2 sessions: corrections requiring configuration externalization
+
+These produce more complex edit paths and test the EMG's ability to handle multi-step corrections.
+
+**Acceptance:**
+- [ ] 10 more sessions completed
+- [ ] Each has a multi-step edit path (≥ 3 operations)
+- [ ] All edit paths correctly extracted
+- [ ] Verification passes for ≥ 7 of 10 (complex corrections are harder)
+
+### Task B-006: Learning Session CI Job
+
+**New workflow:** `.github/workflows/learning-sessions.yaml`
+
+**What to build:**
+- A CI job that replays the verification step for all recorded learning sessions
+- Ensures that corrections remain retrievable after code changes
+- Runs nightly (not on every PR, to save time)
+- Fails if any previously-verified correction becomes unretrievable (regression detection)
+
+**Acceptance:**
+- [ ] CI job replays all session verifications
+- [ ] Regression detection: fails if a correction becomes unretrievable
+- [ ] Runs nightly
+- [ ] Results uploaded as artifact
+
+---
+
+## 7. Track C: Cross-Task Pattern Discovery from Real Artifacts
+
+### Objective
+
+Build cross-task edges from the diverse real artifacts ingested in Track A. The EMG should discover patterns that transfer between similar tasks.
+
+### Task C-001: Archetype Clustering
+
+**What to build:**
+
+Group all ingested artifacts (CodeJam + API Hub + GitHub + blog posts + OIW examples + synthetic variations) by archetype:
+
+```python
+def cluster_by_archetype(artifacts: list[Artifact]) -> dict[str, list[Artifact]]:
+    """Group artifacts by integration archetype."""
+    clusters = {
+        "api-to-erp": [],
+        "file-to-api": [],
+        "api-to-api": [],
+        "paginated-api-ingestion": [],
+        "event-driven-webhook": [],
+        "batch-etl": [],
+        "error-handling-pattern": [],
+        "security-pattern": [],
+        "transform-pipeline": [],
+    }
+    for artifact in artifacts:
+        archetype = classify_archetype(artifact)
+        if archetype in clusters:
+            clusters[archetype].append(artifact)
+    return clusters
+```
+
+**Acceptance:**
+- [ ] All ingested artifacts classified into archetypes
+- [ ] At least 5 archetypes have ≥ 3 artifacts each
+- [ ] Classification documented
+
+### Task C-002: Expert-to-Expert Matching Within Archetypes
+
+For each archetype with ≥ 3 artifacts, run expert-to-expert matching:
+
+1. Build ADGs for all expert trajectories in the archetype
+2. Match each pair using the cascading matcher (exact → rule-based)
+3. Extract common subgraphs
+4. Generate cross-task insights
+
+**SDK LLM usage:** If the matcher produces low-confidence results, ask the LLM to review the two trajectories and identify what they have in common. This helps calibrate the matching thresholds.
+
+**Acceptance:**
+- [ ] Expert-to-expert matching run for all archetype pairs
+- [ ] Common subgraphs extracted where confidence > 0.7
+- [ ] Cross-task insights generated with applies_when conditions
+- [ ] Each insight has support_count ≥ 2
+
+### Task C-003: Cross-Task Edge Population
+
+Store the cross-task insights as edges in the EMG:
+
+```python
+for archetype, artifacts in clusters.items():
+    if len(artifacts) >= 3:
+        expert_graphs = [build_adg(a.expert_trajectory) for a in artifacts]
+        for i, g1 in enumerate(expert_graphs):
+            for g2 in expert_graphs[i+1:]:
+                match = expert_to_expert_matcher.match(g1, g2)
+                if match.confidence > 0.7:
+                    insight = cross_task_insight_generator.generate(g1, g2, match)
+                    edge_store.add_edge(
+                        source_task_id=artifacts[i].task_id,
+                        target_task_id=artifacts[j].task_id,
+                        insight=insight,
+                    )
+```
+
+**Acceptance:**
+- [ ] ≥ 15 cross-task edges populated
+- [ ] Edges span ≥ 4 different archetypes
+- [ ] Each edge has confidence, support_count, and applies_when
+- [ ] Retrieval returns cross-task insights for matching requirements
+
+### Task C-004: Cross-Task Retrieval Verification
+
+Verify that cross-task retrieval actually helps:
+
+1. Take a requirement that matches an archetype with cross-task edges
+2. Run the agent with cross-task retrieval enabled
+3. Verify the agent receives relevant cross-task insights
+4. Verify the agent's plan incorporates the retrieved pattern
+5. Compare with a baseline run (no cross-task retrieval)
+
+**Acceptance:**
+- [ ] Cross-task retrieval returns relevant insights for ≥ 5 test requirements
+- [ ] Agent plans incorporate retrieved patterns (verifiable in plan rationale)
+- [ ] Baseline comparison shows improvement (fewer steps, fewer errors)
+
+---
+
+## 8. Track D: Evaluation — Proving the EMG Learned
+
+### Objective
+
+Demonstrate measurable improvement: the agent performs better AFTER the learning sessions than BEFORE. This is the proof that the EMG is not just storing data but actually improving performance.
+
+### Task D-001: Before/After Benchmark
+
+**What to build:**
+
+Run the existing benchmark suite (bench-001 through bench-005) in two modes:
+
+1. **Baseline (no EMG):** Run with `--no-emg` flag. Record metrics.
+2. **With EMG:** Run with the populated EMG store. Record metrics.
+
+Compare:
+- First-proposal test pass rate
+- Number of correction loops needed
+- Structural correctness score
+- Token cost (should be lower with EMG hits)
+- Latency (should be lower with EMG hits)
+
+**Expected results:**
+- bench-001 (add schema validation): PASS in both modes (already works)
+- bench-002 (create flow): Improved with EMG (flow.create pattern retrieved)
+- bench-003 (fix timeout): Improved with EMG (timeout correction retrieved)
+- bench-004 (error handling): Improved with EMG (error subprocess correction retrieved)
+- bench-005 (refactor): May or may not improve (complex task)
+
+**Acceptance:**
+- [ ] Before/after comparison completed for all 5 benchmarks
+- [ ] At least 2 benchmarks show measurable improvement with EMG
+- [ ] No benchmark shows degradation with EMG
+- [ ] Token cost reduced by ≥ 30% on EMG-hit tasks
+- [ ] Results recorded in `tests/agent_eval/baselines/before-after-wp07.yaml`
+
+### Task D-002: Correction Retrieval Accuracy
+
+**What to build:**
+
+For each of the 30 learning sessions, verify:
+1. The correction insight is retrievable for the original requirement
+2. The correction insight is retrievable for a paraphrased requirement (tests embedding quality)
+3. The correction insight is NOT retrieved for an unrelated requirement (tests specificity)
+
+**Acceptance:**
+- [ ] ≥ 25 of 30 corrections retrievable for original requirement
+- [ ] ≥ 20 of 30 corrections retrievable for paraphrased requirement
+- [ ] 0 false positives (corrections not retrieved for unrelated requirements)
+
+### Task D-003: EMG Knowledge Quality Report
+
+**What to build:** `oiw emg report` command that outputs:
+
+```yaml
+emgKnowledgeReport:
+  corpus:
+    totalTrajectories: 100
+    syntheticTrajectories: 50
+    realTrajectories: 50
+    learningSessionPairs: 30
+  insights:
+    intraTaskCorrections: 30
+    crossTaskPatterns: 15
+    approvedInsights: 45
+  coverage:
+    archetypesCovered: 7
+    failureModesCovered: 10
+    adapterFamiliesCovered: 6
+  retrieval:
+    hitRate: 0.72
+    averageConfidence: 0.81
+    mechanicsFirstRate: 0.65  # % of tasks solved without LLM
+  learning:
+    beforeAfterImprovement: +23%
+    correctionsRetrieved: 28/30
+    falsePositives: 0
+```
+
+**Acceptance:**
+- [ ] Report command works
+- [ ] All metrics populated
+- [ ] Report saved to `docs/emg/knowledge-report-wp07.yaml`
+
+### Task D-004: Learning Curve Visualization
+
+**What to build:**
+
+A simple data file (or script that generates one) showing how the EMG's performance improved as more learning sessions were added:
+
+```yaml
+learningCurve:
+  - sessions: 0
+    benchmarkPassRate: 0.40
+    avgCorrectionLoops: 2.1
+  - sessions: 5
+    benchmarkPassRate: 0.52
+    avgCorrectionLoops: 1.7
+  - sessions: 10
+    benchmarkPassRate: 0.61
+    avgCorrectionLoops: 1.4
+  - sessions: 20
+    benchmarkPassRate: 0.74
+    avgCorrectionLoops: 1.1
+  - sessions: 30
+    benchmarkPassRate: 0.82
+    avgCorrectionLoops: 0.8
+```
+
+This doesn't need to be a chart. A YAML file with the data points is sufficient. The point is to show that performance improves monotonically with more learning sessions.
+
+**Acceptance:**
+- [ ] Learning curve data recorded at 5-session intervals
+- [ ] Monotonic improvement demonstrated
+- [ ] Data saved to `docs/emg/learning-curve-wp07.yaml`
+
+---
+
+## 9. Track E: Knowledge Quality and Governance
+
+### Objective
+
+Ensure the knowledge produced by this work package is trustworthy, properly governed, and won't degrade over time.
+
+### Task E-001: Provenance Tagging
+
+Every trajectory and insight produced in this work package must have clear provenance:
+
+```yaml
+provenance:
+  source: "learning-session" | "sap-codejam" | "api-hub" | "github-community" | "blog-post" | "synthetic"
+  sessionId: "fm-001-session-1"  # for learning sessions
+  artifactUrl: "https://github.com/SAP-samples/..."  # for public artifacts
+  license: "Apache-2.0"
+  reviewer: "hehenaice"
+  reviewDate: "2026-08-XX"
+  confidence: 0.85
+  isReal: true  # distinguishes from synthetic
+```
+
+**Acceptance:**
+- [ ] All trajectories have `provenance.source` set
+- [ ] All insights have `provenance.reviewer` set
+- [ ] Real vs synthetic distinguishable via `provenance.isReal`
+- [ ] Query: `oiw emg list --source learning-session` returns only learning session trajectories
+
+### Task E-002: Negative Knowledge Population
+
+For each learning session, the **failure** is negative knowledge. Store it as an `avoidPattern`:
+
+```yaml
+avoidPattern:
+  id: neg-fm-001
+  trigger:
+    operation: add-node
+    componentType: receiver.odata-v4
+    configMissing: pagination.maxPages
+  reason: "Unbounded pagination can cause memory exhaustion on large datasets"
+  severity: high
+  replacement:
+    - set-config: { pagination: { maxPages: 100 } }
+  evidence:
+    sessionId: fm-001-session-1
+    diagnostic: OIW-E003
+```
+
+**Acceptance:**
+- [ ] ≥ 10 negative knowledge entries created (one per failure mode)
+- [ ] Each has trigger, reason, severity, replacement, evidence
+- [ ] Retrieval returns negative knowledge when the trigger condition matches
+- [ ] Agent avoids the failure pattern when negative knowledge is retrieved
+
+### Task E-003: Knowledge Invalidation Test
+
+Verify that the invalidation mechanism works:
+
+1. Take one approved insight
+2. Simulate a condition that should invalidate it (e.g., "adapter changed")
+3. Run `oiw emg invalidate --insight <id> --reason "adapter version changed"`
+4. Verify the insight is no longer retrievable
+5. Verify the invalidation is recorded (not silently deleted)
+
+**Acceptance:**
+- [ ] Invalidation works
+- [ ] Invalidated insight not retrievable
+- [ ] Invalidation reason recorded
+- [ ] History preserved (not deleted)
+
+### Task E-004: Confidentiality Verification
+
+Verify that no learning session trajectory contains:
+- Secrets
+- Customer identifiers
+- Tenant URLs
+- Personal data
+
+Run the redaction pipeline on all trajectories and verify zero findings.
+
+**Acceptance:**
+- [ ] All 30 learning session trajectories pass redaction check
+- [ ] Zero secrets in any trajectory
+- [ ] Zero customer identifiers in any trajectory
+- [ ] Redaction report saved
+
+---
+
+## 10. Track F: SDK LLM Integration for Roadblocks
+
+### Objective
+
+Document how the developer should use the SDK LLM (z-ai CLI) when they hit roadblocks during this work package.
+
+### Task F-001: Roadblock Resolution Guide
+
+**New file:** `docs/emg/sdk-llm-roadblock-guide.md`
+
+**Content:**
+
+```markdown
+# Using the SDK LLM for Roadblock Resolution
+
+## When to use the LLM
+
+1. **Import parser failures**: When a real artifact can't be imported, ask the LLM 
+   to analyze the artifact structure and identify what's missing.
+
+2. **Failure mode generation**: When you need realistic failure scenarios, ask 
+   the LLM to describe common mistakes for a given archetype.
+
+3. **Correction path suggestion**: When a correction is complex, ask the LLM to 
+   suggest the optimal sequence of typed actions.
+
+4. **Matching threshold calibration**: When expert-to-expert matching produces 
+   low confidence, ask the LLM to identify what two trajectories have in common.
+
+5. **Requirement paraphrasing**: When testing retrieval robustness, ask the LLM 
+   to paraphrase requirements in 3 different ways.
+
+6. **Archetype classification**: When an artifact doesn't clearly fit a known 
+   archetype, ask the LLM to classify it.
+
+## How to use it
+
+```bash
+# Ask about a specific roadblock
+z-ai chat "I'm trying to import a SAP CodeJam artifact that uses a JMS sender. 
+The import parser doesn't recognize it. Here's the artifact structure: [paste]. 
+What should I add to the parser?"
+
+# Generate failure scenarios
+z-ai chat "What are 5 realistic mistakes an SAP CPI consultant would make when 
+building a paginated OData ingestion flow? For each, describe the failure mode 
+and the correction."
+
+# Suggest correction paths
+z-ai chat "An agent added a SOAP receiver but forgot to set the SOAPAction header 
+and didn't add error handling. What's the optimal sequence of typed patches to 
+fix both issues?"
+```
+
+## What NOT to use the LLM for
+
+- Don't use it to generate trajectories (that's the synthetic problem we're solving)
+- Don't use it to approve trajectories (that's a human judgment call)
+- Don't use it to bypass validation or security checks
+- Don't use it to generate secrets or credentials
+```
+
+**Acceptance:**
+- [ ] Guide written
+- [ ] At least 3 roadblocks during this WP resolved using the SDK LLM
+- [ ] Resolutions documented in DEVELOPMENT_LOG.md
+
+---
+
+## 11. Cross-Track Dependencies
+
+```
+Track A (Real Artifact Ingestion)
+  A-001 CodeJam ──────────────────────────────────────────────┐
+  A-002 API Hub ──────────────────────────────────────────────┤
+  A-003 GitHub ───────────────────────────────────────────────┤
+  A-004 Blog Posts ───────────────────────────────────────────┤
+                                                               │
+Track B (Learning Sessions)                                    │
+  B-001 Infrastructure ───────────────────────────────────────┤
+  B-002 Failure Catalog ────── (depends on SDK LLM) ─────────┤
+  B-003 Sessions Batch 1 ───── (depends on B-001, B-002) ────┤
+  B-004 Sessions Batch 2 ───── (depends on B-003) ───────────┤
+  B-005 Sessions Batch 3 ───── (depends on B-004) ───────────┤
+  B-006 CI Job ─────────────── (depends on B-003) ───────────┤
+                                                               │
+Track C (Cross-Task Discovery)                                 │
+  C-001 Archetype Clustering ── (depends on Track A) ─────────┤
+  C-002 Expert Matching ─────── (depends on C-001) ───────────┤
+  C-003 Edge Population ─────── (depends on C-002) ───────────┤
+  C-004 Retrieval Verification ─ (depends on C-003) ──────────┤
+                                                               │
+Track D (Evaluation)                                           │
+  D-001 Before/After ────────── (depends on B-005, C-004) ───┤
+  D-002 Retrieval Accuracy ──── (depends on B-005) ───────────┤
+  D-003 Knowledge Report ────── (depends on D-001, D-002) ────┤
+  D-004 Learning Curve ──────── (depends on B-003..B-005) ────┤
+                                                               │
+Track E (Governance)                                           │
+  E-001 Provenance ──────────── (parallel, applies to all) ───┤
+  E-002 Negative Knowledge ──── (depends on B-003) ───────────┤
+  E-003 Invalidation Test ───── (depends on B-003) ───────────┤
+  E-004 Confidentiality ─────── (depends on Track A + B) ─────┤
+                                                               │
+Track F (SDK LLM Guide)                                        │
+  F-001 Roadblock Guide ─────── (parallel, write early) ──────┘
+```
+
+**Recommended execution order:**
+1. F-001 (write the SDK guide first, so it's available for all subsequent work)
+2. B-001 + B-002 (infrastructure + failure catalog)
+3. A-001 through A-004 (real artifact ingestion, in parallel with B)
+4. B-003 (first 10 learning sessions)
+5. C-001 (archetype clustering, once Track A has enough artifacts)
+6. B-004, B-005 (more learning sessions)
+7. C-002, C-003, C-004 (cross-task discovery)
+8. D-001 through D-004 (evaluation)
+9. E-001 through E-004 (governance)
+10. B-006 (CI job, last)
+
+---
+
+## 12. Acceptance Criteria (Work Package Level)
+
+This work package is complete when **all** of the following are true:
+
+### Knowledge Base
+- [ ] ≥ 20 real public artifacts ingested (CodeJam + API Hub + GitHub + blog posts)
+- [ ] ≥ 30 failed-to-expert trajectory pairs created through learning sessions
+- [ ] ≥ 30 graph edit paths extracted and stored as correction insights
+- [ ] ≥ 15 cross-task edges populated from diverse real artifacts
+- [ ] ≥ 10 negative knowledge entries created
+- [ ] All knowledge properly tagged with provenance (real vs synthetic)
+- [ ] Total EMG knowledge base: ≥ 80 trajectories (50 existing + 30 new)
+
+### Learning Proven
+- [ ] Before/after benchmark shows measurable improvement (≥ 2 benchmarks improved)
+- [ ] ≥ 25 of 30 corrections retrievable for original requirements
+- [ ] ≥ 20 of 30 corrections retrievable for paraphrased requirements
+- [ ] 0 false positives (corrections not retrieved for unrelated requirements)
+- [ ] Learning curve shows monotonic improvement
+- [ ] Mechanics-first rate ≥ 60% (agent solves ≥ 60% of tasks without LLM)
+
+### Quality
+- [ ] All trajectories pass redaction check (zero secrets)
+- [ ] All insights have reviewer provenance
+- [ ] Invalidation mechanism tested and working
+- [ ] Knowledge report generated
+- [ ] No regression in existing 506 tests
+
+### Infrastructure
+- [ ] `oiw learn` CLI commands working
+- [ ] Learning session CI job running nightly
+- [ ] SDK LLM roadblock guide written
+- [ ] ≥ 3 roadblocks resolved using SDK LLM (documented)
+
+### CI
+- [ ] All existing 6 CI workflows still green
+- [ ] New learning-sessions CI job green
+- [ ] Total test count ≥ 550
+
+---
+
+## 13. Definition of Done (Per PR)
+
+Every PR within this work package must satisfy:
+
+- [ ] Tests added or updated
+- [ ] No secrets in any trajectory, fixture, or test data
+- [ ] All new trajectories have provenance tags
+- [ ] Learning session recordings are reproducible
+- [ ] DEVELOPMENT_LOG.md updated
+- [ ] `Human-Approver` trailer filled
+- [ ] No regression in existing tests
+- [ ] SDK LLM usage documented if used to resolve a roadblock
+
+---
+
+## 14. What This Work Package Does NOT Include
+
+- **Tenant deployment.** No real tenant interaction. All validation is local.
+- **PAWS rename.** Still deferred.
+- **EMG Phase D (optimal transport alignment).** Not needed until the knowledge base is larger.
+- **Embedding model upgrade (TF-IDF → sentence-transformers).** TF-IDF is sufficient for 30 learning sessions. Upgrade when retrieval accuracy becomes a bottleneck.
+- **Multi-tenant knowledge isolation.** Single-tenant (local) only.
+- **Organization-wide pattern promotion.** All knowledge stays PROJECT_APPROVED.
+- **Marketplace or public pattern publication.** Internal only.
+- **Additional adapter implementations.** Track B uses existing adapters only.
+
+---
+
+## 15. Glossary (Additions for This WP)
+
+| Term | Definition |
+|------|-----------|
+| **Learning session** | A structured development session where the agent attempts a task, fails, and a human corrects it, producing a failed-to-expert trajectory pair |
+| **Failed-to-expert pair** | Two trajectories for the same task: one that failed, one that succeeded. The difference between them is the correction knowledge |
+| **Graph edit path** | The sequence of INSERT/DELETE/RELABEL operations that transforms the failed trajectory's graph into the expert trajectory's graph. This IS the correction |
+| **Failure mode** | A specific, realistic mistake that agents or consultants make, catalogued with its diagnostic and correction |
+| **Mechanics-first rate** | The percentage of tasks the agent solves by retrieving EMG knowledge without invoking the LLM |
+| **Correction insight** | A stored piece of knowledge derived from a graph edit path: "when you see X, do Y instead of Z" |
+| **Negative knowledge** | Explicit "don't do this" patterns with trigger conditions, reasons, and replacements |
+| **Provenance** | Metadata recording where a trajectory came from (real artifact, learning session, synthetic) and who reviewed it |
+| **SDK LLM** | The z-ai CLI available to the developer for resolving roadblocks during this work package |
+
+---
+
+*End of Work Package WP-07*
