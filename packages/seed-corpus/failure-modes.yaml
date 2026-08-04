@@ -1,0 +1,103 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FailureModeCatalog
+metadata:
+  version: "0.1.0"
+  created: "2026-08-04"
+  description: "Realistic SAP CPI failure modes for guided learning sessions"
+spec:
+  failureModes:
+    - id: fm-001
+      name: "Missing pagination bound"
+      archetype: paginated-api-ingestion
+      description: "Agent adds OData receiver without maxPages limit"
+      diagnostic: "OIW-E003"
+      correction: "Add maxPages config to receiver.odata-v4"
+      severity: high
+
+    - id: fm-002
+      name: "Retry without idempotency"
+      archetype: api-to-erp
+      description: "Agent adds retry to POST receiver without idempotency key"
+      diagnostic: "OIW-W003"
+      correction: "Add idempotency key header before retry"
+      severity: high
+
+    - id: fm-003
+      name: "Missing error subprocess"
+      archetype: any
+      description: "Agent creates flow without exception handling"
+      diagnostic: "OIW-W002"
+      correction: "Add errorHandling.defaultExceptionSubprocess"
+      severity: medium
+
+    - id: fm-004
+      name: "Inline secret in receiver config"
+      archetype: any
+      description: "Agent puts password directly in receiver URL"
+      diagnostic: "OIW-E002"
+      correction: "Replace with credentialRef"
+      severity: critical
+
+    - id: fm-005
+      name: "Missing schema resource"
+      archetype: api-validation
+      description: "Agent adds validator.json-schema but doesn't create the schema file"
+      diagnostic: "RESOURCE_NOT_FOUND"
+      correction: "Create the referenced schema resource"
+      severity: high
+
+    - id: fm-006
+      name: "Wrong edge target after inserting node"
+      archetype: any
+      description: "Agent inserts node but doesn't reconnect edges"
+      diagnostic: "DANGLING_EDGE"
+      correction: "Replace edge from sender→old_target with sender→new_node→old_target"
+      severity: medium
+
+    - id: fm-007
+      name: "Groovy script uses blocked class"
+      archetype: any
+      description: "Agent writes Groovy that imports java.net.URL"
+      diagnostic: "SANDBOX_VIOLATION"
+      correction: "Use allowed HTTP client or externalize the call"
+      severity: critical
+
+    - id: fm-008
+      name: "Missing timeout on receiver"
+      archetype: any
+      description: "Agent adds receiver without timeoutSeconds"
+      diagnostic: "OIW-W001"
+      correction: "Set timeoutSeconds to 30"
+      severity: low
+
+    - id: fm-009
+      name: "Content-Type mismatch after transformation"
+      archetype: transform-pipeline
+      description: "Agent transforms XML→JSON but doesn't update Content-Type header"
+      diagnostic: "CONTENT_TYPE_MISMATCH"
+      correction: "Add Content Modifier to set Content-Type: application/json"
+      severity: medium
+
+    - id: fm-010
+      name: "Missing externalized parameter"
+      archetype: any
+      description: "Agent hardcodes tenant URL in receiver config"
+      diagnostic: "OIW-W005"
+      correction: "Replace with ${ENV_VAR} reference"
+      severity: medium
+
+    - id: fm-011
+      name: "SOAP receiver without SOAPAction header"
+      archetype: soap-integration
+      description: "Agent adds receiver.soap but omits soapAction"
+      diagnostic: "OIW-W004"
+      correction: "Set soapAction in receiver.soap config"
+      severity: medium
+
+    - id: fm-012
+      name: "IDoc receiver with unknown type"
+      archetype: idoc-integration
+      description: "Agent uses an IDoc type not in the known types list"
+      diagnostic: "OIW-W002"
+      correction: "Use a known IDoc type (ORDERS05, MATMAS05, DEBMAS07, CREMAS07)"
+      severity: medium
