@@ -10,9 +10,9 @@ title = "OIW gitleaks config"
 [extend]
 useDefault = true
 
-# Allow test fixtures that contain fake secret strings for testing the
-# redaction / confidentiality scanning pipeline.
-[[allowlistPaths]]
+# Allow test fixture files that contain intentional fake secrets for
+# testing the redaction / confidentiality scanning pipeline.
+[[allowlist]]
 description = "Test files with intentional fake secrets for scanner testing"
 paths = [
   '''packages/seed-corpus/test_confidentiality\.py''',
