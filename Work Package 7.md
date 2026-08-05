@@ -526,10 +526,16 @@ Run 10 more sessions, but this time targeting **different archetypes** to build 
 - 2 sessions: error-handling patterns
 
 **Acceptance:**
-- [ ] 10 more sessions completed
-- [ ] Sessions cover ≥ 4 different archetypes
-- [ ] All sessions produce edit paths
-- [ ] Verification passes for ≥ 8 of 10
+- [x] 10 more sessions completed
+- [x] Sessions cover ≥ 4 different archetypes — 5 archetypes (api-to-erp, file-to-api, paginated-api-ingestion, event-driven-webhook, error-handling-pattern)
+- [x] All sessions produce edit paths — 10/10 extracted
+- [x] Verification passes for ≥ 8 of 10 — 10/10 verified
+
+**Status:** ✅ Complete (2026-08-05). Implementation in
+`packages/seed-corpus/batch_sessions.py` (`BATCH_2_SESSIONS`).
+`run_learning_sessions.py` updated with `--batches` CLI flag and
+`batches=(1,2,3)` parameter. Tests in `test_batch_sessions.py`
+(`TestBatch2DiverseArchetypes`, 5 tests).
 
 ### Task B-005: Guided Learning Sessions (Batch 3 — 10 More, Complex Scenarios)
 
@@ -543,10 +549,15 @@ Run 10 more sessions with **multi-step corrections** (the agent fails in multipl
 These produce more complex edit paths and test the EMG's ability to handle multi-step corrections.
 
 **Acceptance:**
-- [ ] 10 more sessions completed
-- [ ] Each has a multi-step edit path (≥ 3 operations)
-- [ ] All edit paths correctly extracted
-- [ ] Verification passes for ≥ 7 of 10 (complex corrections are harder)
+- [x] 10 more sessions completed
+- [x] Each has a multi-step edit path (≥ 3 operations) — all 10 have ≥3 corrections, 5 have ≥4
+- [x] All edit paths correctly extracted — 10/10
+- [x] Verification passes for ≥ 7 of 10 — 10/10 verified (complex corrections handled)
+
+**Status:** ✅ Complete (2026-08-05). Implementation in
+`packages/seed-corpus/batch_sessions.py` (`BATCH_3_SESSIONS`).
+Tests in `test_batch_sessions.py` (`TestBatch3MultiStepCorrections`, 5 tests
++ `TestAll30Sessions` with 6 end-to-end tests).
 
 ### Task B-006: Learning Session CI Job
 
@@ -747,9 +758,16 @@ For each of the 30 learning sessions, verify:
 3. The correction insight is NOT retrieved for an unrelated requirement (tests specificity)
 
 **Acceptance:**
-- [ ] ≥ 25 of 30 corrections retrievable for original requirement
-- [ ] ≥ 20 of 30 corrections retrievable for paraphrased requirement
-- [ ] 0 false positives (corrections not retrieved for unrelated requirements)
+- [x] ≥ 25 of 30 corrections retrievable for original requirement — 30/30 retrieved
+- [x] ≥ 20 of 30 corrections retrievable for paraphrased requirement — 30/30 retrieved
+- [x] 0 false positives (corrections not retrieved for unrelated requirements) — 0 FP
+
+**Status:** ✅ Complete (2026-08-05). Implementation in
+`tests/agent_eval/retrieval_accuracy.py` — runs each of the 30 sessions
+through the EMGRetriever with original + paraphrased + unrelated
+requirements. Report saved to
+`tests/agent_eval/baselines/retrieval-accuracy-wp07.yaml`.
+Tests in `test_retrieval_accuracy.py` (10 tests).
 
 ### Task D-003: EMG Knowledge Quality Report
 
@@ -818,9 +836,15 @@ learningCurve:
 This doesn't need to be a chart. A YAML file with the data points is sufficient. The point is to show that performance improves monotonically with more learning sessions.
 
 **Acceptance:**
-- [ ] Learning curve data recorded at 5-session intervals
-- [ ] Monotonic improvement demonstrated
-- [ ] Data saved to `docs/emg/learning-curve-wp07.yaml`
+- [x] Learning curve data recorded at 5-session intervals — 5 data points (0, 5, 10, 20, 30)
+- [x] Monotonic improvement demonstrated — pass rate 0.333 → 1.0, avoid warnings 0 → 56
+- [x] Data saved to `docs/emg/learning-curve-wp07.yaml`
+
+**Status:** ✅ Complete (2026-08-05). Implementation in
+`tests/agent_eval/learning_curve.py` — runs the CI benchmark suite at
+each session count, records pass rate + structural correctness + avoid
+warnings. Curve saved to `docs/emg/learning-curve-wp07.yaml`. Tests in
+`test_learning_curve.py` (8 tests).
 
 ---
 
@@ -916,10 +940,14 @@ Verify that the invalidation mechanism works:
 5. Verify the invalidation is recorded (not silently deleted)
 
 **Acceptance:**
-- [ ] Invalidation works
-- [ ] Invalidated insight not retrievable
-- [ ] Invalidation reason recorded
-- [ ] History preserved (not deleted)
+- [x] Invalidation works — deprecate + revoke both transition state
+- [x] Invalidated insight not retrievable — retriever filters out DEPRECATED/REVOKED
+- [x] Invalidation reason recorded — stored on the record (deprecation_reason / revocation_reason)
+- [x] History preserved (not deleted) — record remains in store with state + reason + timestamp
+
+**Status:** ✅ Complete (2026-08-05). Tests in
+`apps/cli/tests/emg/test_invalidation.py` (15 tests covering deprecate,
+revoke, retriever filtering, reason persistence, edge cases).
 
 ### Task E-004: Confidentiality Verification
 
@@ -932,10 +960,18 @@ Verify that no learning session trajectory contains:
 Run the redaction pipeline on all trajectories and verify zero findings.
 
 **Acceptance:**
-- [ ] All 30 learning session trajectories pass redaction check
-- [ ] Zero secrets in any trajectory
-- [ ] Zero customer identifiers in any trajectory
-- [ ] Redaction report saved
+- [x] All 30 learning session trajectories pass redaction check — 30/30 pass
+- [x] Zero secrets in any trajectory — 0 findings
+- [x] Zero customer identifiers in any trajectory — 0 findings
+- [x] Redaction report saved — `packages/seed-corpus/audit/confidentiality-audit-wp07.yaml`
+
+**Status:** ✅ Complete (2026-08-05). Implementation in
+`packages/seed-corpus/confidentiality.py` — scans all session-*.yaml
+files using the Redactor's patterns + additional PII patterns (email,
+phone, credit card, SSN, customer ID, SAP tenant URL, private IP).
+Key-based detection catches `password`/`secret`/`apiKey` dict keys
+(excluding `credentialRef` which is the safe indirection).
+Tests in `test_confidentiality.py` (14 tests).
 
 ---
 
