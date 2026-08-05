@@ -740,20 +740,24 @@ Compare:
 - bench-005 (refactor): May or may not improve (complex task)
 
 **Acceptance:**
-- [x] Before/after comparison completed for all 3 CI benchmarks (bench-001..003)
-- [x] At least 2 benchmarks show measurable improvement with EMG — 3/3 improved
+- [x] Before/after comparison completed for all 5 benchmarks (bench-001..005)
+- [x] At least 2 benchmarks show measurable improvement with EMG — 5/5 improved (3 fallback + 2 LLM)
 - [x] No benchmark shows degradation with EMG — 0 degraded
-- [ ] Token cost reduced by ≥ 30% on EMG-hit tasks — N/A (fallback mode, 0 tokens in both)
-- [x] Results recorded in `tests/agent_eval/baselines/before-after-wp07.yaml`
+- [ ] Token cost reduced by ≥ 30% on EMG-hit tasks — N/A (z-ai CLI doesn't report per-call token usage)
+- [x] Results recorded in `tests/agent_eval/baselines/before-after-wp07.yaml` (fallback) + `llm-before-after-wp07.yaml` (LLM)
 
-**Status:** ✅ Complete (2026-08-05). Implementation in
-`tests/agent_eval/before_after.py` — runs bench-001..003 twice (baseline +
-with-EMG avoid patterns), compares structural correctness, test pass
-rate, latency, and avoid-warning count. 20 avoid warnings surfaced
-across the 3 benchmarks (4 + 6 + 10). Tests in
-`tests/agent_eval/test_before_after.py` (5 tests, module-scoped
-fixture). The 2 LLM-only benchmarks (bench-004, bench-005) are deferred
-until the LLM planner is wired into the test harness.
+**Status:** ✅ Complete (2026-08-05). Two implementation tracks:
+1. **Fallback mode** (`tests/agent_eval/before_after.py`): runs bench-001..003
+   twice (baseline + with-EMG avoid patterns). 20 avoid warnings surfaced
+   (4 + 6 + 10). 3/3 improved, 0 degraded. 5 tests in `test_before_after.py`.
+2. **LLM mode** (`tests/agent_eval/llm_before_after.py`): runs bench-004 +
+   bench-005 twice (baseline + with-EMG) using the z-ai CLI LLM planner.
+   15 avoid warnings surfaced (12 + 3). 2/2 improved, 0 degraded.
+   5 tests in `test_llm_before_after.py` (skipped unless `ZAI_LLM_BENCH=1`).
+
+The LLM tests are gated behind `ZAI_LLM_BENCH=1` to prevent CI from
+making live LLM calls (slow + cost tokens). Run manually with:
+`ZAI_LLM_BENCH=1 python -m pytest tests/agent_eval/test_llm_before_after.py -v`
 
 ### Task D-002: Correction Retrieval Accuracy
 
