@@ -73,6 +73,23 @@ MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz
         findings = _scan_text(text)
         assert findings == []
 
+    def test_does_not_match_uuid_hex_as_phone(self) -> None:
+        """Random hex/numeric IDs (like session-2a3753985156) are NOT flagged as phones."""
+        # This is a regression test for the phone regex being too loose.
+        text = "session-2a3753985156 failed-session-2a3753985156 expert-session-2a3753985156"
+        findings = _scan_text(text)
+        names = [f[0] for f in findings]
+        assert (
+            "phone" not in names
+        ), f"phone pattern incorrectly matched UUID hex: {findings}"
+
+    def test_detects_real_phone_number(self) -> None:
+        """Real phone numbers WITH separators are still detected."""
+        text = "Contact: +1-555-123-4567 for support"
+        findings = _scan_text(text)
+        names = [f[0] for f in findings]
+        assert "phone" in names
+
 
 class TestScanTrajectoryFile:
     def test_clean_session_passes(self, tmp_path: Path) -> None:

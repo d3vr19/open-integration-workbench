@@ -42,9 +42,15 @@ from oiw.agent.redaction import PATTERNS  # noqa: E402
 PII_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # Email addresses
     (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"), "email"),
-    # Phone numbers (international + US)
+    # Phone numbers — require at least one separator (space, dash, dot, or
+    # country code +) to avoid matching random hex/numeric IDs like
+    # "3753985156" which appear in UUID-derived session IDs.
     (
-        re.compile(r"\+?\d{1,3}?[-.\s]?\(?\d{1,4}?\)?[-.\s]?\d{3,4}[-.\s]?\d{4}\b"),
+        re.compile(
+            r"(?:\+\d{1,3}[-.\s]\d{1,4}[-.\s]\d{3,4}[-.\s]\d{4}"
+            r"|\(\d{3}\)\s?\d{3}[-.\s]\d{4}"
+            r"|\d{3}[-.\s]\d{3}[-.\s]\d{4})\b"
+        ),
         "phone",
     ),
     # Credit card numbers (basic pattern)
