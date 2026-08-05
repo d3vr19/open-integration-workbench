@@ -1,0 +1,34 @@
+apiVersion: oiw.dev/v1alpha1
+kind: LearningCurve
+metadata:
+  version: 0.1.0
+  created: '2026-08-05'
+  description: 'WP-07 Track D-004: EMG performance vs learning session count'
+spec:
+  learningCurve:
+  - sessions: 0
+    benchmarkPassRate: 0.333
+    avgCorrectionLoops: 0.0
+    avgStructuralCorrectness: 0.65
+    avoidWarningsSurfaced: 0
+  - sessions: 5
+    benchmarkPassRate: 1.0
+    avgCorrectionLoops: 0.0
+    avgStructuralCorrectness: 1.0
+    avoidWarningsSurfaced: 10
+  - sessions: 10
+    benchmarkPassRate: 1.0
+    avgCorrectionLoops: 0.0
+    avgStructuralCorrectness: 1.0
+    avoidWarningsSurfaced: 15
+  - sessions: 20
+    benchmarkPassRate: 1.0
+    avgCorrectionLoops: 0.0
+    avgStructuralCorrectness: 1.0
+    avoidWarningsSurfaced: 35
+  - sessions: 30
+    benchmarkPassRate: 1.0
+    avgCorrectionLoops: 0.0
+    avgStructuralCorrectness: 1.0
+    avoidWarningsSurfaced: 56
+  monotonicImprovement: true
