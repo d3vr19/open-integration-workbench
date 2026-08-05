@@ -1,0 +1,30 @@
+# Gitleaks configuration for OIW (WP-07).
+#
+# Allows test fixtures that intentionally contain fake secret-like strings
+# used to verify the Redactor / confidentiality scanner detects them.
+#
+# Format: https://github.com/gitleaks/gitleaks#configuration
+
+title = "OIW gitleaks config"
+
+[extend]
+useDefault = true
+
+# Allow test fixtures that contain fake secret strings for testing the
+# redaction / confidentiality scanning pipeline.
+[[allowlistPaths]]
+description = "Test files with intentional fake secrets for scanner testing"
+paths = [
+  '''packages/seed-corpus/test_confidentiality\.py''',
+  '''apps/cli/tests/emg/test_avoid_patterns\.py''',
+  '''apps/cli/tests/emg/test_invalidation\.py''',
+  '''apps/cli/tests/emg/test_retrieval\.py''',
+  '''tests/agent_eval/.*\.py''',
+]
+
+# Also allow specific test fixture strings by description.
+[[allowlist]]
+description = "Fake API key in test fixtures (32 hex chars, not a real secret)"
+regexes = [
+  '''api_key=abcdef0123456789ABCDEF0123456789''',
+]
