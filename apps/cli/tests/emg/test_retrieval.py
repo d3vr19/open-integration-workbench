@@ -340,3 +340,108 @@ def test_emg_retrieval_confidence_scoring() -> None:
     # Should either not match or have low confidence
     if low_result.found:
         assert low_result.confidence < high_result.confidence
+
+
+# ---------------------------------------------------------------------------
+# Test 7: Avoid-pattern retrieval (WP-07 Track E-002)
+# ---------------------------------------------------------------------------
+
+
+def test_emg_retrieval_surfaces_avoid_patterns(tmp_path):
+    """The retriever surfaces avoid patterns matching the requirement."""
+    from oiw.emg.avoid_patterns import AvoidPattern, AvoidPatternStore
+
+    # Build a store with one avoid pattern targeting OData receivers
+    store = AvoidPatternStore(
+        patterns=[
+            AvoidPattern(
+                id="avoid-fm-001",
+                trigger={
+                    "operation": "add-node",
+                    "componentType": "receiver.odata-v4",
+                    "configMissing": "pagination.maxPages",
+                },
+                reason="Unbounded pagination",
+                severity="high",
+                replacement=[],
+                evidence={"failureModeId": "fm-001", "archetype": "paginated-api-ingestion"},
+            ),
+        ]
+    )
+
+    retriever = EMGRetriever(avoid_pattern_store=store)
+
+    # Requirement that matches the avoid pattern's archetype + components
+    req = NormalizedRequirement(
+        intent="create-flow",
+        archetype="paginated-api-ingestion",
+        operations=["transform"],
+        components=["receiver.odata-v4"],
+        raw="Create a flow that reads from OData",
+    )
+
+    result = retriever.retrieve(req, project_id="test")
+    # Avoid pattern should be surfaced even if no positive insight was found
+    assert len(result.avoid_patterns) >= 1
+    assert result.avoid_patterns[0].id == "avoid-fm-001"
+    # The reason string should mention the avoid pattern count
+    assert "avoid: 1 patterns matched" in result.reason
+
+
+def test_emg_retrieval_no_avoid_patterns_when_store_empty():
+    """Empty avoid-pattern store → no patterns returned."""
+    retriever = EMGRetriever()  # no avoid_pattern_store
+    req = NormalizedRequirement(
+        intent="create-flow",
+        archetype="api-to-erp",
+        operations=["transform"],
+        components=["receiver.http"],
+        raw="Create a flow",
+    )
+    result = retriever.retrieve(req, project_id="test")
+    assert result.avoid_patterns == []
+
+
+def test_emg_retrieval_filters_avoid_patterns_by_archetype():
+    """Avoid patterns with non-matching archetype are filtered out."""
+    from oiw.emg.avoid_patterns import AvoidPattern, AvoidPatternStore
+
+    store = AvoidPatternStore(
+        patterns=[
+            # Pattern targets paginated-api-ingestion only
+            AvoidPattern(
+                id="avoid-fm-001",
+                trigger={"operation": "add-node", "componentType": "receiver.odata-v4"},
+                reason="Unbounded pagination",
+                severity="high",
+                replacement=[],
+                evidence={"archetype": "paginated-api-ingestion"},
+            ),
+            # Pattern targets any archetype
+            AvoidPattern(
+                id="avoid-fm-004",
+                trigger={"operation": "add-node", "componentType": "receiver.*"},
+                reason="Inline secret",
+                severity="critical",
+                replacement=[],
+                evidence={"archetype": "any"},
+            ),
+        ]
+    )
+
+    retriever = EMGRetriever(avoid_pattern_store=store)
+
+    # Requirement with a DIFFERENT archetype
+    req = NormalizedRequirement(
+        intent="create-flow",
+        archetype="soap-integration",  # not paginated-api-ingestion
+        operations=[],
+        components=["receiver.soap"],
+        raw="Build a SOAP flow",
+    )
+    result = retriever.retrieve(req, project_id="test")
+    ids = {p.id for p in result.avoid_patterns}
+    # fm-001 should be filtered out (archetype mismatch)
+    assert "avoid-fm-001" not in ids
+    # fm-004 should be included (archetype=any)
+    assert "avoid-fm-004" in ids

@@ -140,6 +140,7 @@ async def run_agent(
 
         # 1.5. EMG retrieval (mechanics-first loop, spec §15.11-15.12)
         emg_used = False
+        avoid_warnings: list[str] = []  # collected from avoid patterns
         if emg_retriever is not None:
             from ..emg.retrieval import inject_insight_into_plan
 
@@ -147,6 +148,13 @@ async def run_agent(
                 requirement=normalized,
                 project_id=project_context.project_id,
             )
+
+            # 1.5a. Surface avoid patterns as warnings regardless of whether
+            # an insight was found. The agent should always know what NOT
+            # to do (WP-07 Track E-002).
+            for ap in retrieval.avoid_patterns:
+                avoid_warnings.append(f"OIW-AVOID-{ap.id}: {ap.reason} (severity={ap.severity})")
+
             if retrieval.found and retrieval.insight is not None:
                 # Inject the expert's successful_workflow into the plan
                 injected_steps = inject_insight_into_plan(
@@ -157,6 +165,14 @@ async def run_agent(
                 )
                 if injected_steps:
                     from .planner import PlanStep
+
+                    # Build avoid-pattern risk list to attach to each step
+                    # so the executor / reviewer sees them in the plan rationale
+                    avoid_risks = [
+                        f"avoid {ap.id}: {ap.reason}"
+                        for ap in retrieval.avoid_patterns
+                        if ap.severity in ("critical", "high")
+                    ]
 
                     plan_steps = [
                         PlanStep(
@@ -174,7 +190,7 @@ async def run_agent(
                         assumptions=[
                             f"EMG-retrieved from expert trajectory (confidence={retrieval.confidence:.2f})"
                         ],
-                        risks=[],
+                        risks=avoid_risks,
                         estimated_patches=sum(1 for s in plan_steps if s.tool == "flow.patch"),
                         base_revision=base_revision,
                     )
@@ -182,6 +198,10 @@ async def run_agent(
                     warnings.append(
                         f"OIW-I001: EMG insight retrieved (confidence={retrieval.confidence:.2f}); using expert workflow instead of LLM planner"
                     )
+
+        # Surface avoid-pattern warnings even if EMG wasn't used for planning
+        if avoid_warnings:
+            warnings.extend(avoid_warnings)
 
         # 2. Plan (only if EMG didn't provide one)
         if not emg_used:

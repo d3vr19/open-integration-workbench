@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..agent.interpreter import NormalizedRequirement
+from .avoid_patterns import AvoidPattern, AvoidPatternStore
 from .insight.compiler import IntraTaskInsight
 from .promotion import InMemoryInsightStore, MemoryPromotionState
 
@@ -36,6 +37,9 @@ class RetrievalResult:
         confidence: 0.0–1.0 match confidence
         reason: why this insight was selected (or why none was found)
         cross_task_insights: cross-task insights from Phase C (empty if not enabled)
+        avoid_patterns: negative-knowledge entries that apply to this
+            requirement (WP-07 Track E-002). The orchestrator surfaces
+            these in the plan rationale so the agent avoids known pitfalls.
     """
 
     found: bool = False
@@ -43,6 +47,7 @@ class RetrievalResult:
     confidence: float = 0.0
     reason: str = ""
     cross_task_insights: list[Any] = field(default_factory=list)
+    avoid_patterns: list[AvoidPattern] = field(default_factory=list)
 
 
 class EMGRetriever:
@@ -65,10 +70,12 @@ class EMGRetriever:
         store: InMemoryInsightStore | None = None,
         task_store: Any = None,
         edge_store: Any = None,
+        avoid_pattern_store: AvoidPatternStore | None = None,
     ):
         self.store = store or InMemoryInsightStore()
         self.task_store = task_store
         self.edge_store = edge_store
+        self.avoid_pattern_store = avoid_pattern_store or AvoidPatternStore()
         # Lazy-init embedder only if task_store is provided
         self._embedder = None
         if self.task_store is not None:
@@ -90,6 +97,8 @@ class EMGRetriever:
         Returns:
             RetrievalResult with the best match (or found=False).
             If cross-task stores are configured, cross_task_insights is populated.
+            If avoid_pattern_store is configured, avoid_patterns is populated
+            with patterns that match the requirement's archetype / components.
         """
         # 1. Intra-task retrieval (existing Phase B behavior)
         intra_result = self._retrieve_intra_task(requirement, project_id)
@@ -100,7 +109,10 @@ class EMGRetriever:
         if self.task_store is not None and self.edge_store is not None and self._embedder is not None:
             cross_insights, cross_reason = self._retrieve_cross_task(requirement, project_id)
 
-        # 3. Merge results
+        # 3. Avoid-pattern retrieval (WP-07 Track E-002)
+        avoid_patterns = self._retrieve_avoid_patterns(requirement)
+
+        # 4. Merge results
         found = intra_result.found or len(cross_insights) > 0
         best_confidence = intra_result.confidence
         if cross_insights:
@@ -111,8 +123,26 @@ class EMGRetriever:
             found=found,
             insight=intra_result.insight,
             confidence=best_confidence,
-            reason=f"intra: {intra_result.reason}; cross: {cross_reason}",
+            reason=f"intra: {intra_result.reason}; cross: {cross_reason}; "
+            f"avoid: {len(avoid_patterns)} patterns matched",
             cross_task_insights=cross_insights,
+            avoid_patterns=avoid_patterns,
+        )
+
+    def _retrieve_avoid_patterns(
+        self,
+        requirement: NormalizedRequirement,
+    ) -> list[AvoidPattern]:
+        """Find avoid patterns that apply to this requirement.
+
+        Uses AvoidPatternStore.find_for_requirement to match by archetype
+        and component family.
+        """
+        if not self.avoid_pattern_store or self.avoid_pattern_store.count() == 0:
+            return []
+        return self.avoid_pattern_store.find_for_requirement(
+            archetype=requirement.archetype,
+            components=requirement.components,
         )
 
     def _retrieve_intra_task(
