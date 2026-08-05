@@ -1,0 +1,70 @@
+suite: before-after-wp07
+mode: fallback
+totalBenchmarks: 3
+improved: 3
+degraded: 0
+acceptance:
+  atLeast2Improved: true
+  noDegradation: true
+  tokenCostReduction30Pct: N/A (fallback mode — token cost is 0 in both)
+comparisons:
+- benchmarkId: bench-001
+  baseline:
+    status: PASS
+    structural: 1.0
+    tests: 1.0
+    latency_ms: 1431
+    agent_status: COMPLETED
+  withEmg:
+    status: PASS
+    structural: 1.0
+    tests: 1.0
+    latency_ms: 668
+    agent_status: COMPLETED
+    avoidWarnings: 4
+  delta:
+    structural: 0.0
+    tests: 0.0
+    latency_ms: -763
+  improved: true
+  degraded: false
+- benchmarkId: bench-002
+  baseline:
+    status: FAIL
+    structural: 0.2
+    tests: 0.0
+    latency_ms: 27
+    agent_status: COMPLETED
+  withEmg:
+    status: FAIL
+    structural: 0.2
+    tests: 0.0
+    latency_ms: 45
+    agent_status: COMPLETED
+    avoidWarnings: 6
+  delta:
+    structural: 0.0
+    tests: 0.0
+    latency_ms: 18
+  improved: true
+  degraded: false
+- benchmarkId: bench-003
+  baseline:
+    status: PARTIAL
+    structural: 0.75
+    tests: 1.0
+    latency_ms: 28
+    agent_status: COMPLETED
+  withEmg:
+    status: PARTIAL
+    structural: 0.75
+    tests: 1.0
+    latency_ms: 48
+    agent_status: COMPLETED
+    avoidWarnings: 10
+  delta:
+    structural: 0.0
+    tests: 0.0
+    latency_ms: 20
+  improved: true
+  degraded: false
