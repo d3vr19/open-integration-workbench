@@ -4,6 +4,7 @@
 # used to verify the Redactor / confidentiality scanner detects them.
 #
 # Format: https://github.com/gitleaks/gitleaks#configuration
+# Note: gitleaks 8.x expects [allowlist] (singular map), not [[allowlist]].
 
 title = "OIW gitleaks config"
 
@@ -12,8 +13,8 @@ useDefault = true
 
 # Allow test fixture files that contain intentional fake secrets for
 # testing the redaction / confidentiality scanning pipeline.
-[[allowlist]]
-description = "Test files with intentional fake secrets for scanner testing"
+[allowlist]
+description = "Test files with intentional fake secrets for scanner testing + fake API key string"
 paths = [
   '''packages/seed-corpus/test_confidentiality\.py''',
   '''apps/cli/tests/emg/test_avoid_patterns\.py''',
@@ -21,10 +22,6 @@ paths = [
   '''apps/cli/tests/emg/test_retrieval\.py''',
   '''tests/agent_eval/.*\.py''',
 ]
-
-# Also allow specific test fixture strings by description.
-[[allowlist]]
-description = "Fake API key in test fixtures (32 hex chars, not a real secret)"
 regexes = [
   '''api_key=abcdef0123456789ABCDEF0123456789''',
 ]
