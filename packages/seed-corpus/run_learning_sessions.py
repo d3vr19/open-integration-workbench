@@ -1000,9 +1000,12 @@ def _make_failed_trajectory(
 ) -> EngineeringTrajectory:
     """Build a failed trajectory that commits the failure mode."""
     steps: list[TrajectoryStep] = []
-    for i, (atype, norm, args, rstatus, rsummary) in enumerate(
-        session_def["failed_steps"]
-    ):
+    for i, fs in enumerate(session_def["failed_steps"]):
+        # Failed steps may be 5-tuple (atype, norm, args, status, summary)
+        # or 3-tuple (atype, norm, args) — default the missing fields.
+        atype, norm, args = fs[0], fs[1], fs[2]
+        rstatus = fs[3] if len(fs) >= 4 else "applied"
+        rsummary = fs[4] if len(fs) >= 5 else f"Step {i}: {atype}"
         steps.append(_make_trajectory_step(i, atype, norm, args, rstatus, rsummary))
 
     reward = compute_reward(
@@ -1050,19 +1053,26 @@ def _make_expert_trajectory(
     """
     steps: list[TrajectoryStep] = []
 
-    # Replay setup steps (everything except the final failed validate)
-    setup_steps = [s for s in session_def["failed_steps"] if s[3] != "failed"]
-    for i, (atype, norm, args, rstatus, rsummary) in enumerate(setup_steps):
+    # Replay setup steps (everything except the failed step(s)).
+    # Failed steps may be 5-tuple or 3-tuple; the status field is at
+    # index 3 if present.
+    setup_steps = [
+        s for s in session_def["failed_steps"] if not (len(s) >= 4 and s[3] == "failed")
+    ]
+    for i, fs in enumerate(setup_steps):
+        atype, norm, args = fs[0], fs[1], fs[2]
+        rsummary = fs[4] if len(fs) >= 5 else f"Setup step {i}: {atype}"
         steps.append(_make_trajectory_step(i, atype, norm, args, "applied", rsummary))
 
     # Apply correction actions
     idx = len(steps)
-    for atype, norm, args in session_def["correction_actions"]:
-        steps.append(
-            _make_trajectory_step(
-                idx, atype, norm, args, "applied", f"Correction: {atype}"
-            )
-        )
+    for ca in session_def["correction_actions"]:
+        # Correction actions may be 3-tuple (atype, norm, args) or
+        # 5-tuple (atype, norm, args, status, summary). We only need
+        # the first 3 here.
+        atype, norm, args = ca[0], ca[1], ca[2]
+        summary = ca[4] if len(ca) >= 5 else f"Correction: {atype}"
+        steps.append(_make_trajectory_step(idx, atype, norm, args, "applied", summary))
         idx += 1
 
     # Final successful validation
@@ -1120,8 +1130,19 @@ def _normalize_action_args(action_type: str, args: dict[str, Any]) -> tuple[str,
 
 def run_learning_sessions(
     output_dir: Path | str = "packages/seed-corpus/learning-sessions",
+    batches: tuple[int, ...] = (1,),
 ) -> dict[str, Any]:
-    """Generate 10 learning sessions, persist them, and return a summary."""
+    """Generate learning sessions, persist them, and return a summary.
+
+    Args:
+        output_dir: Directory to persist session-*.yaml files.
+        batches: Which batches to run. (1,) = Batch 1 only (10 sessions,
+            WP-07 B-003). (1, 2, 3) = all 30 sessions (B-003 + B-004 + B-005).
+            (2,) = Batch 2 only. (3,) = Batch 3 only.
+
+    Returns:
+        Summary dict with totalSessions, verified, extracted, etc.
+    """
     output_dir = Path(output_dir)
     store = LearningSessionStore(base_dir=output_dir)
 
@@ -1130,9 +1151,22 @@ def run_learning_sessions(
     pairer = TrajectoryPairer()
     verifier = LearningVerifier()
 
+    # Build the session list from the requested batches
+    all_session_defs: list[dict[str, Any]] = []
+    if 1 in batches:
+        all_session_defs.extend(SESSIONS)
+    if 2 in batches or 3 in batches:
+        # Import lazily to avoid circular import at module load time
+        from batch_sessions import BATCH_2_SESSIONS, BATCH_3_SESSIONS  # noqa: E402
+
+        if 2 in batches:
+            all_session_defs.extend(BATCH_2_SESSIONS)
+        if 3 in batches:
+            all_session_defs.extend(BATCH_3_SESSIONS)
+
     results: list[dict[str, Any]] = []
 
-    for i, session_def in enumerate(SESSIONS, start=1):
+    for i, session_def in enumerate(all_session_defs, start=1):
         fm_id = session_def["failure_mode"]
         archetype = session_def["archetype"]
 
@@ -1161,18 +1195,21 @@ def run_learning_sessions(
         # Build failed trajectory
         failed_traj = _make_failed_trajectory(session_def, session.id)
         session = recorder.record_attempt(session, failed_traj.metadata.id)
+        # Extract failure details from the failed step (the one with status="failed")
+        last_step = session_def["failed_steps"][-1]
+        failure_summary = last_step[4] if len(last_step) >= 5 else f"Failure: {fm_id}"
         session = recorder.record_failure(
             session,
             diagnostic=fm_id.upper(),
-            details=session_def["failed_steps"][-1][4],
+            details=failure_summary,
         )
 
         # Build expert trajectory
         expert_traj = _make_expert_trajectory(session_def, session.id)
         # Convert correction_actions to the dict format expected by CorrectionRecorder
         correction_dicts = [
-            {"tool": atype, "args": args, "normalized": list(norm)}
-            for atype, norm, args in session_def["correction_actions"]
+            {"tool": ca[0], "args": ca[2], "normalized": list(ca[1])}
+            for ca in session_def["correction_actions"]
         ]
         session = corrector.record_correction(
             session,
@@ -1214,6 +1251,7 @@ def run_learning_sessions(
                 "failed_trajectory_id": session.failed_trajectory_id,
                 "edit_path_id": session.edit_path_id,
                 "insight_id": insight_id,
+                "correction_action_count": len(session_def["correction_actions"]),
             }
         )
 
@@ -1228,5 +1266,25 @@ def run_learning_sessions(
 
 
 if __name__ == "__main__":
-    summary = run_learning_sessions()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Generate learning sessions (WP-07 Track B)."
+    )
+    parser.add_argument(
+        "--batches",
+        type=str,
+        default="1",
+        help="Comma-separated batch numbers to run (e.g. '1', '2,3', '1,2,3'). Default: '1'.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("packages/seed-corpus/learning-sessions"),
+        help="Output directory for session-*.yaml files.",
+    )
+    args = parser.parse_args()
+
+    batches = tuple(int(b.strip()) for b in args.batches.split(","))
+    summary = run_learning_sessions(output_dir=args.output_dir, batches=batches)
     print(yaml.safe_dump(summary, sort_keys=False, default_flow_style=False))
