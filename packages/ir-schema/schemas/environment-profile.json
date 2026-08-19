@@ -16,8 +16,8 @@
       "properties": {
         "name": {
           "type": "string",
-          "enum": ["dev", "test", "stage", "prod"],
-          "description": "Conventional environment tier."
+          "enum": ["dev", "test", "stage", "prod", "btp"],
+          "description": "Conventional environment tier. 'btp' is the live SAP BTP tenant profile (WP-08 Track 0)."
         }
       }
     },

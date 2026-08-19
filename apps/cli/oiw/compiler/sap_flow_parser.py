@@ -143,6 +143,28 @@ def parse_bpmn2_iflw(content: bytes | str) -> dict[str, Any]:
 
     BPMN2 files use <bpmn2:definitions> with <ifl:...> extension elements.
     We extract adapter types and step types from the ifl namespace.
+
+    WP-08 PR-5 / Track B-002: also classify <callActivity> elements by
+    reading their <ifl:property><key>activityType</key><value>...</value>
+    block, not by guessing from the activity name. This is the fix for the
+    import parser gaps documented in WP-08 §2 ("Honest Diagnosis").
+
+    Activity-type vocabulary observed on real SAP CI tenants:
+      - Enricher                          → modifier.content
+      - Mapping (MessageMapping)          → transform.xslt (simulated; SAP uses .mmap)
+      - Script                            → script.groovy (tenant-required if it uses SecureStoreService)
+      - XmlToJsonConverter                → converter.xml-to-json
+      - JsonToXmlConverter                → converter.json-to-xml
+      - Filter                            → filter
+      - Router / ContentBasedRouter       → router.content-based
+      - Splitter / GeneralSplitter        → splitter.general
+      - Gather / Join                     → gather
+      - Encoder / Base64Encoder           → encoder.base64
+      - Log / Logger                      → log.message
+      - ProcessCallElement                → subprocess.local (simulated)
+      - DBstorage                         → datastore.write (tenant-required)
+      - RequestReply                      → request-reply (simulated)
+      - CallActivity (unknown type)       → unsupported (kept in extensions, not dropped)
     """
     if isinstance(content, bytes):
         content = content.decode("utf-8", errors="replace")
@@ -158,6 +180,7 @@ def parse_bpmn2_iflw(content: bytes | str) -> dict[str, Any]:
         "steps": [],
         "receiver": None,
         "error_handling": None,
+        "unsupported_call_activities": [],  # WP-08 B-002: don't silently drop
     }
 
     # Search for ifl: namespace elements and BPMN2 patterns
@@ -250,6 +273,17 @@ def parse_bpmn2_iflw(content: bytes | str) -> dict[str, Any]:
                     {"id": elem.get("id", ""), "type": "ServiceTask", "config": {"name": name}}
                 )
 
+        # WP-08 PR-5 / Track B-002: classify callActivity by its ifl:property
+        # activityType, not by guessing from the activity name.
+        elif tag_lower == "callactivity":
+            step = _classify_call_activity(elem)
+            if step is not None:
+                if step["type"] == "unsupported":
+                    # Preserve the callActivity as opaque metadata — never drop.
+                    result["unsupported_call_activities"].append(step)
+                else:
+                    result["steps"].append(step)
+
     # Try to find flow name
     for elem in root.iter():
         tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
@@ -260,6 +294,117 @@ def parse_bpmn2_iflw(content: bytes | str) -> dict[str, Any]:
                 break
 
     return result
+
+
+# WP-08 PR-5 / Track B-002: callActivity classification by activityType.
+# Maps SAP CI activityType values to OIW step types. Classifications marked
+# `tenant-required` are kept out of the IR's main `nodes` list (they go into
+# `extensions` instead) so the simulated runtime doesn't try to execute
+# something that needs a real SAP tenant.
+_ACTIVITY_TYPE_MAP: dict[str, dict[str, Any]] = {
+    "Enricher": {"oiw_type": "modifier.content", "fidelity": "compatible-subset"},
+    "Mapping": {"oiw_type": "transform.xslt", "fidelity": "simulated"},
+    "MessageMapping": {"oiw_type": "transform.xslt", "fidelity": "simulated"},
+    "Script": {"oiw_type": "script.groovy", "fidelity": "compatible-subset"},
+    "XmlToJsonConverter": {"oiw_type": "converter.xml-to-json", "fidelity": "compatible-subset"},
+    "JsonToXmlConverter": {"oiw_type": "converter.json-to-xml", "fidelity": "compatible-subset"},
+    "Filter": {"oiw_type": "filter", "fidelity": "compatible-subset"},
+    "ContentBasedRouter": {"oiw_type": "router.content-based", "fidelity": "compatible-subset"},
+    "Router": {"oiw_type": "router.content-based", "fidelity": "compatible-subset"},
+    "GeneralSplitter": {"oiw_type": "splitter.general", "fidelity": "simulated"},
+    "Splitter": {"oiw_type": "splitter.general", "fidelity": "simulated"},
+    "Gather": {"oiw_type": "gather", "fidelity": "simulated"},
+    "Join": {"oiw_type": "gather", "fidelity": "simulated"},
+    "Base64Encoder": {"oiw_type": "encoder.base64", "fidelity": "compatible-subset"},
+    "Encoder": {"oiw_type": "encoder.base64", "fidelity": "compatible-subset"},
+    "Logger": {"oiw_type": "log.message", "fidelity": "compatible-subset"},
+    "Log": {"oiw_type": "log.message", "fidelity": "compatible-subset"},
+    "ProcessCallElement": {"oiw_type": "subprocess.local", "fidelity": "simulated"},
+    "RequestReply": {"oiw_type": "request-reply", "fidelity": "simulated"},
+    "DBstorage": {"oiw_type": "datastore.write", "fidelity": "tenant-required"},
+    # SecureStore access — tenant-required (uses SAP-specific ITApiFactory + SecureStoreService).
+    # We classify the *type* but mark fidelity so the runtime knows not to execute it.
+    # The presence of "SecureStore" in the script body or activity name is a signal.
+}
+
+
+def _classify_call_activity(elem: ET.Element) -> dict[str, Any] | None:
+    """Classify a <callActivity> element by its ifl:property activityType.
+
+    Returns a step dict with `id`, `type`, `config`. If the activityType
+    is unknown, returns a step with `type="unsupported"` so the caller
+    can preserve it in `extensions` (never silently dropped).
+
+    Spec ref: WP-08 §5 B-002 ("Prefer classifying from ifl:property keys
+    over guessing from the activity name").
+    """
+    name = elem.get("name", "")
+    elem_id = elem.get("id", "")
+
+    # Read all ifl:property key/value pairs in the callActivity's extensionElements
+    props: dict[str, str] = {}
+    for ext in elem.iter():
+        ext_local = ext.tag.split("}")[-1] if "}" in ext.tag else ext.tag
+        if ext_local != "extensionElements":
+            continue
+        for prop in ext:
+            prop_local = prop.tag.split("}")[-1] if "}" in prop.tag else prop.tag
+            if prop_local != "property":
+                continue
+            k = None
+            v = None
+            for child in prop:
+                lt = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                if lt == "key":
+                    k = (child.text or "").strip()
+                elif lt == "value":
+                    v = child.text or ""
+            if k:
+                props[k] = v
+
+    activity_type = props.get("activityType", "")
+
+    # Special-case SecureStore: Script activityType + name mentions SecureStore
+    # → tenant-required, not the compatible-subset script.groovy.
+    if activity_type == "Script" and "securestore" in name.lower():
+        return {
+            "id": elem_id or name,
+            "type": "unsupported",
+            "config": {
+                "name": name,
+                "activityType": activity_type,
+                "reason": "tenant-required: uses SAP SecureStoreService",
+                "properties": props,
+            },
+            "fidelity": "tenant-required",
+        }
+
+    mapping = _ACTIVITY_TYPE_MAP.get(activity_type)
+    if mapping is None:
+        # Unknown activityType — preserve as unsupported, never drop.
+        return {
+            "id": elem_id or name,
+            "type": "unsupported",
+            "config": {
+                "name": name,
+                "activityType": activity_type,
+                "reason": f"unrecognized activityType: {activity_type!r}",
+                "properties": props,
+            },
+            "fidelity": "unsupported",
+        }
+
+    return {
+        "id": elem_id or name,
+        "type": mapping["oiw_type"],  # caller maps this to OIW step type
+        # We stash the SAP-native type in config so the IR can preserve provenance.
+        "config": {
+            "name": name,
+            "activityType": activity_type,
+            "properties": props,
+        },
+        "fidelity": mapping["fidelity"],
+    }
 
 
 def _extract_ifl_params(elem: ET.Element) -> dict[str, str]:
@@ -456,22 +601,46 @@ _STEP_TYPE_MAP = {
 
 
 def _step_to_node(step: dict[str, Any], index: int) -> dict[str, Any] | None:
-    """Convert a parsed step to an OIW node."""
+    """Convert a parsed step to an OIW node.
+
+    Handles two sources of steps:
+      1. Legacy BPMN2 tag-based classification (ServiceTask, Script, etc.)
+         — these use SAP-native type names that _STEP_TYPE_MAP translates.
+      2. WP-08 PR-5 callActivity classification — these already return the
+         OIW type directly (e.g. "modifier.content", "converter.json-to-xml")
+         because _classify_call_activity() already did the mapping via
+         _ACTIVITY_TYPE_MAP. We detect this by checking if the type contains
+         a dot (OIW types always do: "modifier.content", "sender.http", etc.).
+    """
     step_type = step.get("type", "")
-    oiw_type = _STEP_TYPE_MAP.get(step_type)
-    if not oiw_type:
-        return None
+
+    # WP-08 PR-5: if the type is already an OIW type (contains a dot),
+    # use it directly without looking up _STEP_TYPE_MAP.
+    if "." in step_type:
+        oiw_type = step_type
+    else:
+        oiw_type = _STEP_TYPE_MAP.get(step_type)
+        if not oiw_type:
+            return None
 
     node_id = step.get("id") or f"step-{index}"
     config = step.get("config", {})
+    fidelity = step.get("fidelity", "simulated")
 
     # Special handling for known step types
     if oiw_type == "script.groovy":
         config = {"script": config.get("ScriptArtifact", "resources/scripts/process.groovy")}
     elif oiw_type == "transform.xslt":
         config = {"stylesheet": config.get("MappingArtifact", "resources/mappings/transform.xsl")}
+    else:
+        # WP-08 PR-5: callActivity steps carry their SAP-native properties in
+        # config. Keep the OIW-relevant subset and drop the raw SAP properties
+        # (they're preserved in the import report's `unsupported_call_activities`
+        # list for truly unclassifiable steps).
+        if "properties" in config:
+            config = {k: v for k, v in config.items() if k != "properties"}
 
-    return {"id": node_id, "type": oiw_type, "config": config, "fidelity": "simulated"}
+    return {"id": node_id, "type": oiw_type, "config": config, "fidelity": fidelity}
 
 
 def _step_type_to_oiw(step_type: str) -> str:

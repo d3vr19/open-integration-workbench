@@ -1,0 +1,46 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: api-to-erp
+  labels:
+    archetype: api-to-erp
+  name: Held Out Order Async — api-to-erp
+  version: 1
+spec:
+  edges:
+  - from: sender-http
+    to: log-receive
+  - from: log-receive
+    to: receiver-out
+  entrypoints:
+  - config:
+      methods:
+      - POST
+      path: /api-to-erp
+    fidelity: simulated
+    id: sender-http
+    type: sender.http
+  errorHandling:
+    defaultExceptionSubprocess:
+      steps:
+      - config:
+          level: ERROR
+          message: flow failed
+        fidelity: compatible-subset
+        id: error-log
+        type: log.message
+  extensions: {}
+  nodes:
+  - config:
+      level: INFO
+      message: received request
+    fidelity: compatible-subset
+    id: log-receive
+    type: log.message
+  - config:
+      method: POST
+      timeoutSeconds: 30
+      url: https://example.invalid/api
+    fidelity: simulated
+    id: receiver-out
+    type: receiver.http

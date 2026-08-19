@@ -130,7 +130,7 @@ def _count_seed_corpus_artifacts(artifacts_dir: Path) -> tuple[int, int, int, in
 
 def _count_archetypes(artifacts: list[dict[str, Any]]) -> int:
     """Count distinct archetypes in the artifact list."""
-    from cross_task_pipeline import classify_archetype  # noqa
+    from cross_task_pipeline import classify_archetype
 
     return len({classify_archetype(a.get("ir", {})) for a in artifacts})
 
@@ -172,7 +172,7 @@ def generate_report(
     session_count = _count_learning_sessions(sessions_dir)
     avoid_count = _count_avoid_patterns(avoid_yaml)
     failure_count = _count_failure_modes(failure_yaml)
-    art_total, art_synth, art_real, art_real_collapsed = _count_seed_corpus_artifacts(
+    _art_total, art_synth, art_real, _art_real_collapsed = _count_seed_corpus_artifacts(
         artifacts_dir
     )
 

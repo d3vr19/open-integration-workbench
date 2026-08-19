@@ -22,6 +22,7 @@ short markdown file describing a single architectural decision.
 | [ADR-PY-002](adr-py-002-fastapi-prototype.md) | Python FastAPI prototype for the REST API server (DEVIATION) | DEVIATION — TEMPORARY | §6.2, §21.1 |
 | [ADR-PY-003](adr-py-003-mcp-server-prototype.md) | Python MCP server prototype (DEVIATION) | DEVIATION — TEMPORARY | §5.1, §12.4, §21.3 |
 | [ADR-PY-004](adr-py-004-model-gateway-prototype.md) | Python model gateway prototype (DEVIATION) | DEVIATION — TEMPORARY | §5.1, §12.7 |
+| [ADR-PY-005](adr-py-005-jsonl-emg-store.md) | Durable JSONL EMG store before Postgres/pgvector (WP-08 PR-1) | ADOPTED | §13, §13.16 / ADR-010 |
 | [ADR-CI-001](adr-ci-001-github-actions.md) | GitHub Actions are the validation gate | ADOPTED | §14.4, §11.6 |
 
 ## ADR template

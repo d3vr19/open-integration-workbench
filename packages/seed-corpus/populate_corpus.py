@@ -21,12 +21,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import yaml  # noqa: E402
-
-from ingest import ingest_artifact  # noqa: E402
-from synthetic_artifacts import create_all_synthetic_artifacts  # noqa: E402
-from synthesize_trajectory import synthesize_expert_trajectory  # noqa: E402
-from promote import promote_seed_corpus  # noqa: E402
+import yaml
+from ingest import ingest_artifact
+from promote import promote_seed_corpus
+from synthesize_trajectory import synthesize_expert_trajectory
+from synthetic_artifacts import create_all_synthetic_artifacts
 
 
 # Additional synthetic artifact generators (variations to reach 50)

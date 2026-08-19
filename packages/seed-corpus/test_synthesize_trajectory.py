@@ -14,14 +14,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 # Make packages importable
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # seed-corpus dir itself
 
-from synthesize_trajectory import (  # noqa: E402
+from synthesize_trajectory import (
     synthesize_expert_trajectory,
 )
 

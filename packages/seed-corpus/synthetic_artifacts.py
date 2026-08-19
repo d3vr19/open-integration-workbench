@@ -384,7 +384,7 @@ def create_all_synthetic_artifacts(output_dir: Path | str) -> list[Path]:
     artifact_dirs = []
 
     for generator in SYNTHETIC_ARTIFACTS:
-        flow_id, flow_name, flow_yaml = generator()
+        flow_id, _flow_name, flow_yaml = generator()
         artifact_dir = output_dir / f"synthetic-{flow_id}"
         artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -412,6 +412,6 @@ def create_all_synthetic_artifacts(output_dir: Path | str) -> list[Path]:
 
 
 __all__ = [
-    "create_all_synthetic_artifacts",
     "SYNTHETIC_ARTIFACTS",
+    "create_all_synthetic_artifacts",
 ]

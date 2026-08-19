@@ -8,12 +8,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from populate_corpus import populate_corpus, generate_variation_artifacts  # noqa: E402
+from populate_corpus import generate_variation_artifacts, populate_corpus
 
 
 class TestPopulateCorpus:

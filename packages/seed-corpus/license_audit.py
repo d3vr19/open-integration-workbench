@@ -301,9 +301,9 @@ def audit_oiw_examples(audit_dir: Path | str | None = None) -> list[AuditReport]
 
 
 __all__ = [
-    "LicenseAuditor",
-    "AuditReport",
-    "ArtifactAudit",
     "LICENSE_ALLOWLIST",
+    "ArtifactAudit",
+    "AuditReport",
+    "LicenseAuditor",
     "audit_oiw_examples",
 ]

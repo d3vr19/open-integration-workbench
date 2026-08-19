@@ -207,3 +207,183 @@ class TestImportParserIntegration:
             report = import_archive(Path(tmpdir), codejam_zip, "sap-cloud-integration-2026-07")
             # Should at least find some recognized components
             assert len(report.recognized) > 0 or report.status in ("PARTIAL", "FULL")
+
+
+# ---------------------------------------------------------------------------
+# WP-08 PR-5 / Track B-002: callActivity classification by activityType
+# ---------------------------------------------------------------------------
+
+
+def test_call_activity_enricher_classified_as_content_modifier():
+    """A callActivity with activityType=Enricher maps to modifier.content."""
+    from oiw.compiler.sap_flow_parser import parse_bpmn2_iflw
+
+    iflw = """<?xml version="1.0"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:ifl="http://sap.com/ifl">
+  <bpmn2:process id="p1" name="Test">
+    <bpmn2:callActivity id="ca1" name="Modify_DefineBody">
+      <bpmn2:extensionElements>
+        <ifl:property><key>activityType</key><value>Enricher</value></ifl:property>
+        <ifl:property><key>bodyType</key><value>expression</value></ifl:property>
+      </bpmn2:extensionElements>
+    </bpmn2:callActivity>
+  </bpmn2:process>
+</bpmn2:definitions>
+"""
+    parsed = parse_bpmn2_iflw(iflw)
+    assert "error" not in parsed
+    # Enricher → modifier.content (NOT in unsupported_call_activities)
+    assert len(parsed["unsupported_call_activities"]) == 0
+    assert len(parsed["steps"]) == 1
+    s = parsed["steps"][0]
+    assert s["type"] == "modifier.content"
+    assert s["fidelity"] == "compatible-subset"
+    assert s["config"]["activityType"] == "Enricher"
+
+
+def test_call_activity_mapping_classified_as_xslt():
+    """A callActivity with activityType=Mapping maps to transform.xslt."""
+    from oiw.compiler.sap_flow_parser import parse_bpmn2_iflw
+
+    iflw = """<?xml version="1.0"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:ifl="http://sap.com/ifl">
+  <bpmn2:process id="p1" name="Test">
+    <bpmn2:callActivity id="ca1" name="MM_RFCResponse_to_LCNCRequest">
+      <bpmn2:extensionElements>
+        <ifl:property><key>activityType</key><value>Mapping</value></ifl:property>
+      </bpmn2:extensionElements>
+    </bpmn2:callActivity>
+  </bpmn2:process>
+</bpmn2:definitions>
+"""
+    parsed = parse_bpmn2_iflw(iflw)
+    assert len(parsed["steps"]) == 1
+    s = parsed["steps"][0]
+    assert s["type"] == "transform.xslt"
+    assert s["fidelity"] == "simulated"
+
+
+def test_call_activity_xml_to_json_converter():
+    """A callActivity with activityType=XmlToJsonConverter maps to converter.xml-to-json."""
+    from oiw.compiler.sap_flow_parser import parse_bpmn2_iflw
+
+    iflw = """<?xml version="1.0"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:ifl="http://sap.com/ifl">
+  <bpmn2:process id="p1" name="Test">
+    <bpmn2:callActivity id="ca1" name="Convert_Xml_to_Json">
+      <bpmn2:extensionElements>
+        <ifl:property><key>activityType</key><value>XmlToJsonConverter</value></ifl:property>
+      </bpmn2:extensionElements>
+    </bpmn2:callActivity>
+  </bpmn2:process>
+</bpmn2:definitions>
+"""
+    parsed = parse_bpmn2_iflw(iflw)
+    assert len(parsed["steps"]) == 1
+    s = parsed["steps"][0]
+    assert s["type"] == "converter.xml-to-json"
+    assert s["fidelity"] == "compatible-subset"
+
+
+def test_call_activity_securestore_script_is_tenant_required():
+    """A Script callActivity mentioning SecureStore is tenant-required (kept as unsupported)."""
+    from oiw.compiler.sap_flow_parser import parse_bpmn2_iflw
+
+    iflw = """<?xml version="1.0"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:ifl="http://sap.com/ifl">
+  <bpmn2:process id="p1" name="Test">
+    <bpmn2:callActivity id="ca1" name="GET apiKey from SecureStore">
+      <bpmn2:extensionElements>
+        <ifl:property><key>activityType</key><value>Script</value></ifl:property>
+      </bpmn2:extensionElements>
+    </bpmn2:callActivity>
+  </bpmn2:process>
+</bpmn2:definitions>
+"""
+    parsed = parse_bpmn2_iflw(iflw)
+    # Should NOT go to steps[] — it should go to unsupported_call_activities[]
+    assert len(parsed["steps"]) == 0
+    assert len(parsed["unsupported_call_activities"]) == 1
+    u = parsed["unsupported_call_activities"][0]
+    assert u["fidelity"] == "tenant-required"
+    assert "SecureStoreService" in u["config"]["reason"]
+
+
+def test_call_activity_unknown_activity_type_preserved_not_dropped():
+    """Unknown activityType is preserved as unsupported, never silently dropped (WP-08 B-002)."""
+    from oiw.compiler.sap_flow_parser import parse_bpmn2_iflw
+
+    iflw = """<?xml version="1.0"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:ifl="http://sap.com/ifl">
+  <bpmn2:process id="p1" name="Test">
+    <bpmn2:callActivity id="ca1" name="SomeUnknownStep">
+      <bpmn2:extensionElements>
+        <ifl:property><key>activityType</key><value>BrandNewFeature</value></ifl:property>
+      </bpmn2:extensionElements>
+    </bpmn2:callActivity>
+  </bpmn2:process>
+</bpmn2:definitions>
+"""
+    parsed = parse_bpmn2_iflw(iflw)
+    assert len(parsed["steps"]) == 0
+    assert len(parsed["unsupported_call_activities"]) == 1
+    u = parsed["unsupported_call_activities"][0]
+    assert u["type"] == "unsupported"
+    assert u["fidelity"] == "unsupported"
+    assert "BrandNewFeature" in u["config"]["reason"]
+    # Properties preserved so a human can decide later
+    assert u["config"]["properties"]["activityType"] == "BrandNewFeature"
+
+
+def test_real_tenant_artifact_classifies_more_callactivities():
+    """Real tenant ZIP import recognizes callActivities previously marked unsupported.
+
+    Regression check: the CodeJam fixture's import report (in
+    packages/test-fixtures/real-sap/.../import-report.yaml) lists 5 unsupported
+    callActivities. With the WP-08 B-002 fix, the SecureStore one stays
+    tenant-required but the others (Enricher, Mapping, JsonToXmlConverter)
+    should now classify properly.
+    """
+    import zipfile
+
+    from oiw.compiler.sap_flow_parser import parse_bpmn2_iflw
+
+    fixture = (
+        Path(__file__).resolve().parent.parent.parent.parent
+        / "packages"
+        / "test-fixtures"
+        / "real-sap"
+        / "sap-codejam-request-employee-dependants"
+        / "source-with-groovy.zip"
+    )
+    if not fixture.is_file():
+        pytest.skip(f"fixture missing: {fixture}")
+
+    with zipfile.ZipFile(fixture) as z:
+        iflw_names = [n for n in z.namelist() if n.endswith(".iflw")]
+        assert iflw_names, "expected ≥ 1 .iflw in CodeJam fixture"
+        all_steps: list[dict] = []
+        all_unsupported: list[dict] = []
+        for name in iflw_names:
+            iflw = z.read(name).decode("utf-8", errors="replace")
+            parsed = parse_bpmn2_iflw(iflw)
+            all_steps.extend(parsed["steps"])
+            all_unsupported.extend(parsed["unsupported_call_activities"])
+
+    # Previously 5 unsupported; after the fix the SecureStore ones should
+    # still be tenant-required (preserved as unsupported), but Enricher /
+    # JsonToXmlConverter / Mapping should now classify.
+    assert len(all_steps) > 0, "expected some steps to classify after the B-002 fix"
+    # The unsupported bucket should now be smaller (only truly-unknown or
+    # SecureStore-tenant-required entries remain).
+    classified_types = {s["type"] for s in all_steps}
+    # Enricher (→ modifier.content) MUST be classified now
+    assert "modifier.content" in classified_types
+
+
+# Need Path for the real-tenant test

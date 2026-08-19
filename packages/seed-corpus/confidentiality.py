@@ -32,8 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(REPO_ROOT / "packages" / "seed-corpus"))
 
-from oiw.agent.redaction import PATTERNS  # noqa: E402
-
+from oiw.agent.redaction import PATTERNS
 
 # --------------------------------------------------------------------------- #
 # PII detection (additional to Redactor — these aren't secrets but are PII)

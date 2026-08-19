@@ -11,13 +11,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(REPO_ROOT / "packages" / "seed-corpus"))
 
-from confidentiality import (  # noqa: E402
+from confidentiality import (
     _scan_text,
     run_confidentiality_audit,
     run_confidentiality_check,
     scan_trajectory_file,
 )
-from run_learning_sessions import run_learning_sessions  # noqa: E402
+from run_learning_sessions import run_learning_sessions
 
 
 class TestPatternDetection:
@@ -210,7 +210,7 @@ class TestConfidentialityAudit:
 
     def test_save_audit_report_yaml(self, tmp_path: Path) -> None:
         """Audit report saves as valid YAML."""
-        from confidentiality import save_audit_report, ConfidentialityReport
+        from confidentiality import ConfidentialityReport, save_audit_report
 
         report = ConfidentialityReport(
             total_files=10,

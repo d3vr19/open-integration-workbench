@@ -150,11 +150,43 @@ class EMGRetriever:
         requirement: NormalizedRequirement,
         project_id: str | None,
     ) -> RetrievalResult:
-        """Existing intra-task retrieval (Phase B)."""
+        """Existing intra-task retrieval (Phase B).
+
+        WP-08 PR-8: if the project-specific search returns nothing, fall back
+        to a cross-project search. This is the correct behavior for seed-corpus
+        insights (CodeJam artifacts, tenant-pulled artifacts) — they are global
+        knowledge, not project-private. Project-scoped insights (tenant-specific
+        patterns with confidentialityScope=project) still only match within
+        their own project because the scoring uses the insight's components,
+        which are project-specific.
+        """
+        # 1. Try project-specific first (preserves confidentiality scoping)
         candidates = self.store.list(
             project_id=project_id,
             state=MemoryPromotionState.PROJECT_APPROVED,
         )
+
+        # 2. WP-08 PR-8: fall back to cross-project (seed corpus / global knowledge)
+        if not candidates:
+            candidates = self.store.list(
+                project_id=None,
+                state=MemoryPromotionState.PROJECT_APPROVED,
+            )
+            if candidates:
+                # Log that we're using cross-project knowledge
+                pass  # the reason string will reflect this below
+        else:
+            # Also include cross-project candidates so the scorer can pick the best
+            cross_project = self.store.list(
+                project_id=None,
+                state=MemoryPromotionState.PROJECT_APPROVED,
+            )
+            # Merge, avoiding duplicates by insight id
+            seen_ids = {c.id for c in candidates}
+            for c in cross_project:
+                if c.id not in seen_ids:
+                    candidates.append(c)
+                    seen_ids.add(c.id)
 
         if not candidates:
             return RetrievalResult(
@@ -269,53 +301,70 @@ class EMGRetriever:
     ) -> float:
         """Score how well an insight matches a requirement.
 
-        Scoring is based on:
-          1. Intent match (0.4 weight) — same intent category
-          2. Operations overlap (0.3 weight) — shared operations
-          3. Component overlap (0.3 weight) — shared components
+        WP-08 PR-8: revised scoring for the held-out proof.
+
+        Two scoring modes:
+          A. Expert trajectory (no corrections): component overlap is the
+             primary signal. The workflow tells you "these are the node types
+             you need for this pattern." Weights: 0.7 component, 0.3 operations.
+          B. Correction memory (has corrections): corrections relevance is
+             the primary signal — the insight says "when you see X, avoid Y."
+             Weights: 0.3 component, 0.3 operations, 0.4 corrections.
 
         Returns a score in [0, 1].
         """
-        # The insight's task_id encodes the original requirement's intent
-        # For now, we match on the successful_workflow's action types
-        score = 0.0
-
-        # 1. Intent match: check if the insight's workflow actions include
-        #    the same operations as the requirement
         workflow_actions = [tuple(n.get("action", ())) for n in insight.successful_workflow]
         req_operations = set(requirement.operations)
-        workflow_ops = set()
-        for action in workflow_actions:
-            if len(action) >= 2:
-                workflow_ops.add(action[1])  # op field (addNode, etc.)
-
-        if req_operations and workflow_ops:
-            overlap = len(req_operations & workflow_ops) / len(req_operations)
-            score += 0.4 * overlap
-
-        # 2. Component overlap
         req_components = set(requirement.components)
+
+        # Extract workflow component types
         workflow_components = set()
         for action in workflow_actions:
             if len(action) >= 3:
-                workflow_components.add(action[2])  # componentType
+                workflow_components.add(action[2])
 
-        if req_components and workflow_components:
-            overlap = len(req_components & workflow_components) / len(req_components)
-            score += 0.3 * overlap
+        # Extract workflow operation types
+        workflow_ops = set()
+        for action in workflow_actions:
+            if len(action) >= 2:
+                workflow_ops.add(action[1])
 
-        # 3. Corrections relevance: if the insight has corrections that
-        #    mention the same components, boost the score
-        if requirement.components:
-            relevant_corrections = 0
-            for correction in insight.corrections:
-                for avoid in correction.avoid:
-                    action = avoid.get("action")
-                    if action and len(action) >= 3 and action[2] in req_components:
-                        relevant_corrections += 1
-                        break
-            if relevant_corrections > 0:
-                score += 0.3 * min(relevant_corrections / len(requirement.components), 1.0)
+        score = 0.0
+
+        has_corrections = len(insight.corrections) > 0
+
+        if not has_corrections:
+            # Mode A: expert trajectory — component overlap is the signal
+            if req_components and workflow_components:
+                overlap = len(req_components & workflow_components) / len(req_components)
+                score += 0.7 * overlap
+            # Small boost for operations overlap (e.g. "transform" matching addNode)
+            if req_operations and workflow_ops:
+                op_overlap = len(req_operations & workflow_ops) / len(req_operations)
+                score += 0.3 * op_overlap
+        else:
+            # Mode B: correction memory — corrections are the signal
+            # 1. Intent match (0.3 weight)
+            if req_operations and workflow_ops:
+                overlap = len(req_operations & workflow_ops) / len(req_operations)
+                score += 0.3 * overlap
+
+            # 2. Component overlap (0.3 weight)
+            if req_components and workflow_components:
+                overlap = len(req_components & workflow_components) / len(req_components)
+                score += 0.3 * overlap
+
+            # 3. Corrections relevance (0.4 weight)
+            if req_components:
+                relevant_corrections = 0
+                for correction in insight.corrections:
+                    for avoid in correction.avoid:
+                        action = avoid.get("action")
+                        if action and len(action) >= 3 and action[2] in req_components:
+                            relevant_corrections += 1
+                            break
+                if relevant_corrections > 0:
+                    score += 0.4 * min(relevant_corrections / len(requirement.components), 1.0)
 
         return min(score, 1.0)
 

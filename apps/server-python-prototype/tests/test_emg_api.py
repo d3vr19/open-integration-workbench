@@ -111,3 +111,107 @@ def test_get_emg_stats() -> None:
     assert data["approvedInsights"] == 1
     assert data["crossTaskEdges"] == 5
     assert data["retrievalHitRate"] == 0.75
+
+
+# ---------------------------------------------------------------------------
+# WP-08 PR-3 / Track A-003: persisted-store reads
+# ---------------------------------------------------------------------------
+
+
+def test_emg_stats_reads_persisted_store(tmp_path, monkeypatch) -> None:
+    """GET /emg/stats serves counts from the persisted JsonlEmgStore (WP-08 A-003).
+
+    Acceptance: `GET /api/v1/emg/stats` and `oiw emg status` agree after a restart.
+    """
+    from fastapi.testclient import TestClient
+
+    from oiw_server.main import app
+    from oiw_server.routes import emg as emg_routes
+
+    # Reset module-level state
+    emg_routes._EMG_STORE = None
+    monkeypatch.setenv("OIW_WORKSPACE", str(tmp_path))
+
+    # Populate the durable store directly via the JsonlEmgStore API.
+    # Use the default dim (53) so the server's auto-loaded store stays compatible.
+    import sys
+
+    cli_src = str(__import__("pathlib").Path(__file__).resolve().parents[2] / "apps" / "cli")
+    if cli_src not in sys.path:
+        sys.path.insert(0, cli_src)
+    from oiw.agent.interpreter import NormalizedRequirement
+    from oiw.emg.promotion import InsightRecord, MemoryPromotionState
+    from oiw.emg.store import JsonlEmgStore
+
+    store = JsonlEmgStore(root=tmp_path / ".oiw" / "emg")
+    store.load()
+    store.upsert_insight(
+        InsightRecord(
+            id="dur-1",
+            state=MemoryPromotionState.PROJECT_APPROVED,
+            project_id="proj-x",
+            trajectory_id="traj-1",
+        )
+    )
+    req = NormalizedRequirement(
+        intent="add-validation",
+        raw="add json schema validation",
+        archetype="api-to-erp",
+        source_protocol="https",
+        target_protocol="https",
+        operations=["validate"],
+        components=["validator.json-schema"],
+    )
+    store.upsert_task_from_requirement(req, task_id="task-x", project_id="proj-x")
+    store.save()
+
+    client = TestClient(app)
+    with client:
+        r = client.get("/api/v1/emg/stats")
+        assert r.status_code == 200
+        data = r.json()
+        # Durable path: counts come from the persisted store
+        assert data["approvedInsights"] == 1
+        assert data["totalTrajectories"] == 1
+        assert data["embeddingBackend"] == "tfidf"
+        assert data["compatible"] is True
+
+
+def test_emg_insights_reads_persisted_store(tmp_path, monkeypatch) -> None:
+    """GET /projects/{id}/emg/insights serves insights from the persisted store."""
+    from fastapi.testclient import TestClient
+
+    from oiw_server.main import app
+    from oiw_server.routes import emg as emg_routes
+
+    emg_routes._EMG_STORE = None
+    monkeypatch.setenv("OIW_WORKSPACE", str(tmp_path))
+
+    import sys
+
+    cli_src = str(__import__("pathlib").Path(__file__).resolve().parents[2] / "apps" / "cli")
+    if cli_src not in sys.path:
+        sys.path.insert(0, cli_src)
+    from oiw.emg.promotion import InsightRecord, MemoryPromotionState
+    from oiw.emg.store import JsonlEmgStore
+
+    store = JsonlEmgStore(root=tmp_path / ".oiw" / "emg")
+    store.load()
+    store.upsert_insight(
+        InsightRecord(
+            id="dur-insight-1",
+            state=MemoryPromotionState.PROJECT_APPROVED,
+            project_id="proj-y",
+            trajectory_id="traj-y",
+        )
+    )
+    store.save()
+
+    client = TestClient(app)
+    with client:
+        r = client.get("/api/v1/projects/proj-y/emg/insights")
+        assert r.status_code == 200
+        data = r.json()
+        # The insight is returned even though the in-memory test store is empty
+        ids = [i["id"] for i in data]
+        assert "dur-insight-1" in ids

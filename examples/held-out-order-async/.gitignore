@@ -1,0 +1,5 @@
+dist/
+.oiw/compiler.lock
+__pycache__/
+*.pyc
+.env

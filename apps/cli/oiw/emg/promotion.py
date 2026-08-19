@@ -18,11 +18,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class MemoryPromotionState(str, Enum):
+class MemoryPromotionState(StrEnum):
     """Memory promotion lifecycle states (spec §15.10)."""
 
     CAPTURED = "CAPTURED"

@@ -184,7 +184,7 @@ def get_all_artifact_dirs(corpus_dir: Path | str | None = None) -> list[Path]:
 
 __all__ = [
     "IngestResult",
+    "get_all_artifact_dirs",
     "ingest_artifact",
     "ingest_oiw_examples",
-    "get_all_artifact_dirs",
 ]

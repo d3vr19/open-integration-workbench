@@ -27,6 +27,17 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.5",
 ]
+# WP-08 PR-2 / Track A-002: EmbeddingGemma-300m backend.
+# NOT required for CI — CI uses OIW_EMBEDDING_BACKEND=tfidf (the default).
+# Install with `pip install 'oiw[embeddings]'` to enable the Gemma backend
+# for local/dev/tenant learning. The model is downloaded at first use under
+# Google's Gemma terms (not Apache-2.0) — see NOTICE for the license note.
+embeddings = [
+    "sentence-transformers>=3.0",
+    "torch",  # CPU wheel is fine; no CUDA needed for inference
+    # Fastembed is the lighter alternative — uncomment to enable.
+    # "fastembed>=0.3",
+]
 
 [project.scripts]
 oiw = "oiw.cli:main"

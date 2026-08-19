@@ -61,6 +61,15 @@ def create_app() -> FastAPI:
     app.include_router(archive.router)
     app.include_router(emg.router)
 
+    # WP-08 PR-3 / Track A-003: load the persisted EMG store at startup so
+    # the EMG routes (`/api/v1/emg/stats`, `/api/v1/projects/{id}/emg/insights`)
+    # serve real persisted corpus counts, not the empty in-memory test dict.
+    # Safe to call: returns None on failure and the routes fall back to the
+    # in-memory path.
+    @app.on_event("startup")
+    def _load_emg_store() -> None:
+        emg.load_persisted_store()
+
     return app
 
 

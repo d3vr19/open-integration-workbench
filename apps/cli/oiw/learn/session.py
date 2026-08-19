@@ -17,14 +17,14 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 
-class LearningSessionStatus(str, Enum):
+class LearningSessionStatus(StrEnum):
     """Lifecycle states for a learning session."""
 
     IN_PROGRESS = "IN_PROGRESS"

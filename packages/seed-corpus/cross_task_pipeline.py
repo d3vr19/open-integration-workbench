@@ -34,18 +34,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(REPO_ROOT / "packages" / "seed-corpus"))
 
-from oiw.agent.trajectory import (  # noqa: E402
+from oiw.agent.trajectory import (
     EngineeringTrajectory,
 )
-from oiw.emg.edge_store import CrossTaskEdgeStore  # noqa: E402
-from oiw.emg.graph_builder import ActionDecisionGraphBuilder  # noqa: E402
-from oiw.emg.insight.cross_task import (  # noqa: E402
+from oiw.emg.edge_store import CrossTaskEdgeStore
+from oiw.emg.graph_builder import ActionDecisionGraphBuilder
+from oiw.emg.insight.cross_task import (
     CrossTaskInsightGenerator,
 )
-from oiw.emg.matching.expert_to_expert import ExpertToExpertMatcher  # noqa: E402
-from oiw.emg.task_store import TaskMemoryNode  # noqa: E402
-from synthesize_trajectory import synthesize_expert_trajectory  # noqa: E402
-
+from oiw.emg.matching.expert_to_expert import ExpertToExpertMatcher
+from oiw.emg.task_store import TaskMemoryNode
+from synthesize_trajectory import synthesize_expert_trajectory
 
 # --------------------------------------------------------------------------- #
 # C-001: Archetype classification
@@ -233,7 +232,7 @@ def load_all_artifacts(
 
     # 2. Seed corpus artifacts — populate if empty
     if not artifacts_dir.is_dir() or not any(artifacts_dir.iterdir()):
-        from populate_corpus import populate_corpus  # noqa: E402
+        from populate_corpus import populate_corpus
 
         populate_corpus(output_dir=artifacts_dir)
 
@@ -406,8 +405,8 @@ def populate_cross_task_edges(
         # Match every pair within the archetype
         for i in range(len(task_nodes)):
             for j in range(i + 1, len(task_nodes)):
-                a_art, a_tn, a_adg = task_nodes[i]
-                b_art, b_tn, b_adg = task_nodes[j]
+                _a_art, a_tn, a_adg = task_nodes[i]
+                _b_art, b_tn, b_adg = task_nodes[j]
                 matches_run += 1
                 try:
                     match = matcher.match(a_adg, b_adg)

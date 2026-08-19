@@ -24,7 +24,6 @@ from oiw.environments import EnvironmentProfile, load_profile
 from oiw.tenant import (
     MockSapCiTenantAdapter,
     MockTenantError,
-    SapCiTenantAdapter,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -169,18 +168,165 @@ def test_mock_get_artifact_version_none_when_not_deployed(mock_adapter, profile)
 
 
 # ---------------------------------------------------------------------------
-# Real adapter stub
+# Real adapter (WP-08 Track 0): GET-only against the live OData API
 # ---------------------------------------------------------------------------
 
+from oiw.tenant import SapCiTenantError, build_tenant_adapter  # noqa: E402
+from oiw.tenant.sap_ci_adapter import SapCiTenantAdapter as _RealAdapter  # noqa: E402
 
-def test_real_adapter_raises_not_implemented() -> None:
-    """SapCiTenantAdapter raises NotImplementedError (OW-010 placeholder)."""
-    adapter = SapCiTenantAdapter()
-    with pytest.raises(NotImplementedError, match="OW-010"):
-        _run(adapter.connect(profile))  # noqa: F821 — profile from fixture scope
 
-    with pytest.raises(NotImplementedError, match="OW-010"):
+def _mock_transport(handler):
+    import httpx
+
+    return httpx.MockTransport(handler)
+
+
+def test_real_adapter_rejects_when_credentials_missing(profile) -> None:
+    """connect() raises SapCiTenantError when no credentials are configured."""
+    adapter = _RealAdapter(tenant_url="https://example.invalid", username="", password="")
+    with pytest.raises(SapCiTenantError, match="credentials not configured"):
+        _run(adapter.connect(profile))
+
+
+def test_real_adapter_connect_validates_credentials(profile) -> None:
+    """connect() validates Basic auth by hitting the service root."""
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Verify Basic auth header is present
+        auth = request.headers.get("Authorization", "")
+        assert auth.startswith("Basic "), "Basic auth header missing"
+        # Return a small service document
+        return httpx.Response(200, json={"d": {"EntitySets": ["IntegrationPackages"]}})
+
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid/api/v1",
+        username="sb-user",
+        password="secret",
+        client=httpx.AsyncClient(
+            transport=_mock_transport(handler), base_url="https://example.invalid/api/v1"
+        ),
+    )
+    _run(adapter.connect(profile))
+    assert adapter.is_connected
+    _run(adapter.disconnect())
+
+
+def test_real_adapter_connect_raises_on_401(profile) -> None:
+    """connect() raises SapCiTenantError on HTTP 401 (bad credentials)."""
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": {"message": "Unauthorized"}})
+
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid/api/v1",
+        username="bad",
+        password="creds",
+        client=httpx.AsyncClient(
+            transport=_mock_transport(handler), base_url="https://example.invalid/api/v1"
+        ),
+    )
+    with pytest.raises(SapCiTenantError, match="HTTP 401"):
+        _run(adapter.connect(profile))
+
+
+def test_real_adapter_list_packages_parses_odata(profile) -> None:
+    """list_packages() correctly parses SAP CI's `d.results` OData format."""
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        # Service root for connect()
+        if url.rstrip("/") in {"https://example.invalid/api/v1", "https://example.invalid/api/v1/"}:
+            return httpx.Response(200, json={"d": {"EntitySets": ["IntegrationPackages"]}})
+        assert "/IntegrationPackages" in url, f"unexpected URL: {url}"
+        return httpx.Response(
+            200,
+            json={
+                "d": {
+                    "results": [
+                        {
+                            "Id": "PkgA",
+                            "Name": "Package A",
+                            "Version": "1.0.0",
+                            "Mode": "EDIT_ALLOWED",
+                            "ModifiedBy": "alice@example.com",
+                            "ResourceId": "abc123",
+                        }
+                    ]
+                }
+            },
+        )
+
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid/api/v1",
+        username="u",
+        password="p",
+        client=httpx.AsyncClient(
+            transport=_mock_transport(handler), base_url="https://example.invalid/api/v1"
+        ),
+    )
+    _run(adapter.connect(profile))
+    pkgs = _run(adapter.list_packages(top=10))
+    assert len(pkgs) == 1
+    assert pkgs[0].id == "PkgA"
+    assert pkgs[0].name == "Package A"
+    assert pkgs[0].mode == "EDIT_ALLOWED"
+    _run(adapter.disconnect())
+
+
+def test_real_adapter_download_artifact_returns_zip_bytes(profile) -> None:
+    """download_artifact() returns the raw ZIP bytes from $value."""
+    import httpx
+
+    fake_zip = b"PK\x03\x04fake-zip-bytes"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.rstrip("/") in {"https://example.invalid/api/v1", "https://example.invalid/api/v1/"}:
+            return httpx.Response(200, json={"d": {"EntitySets": ["IntegrationPackages"]}})
+        if "/$value" in url and "IntegrationDesigntimeArtifacts" in url:
+            return httpx.Response(200, content=fake_zip, headers={"content-type": "application/zip"})
+        return httpx.Response(404)
+
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid/api/v1",
+        username="u",
+        password="p",
+        client=httpx.AsyncClient(
+            transport=_mock_transport(handler), base_url="https://example.invalid/api/v1"
+        ),
+    )
+    _run(adapter.connect(profile))
+    blob = _run(adapter.download_artifact("MyFlow", "1.0.0"))
+    assert blob == fake_zip
+    _run(adapter.disconnect())
+
+
+def test_real_adapter_write_ops_not_implemented(profile) -> None:
+    """upload_package / deploy / poll_deployment remain NotImplementedError (WP-08 §C-004)."""
+    adapter = _RealAdapter(tenant_url="https://example.invalid", username="u", password="p")
+    with pytest.raises(NotImplementedError, match="WP-08"):
         _run(adapter.upload_package("pkg", b"data", "sha256:abc"))
+    with pytest.raises(NotImplementedError, match="WP-08"):
+        _run(adapter.deploy("pkg", "1.0.0"))
+    with pytest.raises(NotImplementedError, match="no deploy path"):
+        _run(adapter.poll_deployment("dep-1"))
+
+
+def test_build_tenant_adapter_returns_mock_by_default() -> None:
+    """build_tenant_adapter() returns Mock when OIW_USE_REAL_TENANT is unset."""
+    adapter = build_tenant_adapter(use_real=False)
+    from oiw.tenant.mock_adapter import MockSapCiTenantAdapter
+
+    assert isinstance(adapter, MockSapCiTenantAdapter)
+
+
+def test_build_tenant_adapter_returns_real_when_opted_in() -> None:
+    """build_tenant_adapter(use_real=True) returns SapCiTenantAdapter."""
+    adapter = build_tenant_adapter(use_real=True, tenant_url="https://x", username="u", password="p")
+    assert isinstance(adapter, _RealAdapter)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,21 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  name: smoke
+spec:
+  assertions:
+  - equals: COMPLETED
+    type: exchange.status
+  - node: log-receive
+    type: node.executed
+  flow: api-to-erp
+  input:
+    bodyInline: '{}'
+    entrypoint: sender-http
+    headers:
+      Content-Type: application/json
+  mocks:
+  - respond:
+      body: '{}'
+      status: 200
+    target: receiver-out

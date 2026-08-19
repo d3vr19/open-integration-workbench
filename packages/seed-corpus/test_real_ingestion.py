@@ -13,12 +13,11 @@ import sys
 import zipfile
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from real_ingestion import (  # noqa: E402
+from real_ingestion import (
     analyze_sap_zip,
     create_pattern_from_analysis,
     ingest_real_artifacts,

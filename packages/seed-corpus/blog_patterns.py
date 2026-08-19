@@ -289,4 +289,4 @@ def create_blog_post_patterns(output_dir: Path | str) -> list[Path]:
     return artifact_dirs
 
 
-__all__ = ["create_blog_post_patterns", "BLOG_PATTERNS"]
+__all__ = ["BLOG_PATTERNS", "create_blog_post_patterns"]

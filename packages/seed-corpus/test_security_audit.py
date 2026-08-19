@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from security_audit import audit_seed_corpus_security  # noqa: E402
+from security_audit import audit_seed_corpus_security
 
 
 class TestSecurityAudit:

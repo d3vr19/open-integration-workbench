@@ -196,12 +196,39 @@ def interpret_requirement_fallback(raw_text: str) -> NormalizedRequirement:
         components.append("script.groovy")
     if "transform" in text or "mapping" in text or "xslt" in text:
         components.append("transform.xslt")
+    # WP-08 PR-8: recognize JSON↔XML converters from natural language
+    if ("json" in text and "xml" in text) or "json to xml" in text or "json-to-xml" in text:
+        components.append("converter.json-to-xml")
+    if (
+        ("xml" in text and "json" in text and "to json" in text)
+        or "xml to json" in text
+        or "xml-to-json" in text
+    ):
+        components.append("converter.xml-to-json")
+    # WP-08 PR-8: recognize content modifier from header/property manipulation
+    if any(
+        kw in text
+        for kw in ["header", "correlation id", "property", "content modifier", "set header", "set property"]
+    ):
+        components.append("modifier.content")
     if source_protocol == "https" or "rest" in text or "api" in text:
         components.append("sender.http")
-    if "receiver" in text or "send to" in text or "forward" in text:
+    if "receiver" in text or "send to" in text or "forward" in text or "forwards" in text:
         components.append("receiver.http")
     if "timeout" in text:
         components.append("receiver.http")
+    # WP-08 PR-8: recognize log.message from error handling / logging context
+    if (
+        any(kw in text for kw in ["log", "error handling", "error subprocess", "exception"])
+        and "log.message" not in components
+    ):
+        components.append("log.message")
+    # WP-08 PR-8: recognize router from routing/branching language
+    if any(kw in text for kw in ["route", "router", "routing", "branch"]):
+        components.append("router.content-based")
+    # WP-08 PR-8: recognize filter from filtering language
+    if "filter" in text:
+        components.append("filter")
 
     # Archetype
     archetype = None

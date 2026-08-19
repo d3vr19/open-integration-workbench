@@ -1,0 +1,92 @@
+wp08TrackD:
+  status: PASS
+  generatedAt: '2026-08-19'
+  storePath: /tmp/oiw-emg-codejam
+  storeStats:
+    insights: 7
+    tasks: 7
+    edges: 0
+  storeProvenance:
+    sap-codejam: 7
+  heldOutProject: examples/held-out-order-async
+  heldOutProjectId: held-out-order-async
+  heldOutNotInStore: true
+  requirement: Build an integration flow that receives a JSON order via HTTPS, sets
+    a correlation ID in the message header, converts the JSON body to XML, and forwards
+    the XML to an S/4HANA order API. Include an error subprocess that logs and returns
+    a 500 on transformation failure.
+  expectedComponents:
+  - converter.json-to-xml
+  - log.message
+  - modifier.content
+  - receiver.http
+  - sender.http
+  baseline:
+    label: baseline
+    status: COMPLETED
+    planSteps: 0
+    planTools: []
+    nodeTypesAdded:
+    - log.message
+    - receiver.http
+    structuralOverlap: 0.4
+    llmUsed: false
+    emgUsed: false
+    latencyMs: 7
+    warnings:
+    - 'OIW-W014: LLM interpreter unavailable; using keyword fallback. Install an API
+      key for full interpretation.'
+    - 'OIW-W014: LLM planner unavailable; using hardcoded fallback planner.'
+  withEmg:
+    label: with-emg
+    status: COMPLETED
+    planSteps: 3
+    planTools:
+    - flow.patch
+    - flow.patch
+    - flow.patch
+    nodeTypesAdded:
+    - log.message
+    - receiver.http
+    structuralOverlap: 0.4
+    llmUsed: false
+    emgUsed: true
+    retrievalFound: true
+    retrievalConfidence: 0.35
+    latencyMs: 51
+    warnings:
+    - 'OIW-W014: LLM interpreter unavailable; using keyword fallback. Install an API
+      key for full interpretation.'
+    - 'OIW-I001: EMG insight retrieved (confidence=0.35); using expert workflow instead
+      of LLM planner'
+  passCriteria:
+    realProvenance:
+      required: true
+      passed: true
+      evidence: 'provenance counts: {''sap-codejam'': 7}'
+    retrievalSimilarity:
+      required: true
+      passed: true
+      threshold: 0.3
+      actual: 0.35
+    measurablyBetter:
+      required: true
+      passed: true
+      metrics:
+        structuralOverlap:
+          baseline: 0.4
+          withEmg: 0.4
+          better: false
+        mechanicsFirstHit:
+          better: true
+          emgUsed: true
+          llmUsed: false
+        planSteps:
+          baseline: 0
+          withEmg: 3
+          better: true
+    heldOutNotInStore:
+      required: true
+      passed: true
+  conclusion: The EMG-informed run is measurably better than the baseline on at least
+    one documented metric. The gate is passed.

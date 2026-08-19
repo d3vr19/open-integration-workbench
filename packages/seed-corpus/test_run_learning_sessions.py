@@ -14,14 +14,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import yaml  # noqa: E402
-
-from run_learning_sessions import run_learning_sessions  # noqa: E402
+import yaml
+from run_learning_sessions import run_learning_sessions
 
 
 class TestLearningSessionBatch1:

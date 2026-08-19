@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from blog_patterns import create_blog_post_patterns  # noqa: E402
+from blog_patterns import create_blog_post_patterns
 
 
 class TestBlogPatterns:

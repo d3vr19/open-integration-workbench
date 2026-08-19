@@ -27,8 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(REPO_ROOT / "packages" / "seed-corpus"))
 
-from oiw.agent.normalization import normalize_action  # noqa: E402
-from oiw.agent.trajectory import (  # noqa: E402
+from oiw.agent.normalization import normalize_action
+from oiw.agent.trajectory import (
     ActionRecord,
     EngineeringTrajectory,
     ObservationRecord,
@@ -39,13 +39,12 @@ from oiw.agent.trajectory import (  # noqa: E402
     TrajectorySpec,
     TrajectoryStep,
 )
-from oiw.emg.reward import compute_reward  # noqa: E402
-from oiw.learn.corrector import CorrectionRecorder  # noqa: E402
-from oiw.learn.pairer import TrajectoryPairer  # noqa: E402
-from oiw.learn.recorder import AttemptRecorder  # noqa: E402
-from oiw.learn.session import LearningSessionStore, LearningSessionStatus  # noqa: E402
-from oiw.learn.verifier import LearningVerifier  # noqa: E402
-
+from oiw.emg.reward import compute_reward
+from oiw.learn.corrector import CorrectionRecorder
+from oiw.learn.pairer import TrajectoryPairer
+from oiw.learn.recorder import AttemptRecorder
+from oiw.learn.session import LearningSessionStatus, LearningSessionStore
+from oiw.learn.verifier import LearningVerifier
 
 # --------------------------------------------------------------------------- #
 # Failure-mode-driven session definitions
@@ -1157,7 +1156,7 @@ def run_learning_sessions(
         all_session_defs.extend(SESSIONS)
     if 2 in batches or 3 in batches:
         # Import lazily to avoid circular import at module load time
-        from batch_sessions import BATCH_2_SESSIONS, BATCH_3_SESSIONS  # noqa: E402
+        from batch_sessions import BATCH_2_SESSIONS, BATCH_3_SESSIONS
 
         if 2 in batches:
             all_session_defs.extend(BATCH_2_SESSIONS)

@@ -14,25 +14,23 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from synthesize_trajectory import synthesize_expert_trajectory  # noqa: E402
-from promote import (  # noqa: E402
-    promote_seed_trajectory,
-    promote_seed_corpus,
-    build_seed_retriever,
-    SEED_DISCOUNT_FACTOR,
-)
-
-from oiw.emg.promotion import (  # noqa: E402
+from oiw.agent.interpreter import NormalizedRequirement
+from oiw.emg.promotion import (
     InMemoryInsightStore,
     MemoryPromotionState,
     MemoryPromotionWorkflow,
 )
-from oiw.agent.interpreter import NormalizedRequirement  # noqa: E402
+from promote import (
+    SEED_DISCOUNT_FACTOR,
+    build_seed_retriever,
+    promote_seed_corpus,
+    promote_seed_trajectory,
+)
+from synthesize_trajectory import synthesize_expert_trajectory
 
 EXAMPLE_ORDER = REPO_ROOT / "examples" / "order-to-s4" / "flows" / "order-to-s4"
 EXAMPLE_SFTP = REPO_ROOT / "examples" / "sftp-order-drop" / "flows" / "batch-orders"
@@ -110,7 +108,7 @@ class TestSeedRetrieval:
 
     def test_retrieval_finds_matching_insight(self) -> None:
         """Seed corpus retrieval finds matching insight for known pattern."""
-        retriever, traj = self._setup_retriever()
+        retriever, _traj = self._setup_retriever()
 
         # Build a requirement matching the seed trajectory
         req = NormalizedRequirement(
@@ -178,3 +176,34 @@ class TestSeedRetrieval:
         result = retriever.retrieve(req)
         # cross_task_insights should be empty (no task store configured)
         assert len(result.cross_task_insights) == 0
+
+
+# ---------------------------------------------------------------------------
+# WP-08 PR-3 / Track A-004: durable promotion
+# ---------------------------------------------------------------------------
+
+
+def test_promote_seed_corpus_persists_to_durable_store(tmp_path):
+    """promote_seed_corpus(durable_store=...) writes insights + tasks to disk."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "cli"))
+    from oiw.emg.store import JsonlEmgStore
+
+    traj = synthesize_expert_trajectory(EXAMPLE_ORDER)
+
+    store = JsonlEmgStore(root=tmp_path / "emg", embedding_dim=60)
+    store.load()
+
+    promoted = promote_seed_corpus([traj], durable_store=store, persist=True)
+    assert len(promoted) == 1
+
+    # Restart: open a fresh store at the same path, verify the insight survived
+    store2 = JsonlEmgStore(root=tmp_path / "emg", embedding_dim=60)
+    store2.load()
+    assert store2.stats()["insights"] == 1
+    assert store2.stats()["tasks"] == 1
+
+    # The insight ID should be retrievable
+    rec = store2.get_insight(promoted[0])
+    assert rec is not None
+    assert rec.state.value == "PROJECT_APPROVED"

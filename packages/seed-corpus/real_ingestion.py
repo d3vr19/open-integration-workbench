@@ -29,8 +29,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from synthesize_trajectory import synthesize_expert_trajectory  # noqa: E402
-from promote import promote_seed_corpus  # noqa: E402
+from promote import promote_seed_corpus
+from synthesize_trajectory import synthesize_expert_trajectory
 
 
 @dataclass
@@ -68,12 +68,10 @@ def analyze_sap_zip(zip_path: Path) -> dict[str, Any]:
                 info["files"].append(name)
                 lower = name.lower()
                 if (
-                    lower.endswith(".iflw")
-                    or lower.endswith(".iflow")
-                    or "iflow" in lower
+                    lower.endswith((".iflw", ".iflow")) or "iflow" in lower
                 ):
                     info["iflows"].append(name)
-                elif lower.endswith(".groovy") or lower.endswith(".js"):
+                elif lower.endswith((".groovy", ".js")):
                     info["scripts"].append(name)
                 elif (
                     lower.endswith(".xsd")
@@ -81,7 +79,7 @@ def analyze_sap_zip(zip_path: Path) -> dict[str, Any]:
                     and "schema" in lower
                 ):
                     info["schemas"].append(name)
-                elif lower.endswith(".xsl") or lower.endswith(".xslt"):
+                elif lower.endswith((".xsl", ".xslt")):
                     info["mappings"].append(name)
     except zipfile.BadZipFile:
         info["error"] = "bad zip file"
@@ -386,6 +384,6 @@ __all__ = [
     "IngestionResult",
     "analyze_sap_zip",
     "create_pattern_from_analysis",
-    "ingest_real_artifacts",
     "ingest_all_real_sources",
+    "ingest_real_artifacts",
 ]

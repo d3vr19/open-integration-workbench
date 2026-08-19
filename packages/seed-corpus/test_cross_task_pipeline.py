@@ -12,12 +12,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from cross_task_pipeline import (  # noqa: E402
+from cross_task_pipeline import (
     Artifact,
     classify_archetype,
     cluster_by_archetype,
@@ -25,7 +24,6 @@ from cross_task_pipeline import (  # noqa: E402
     populate_cross_task_edges,
     verify_cross_task_retrieval,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Helpers

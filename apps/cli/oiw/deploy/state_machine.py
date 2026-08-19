@@ -22,12 +22,12 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 
-class DeploymentState(str, Enum):
+class DeploymentState(StrEnum):
     """Deployment lifecycle states (spec §18.5)."""
 
     DRAFT = "DRAFT"

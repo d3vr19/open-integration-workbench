@@ -19,8 +19,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ingest import ingest_artifact, ingest_oiw_examples, get_all_artifact_dirs  # noqa: E402
-from synthetic_artifacts import create_all_synthetic_artifacts  # noqa: E402
+from ingest import (
+    get_all_artifact_dirs,
+    ingest_artifact,
+    ingest_oiw_examples,
+)
+from synthetic_artifacts import create_all_synthetic_artifacts
 
 
 class TestBatchIngestion:

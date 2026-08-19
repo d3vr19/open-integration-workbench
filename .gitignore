@@ -104,3 +104,20 @@ packages/seed-corpus/audit/confidentiality-audit-wp07.yaml
 tests/agent_eval/baselines/retrieval-accuracy-wp07.yaml
 tests/agent_eval/baselines/c004-plan-incorporation-wp07.yaml
 tests/agent_eval/baselines/llm-before-after-wp07.yaml
+
+# WP-08 PR-1: Durable EMG store (project- + workspace-scoped).
+# Contains task embeddings + insights; may include tenant-derived knowledge
+# with confidentialityScope=project. Never commit.
+.oiw/emg/
+
+# WP-08 Track 0: Tenant cache (downloaded ZIPs may contain hostnames, customer
+# IP, and credentials in Groovy scripts). Never commit. The redacted IR +
+# import-report.yaml + metadata.yaml under packages/seed-corpus/artifacts/
+# are eligible for commit only with an explicit reviewer decision.
+.oiw/tenant-cache/
+
+# WP-08 PR-2: Optional EmbeddingGemma model cache (downloaded by
+# sentence-transformers at first use; ~600MB). Never commit.
+.cache/
+.cache_gemma/
+hf_cache/

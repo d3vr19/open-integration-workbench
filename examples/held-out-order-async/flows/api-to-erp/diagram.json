@@ -1,0 +1,38 @@
+{
+  "nodes": [
+    {
+      "id": "sender-http",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "lane": "sender"
+    },
+    {
+      "id": "log-receive",
+      "position": {
+        "x": 250,
+        "y": 200
+      },
+      "lane": "process"
+    },
+    {
+      "id": "receiver-out",
+      "position": {
+        "x": 500,
+        "y": 200
+      },
+      "lane": "receiver"
+    }
+  ],
+  "edges": [
+    {
+      "from": "sender-http",
+      "to": "log-receive"
+    },
+    {
+      "from": "log-receive",
+      "to": "receiver-out"
+    }
+  ]
+}

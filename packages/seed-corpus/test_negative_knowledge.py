@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from negative_knowledge import (  # noqa: E402
+from negative_knowledge import (
     build_avoid_patterns,
     populate_negative_knowledge,
     write_avoid_patterns_yaml,

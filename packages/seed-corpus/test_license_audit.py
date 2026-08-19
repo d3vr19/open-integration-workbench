@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from license_audit import (  # noqa: E402
+from license_audit import (
     LicenseAuditor,
     audit_oiw_examples,
 )

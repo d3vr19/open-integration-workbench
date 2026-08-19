@@ -11,9 +11,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from emg_report import generate_report, save_report  # noqa: E402
-from run_learning_sessions import run_learning_sessions  # noqa: E402
-from negative_knowledge import populate_negative_knowledge  # noqa: E402
+from emg_report import generate_report, save_report
+from negative_knowledge import populate_negative_knowledge
+from run_learning_sessions import run_learning_sessions
 
 
 class TestEmgReport:

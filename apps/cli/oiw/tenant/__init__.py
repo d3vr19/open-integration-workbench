@@ -18,7 +18,13 @@ from .adapter import (
     UploadResult,
 )
 from .mock_adapter import MockSapCiTenantAdapter, MockTenantError
-from .sap_ci_adapter import SapCiTenantAdapter
+from .sap_ci_adapter import (
+    SapCiTenantAdapter,
+    SapCiTenantError,
+    TenantArtifactSummary,
+    TenantPackageSummary,
+    build_tenant_adapter,
+)
 
 __all__ = [
     "TenantAdapter",
@@ -30,4 +36,8 @@ __all__ = [
     "MockSapCiTenantAdapter",
     "MockTenantError",
     "SapCiTenantAdapter",
+    "SapCiTenantError",
+    "TenantArtifactSummary",
+    "TenantPackageSummary",
+    "build_tenant_adapter",
 ]

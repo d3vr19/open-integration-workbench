@@ -24,9 +24,9 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 
-from oiw.agent.interpreter import NormalizedRequirement  # noqa: E402
-from oiw.agent.normalization import normalize_action  # noqa: E402
-from oiw.agent.trajectory import (  # noqa: E402
+from oiw.agent.interpreter import NormalizedRequirement
+from oiw.agent.normalization import normalize_action
+from oiw.agent.trajectory import (
     ActionRecord,
     EngineeringTrajectory,
     ObservationRecord,
@@ -37,7 +37,7 @@ from oiw.agent.trajectory import (  # noqa: E402
     TrajectorySpec,
     TrajectoryStep,
 )
-from oiw.emg.reward import compute_reward  # noqa: E402
+from oiw.emg.reward import compute_reward
 
 
 def synthesize_expert_trajectory(
@@ -422,10 +422,7 @@ def _normalize_requirement_from_ir(ir: dict, raw: str) -> NormalizedRequirement:
         if "validator" in ntype:
             operations.append("validate")
             components.append(ntype)
-        elif "transform" in ntype or "xslt" in ntype:
-            operations.append("transform")
-            components.append(ntype)
-        elif "script" in ntype or "groovy" in ntype:
+        elif "transform" in ntype or "xslt" in ntype or "script" in ntype or "groovy" in ntype:
             operations.append("transform")
             components.append(ntype)
         elif "router" in ntype:
@@ -440,7 +437,7 @@ def _normalize_requirement_from_ir(ir: dict, raw: str) -> NormalizedRequirement:
         elif "converter" in ntype or "json-to-xml" in ntype or "xml-to-json" in ntype:
             operations.append("transform")
             components.append(ntype)
-        elif ntype.startswith("sender") or ntype.startswith("receiver"):
+        elif ntype.startswith(("sender", "receiver")):
             components.append(ntype)
 
     # Archetype
