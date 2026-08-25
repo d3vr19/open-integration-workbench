@@ -1,0 +1,128 @@
+metadata:
+  id: traj-637508688f11
+  projectId: held-out-order-async
+  taskId: task-41e6d508
+  baseRevision: 68331dd
+  startedAt: 1787642768.207941
+  finishedAt: 1787642768.2081494
+  schemaVersion: '1.0'
+spec:
+  query:
+    raw: Add validation to the order flow
+    normalized:
+      intent: add-validation
+      sourceProtocol: null
+      targetProtocol: null
+      operations:
+      - validate
+      archetype: null
+      raw: Add validation to the order flow
+  steps:
+  - index: 0
+    observation:
+      type: pre-action
+      fingerprint: f1a5fab3b1d1f8aba4a33114c411d16d8ef43f1978989916b5f0e05ff3c330b1
+      summary:
+        stepIndex: 0
+        tool: flow.patch
+      diagnosticCode: null
+      diagnosticCategory: null
+      componentRole: null
+      targetProfile: null
+    action:
+      type: flow.patch
+      normalized:
+      - flow.patch
+      - addNode
+      - validator.json-schema
+      - after-sender
+      - full-config
+      argumentsDigest: 934c5d55536fde353971577bacdc71312843f23b038eca397e8b595b63f75757
+      rawRef: null
+    result:
+      status: applied
+      revision: null
+      summary: Add JSON Schema validator node after sender
+      diagnostics: []
+  - index: 1
+    observation:
+      type: pre-action
+      fingerprint: b58317284e0c7494088959ebcf6d435e7388179b4922a7543ef56f8906d632c2
+      summary:
+        stepIndex: 1
+        tool: resource.write
+      diagnosticCode: null
+      diagnosticCategory: null
+      componentRole: null
+      targetProfile: null
+    action:
+      type: resource.write
+      normalized:
+      - resource.write
+      - add-resource
+      - schema.json
+      - flows/<flow>/resources/schemas/input.schema.json
+      - ''
+      argumentsDigest: 178e33e4c357d3f142f3457bf56a902319833bbc5976712e210998ce5c259c42
+      rawRef: null
+    result:
+      status: applied
+      revision: null
+      summary: Create input JSON Schema resource
+      diagnostics: []
+  - index: 2
+    observation:
+      type: pre-action
+      fingerprint: e0d583c54cf53e885504411897579d3ccca83a492a1502fb54a5cc728b2d7a93
+      summary:
+        stepIndex: 2
+        tool: flow.validate
+      diagnosticCode: null
+      diagnosticCategory: null
+      componentRole: null
+      targetProfile: null
+    action:
+      type: flow.validate
+      normalized:
+      - flow.validate
+      - invoke
+      - project
+      - held-out-order-async
+      - ''
+      argumentsDigest: 95ec5de0f9de7fd9fbdd368b57666c07da21f349fb4f4fce47a96019cb94be75
+      rawRef: null
+    result:
+      status: applied
+      revision: null
+      summary: Validate the project after changes
+      diagnostics: []
+  - index: 3
+    observation:
+      type: pre-action
+      fingerprint: 8bf9d344f9766b91ea79b1950a65d853d8778a2c88c3063ddb3948b1d77e33df
+      summary:
+        stepIndex: 3
+        tool: test.run
+      diagnosticCode: null
+      diagnosticCategory: null
+      componentRole: null
+      targetProfile: null
+    action:
+      type: test.run
+      normalized:
+      - test.run
+      - invoke
+      - flow-test
+      - api-to-erp
+      - ''
+      argumentsDigest: c09d2220dd68919f48563421a7ec566e318c12cf64a346e084294ad9fde2e27b
+      rawRef: null
+    result:
+      status: applied
+      revision: null
+      summary: Run all tests to verify the changes
+      diagnostics: []
+  outcome:
+    status: success
+    reward:
+      completion: 1.0

@@ -1,0 +1,7 @@
+createdAt: '2026-08-25T06:40:01.880775+00:00'
+embedding:
+  backend: gemma
+  dim: 768
+  model: unsloth/embeddinggemma-300m
+lastUpdated: '2026-08-25T06:41:00.943635+00:00'
+schemaVersion: '1'

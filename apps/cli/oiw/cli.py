@@ -605,16 +605,22 @@ def deploy_check_drift(project_path: Path, profile: str, package_id: str, build_
     """Check for drift between local build and tenant."""
     import asyncio
 
+    from .deploy.bundle import find_build_dir, zip_build_dir
     from .deploy.drift import DriftDetector
     from .environments import load_profile
-    from .tenant import MockSapCiTenantAdapter
+    from .tenant import build_tenant_adapter
 
     prof = load_profile(project_path, profile)
-    adapter = MockSapCiTenantAdapter(state_dir=project_path / ".oiw" / "mock-tenant")
+    adapter = build_tenant_adapter(mock_state_dir=project_path / ".oiw" / "mock-tenant")
 
     async def _check():
         await adapter.connect(prof)
-        digest = build_digest or "sha256:auto-computed"
+        if build_digest:
+            digest = build_digest
+        else:
+            # Auto-compute from the real build output (WP-08 PR-9 seam fix —
+            # was the literal string "sha256:auto-computed").
+            _, digest = zip_build_dir(find_build_dir(project_path))
         report = await DriftDetector().detect_drift(digest, adapter, package_id)
         await adapter.disconnect()
         return report
@@ -622,6 +628,7 @@ def deploy_check_drift(project_path: Path, profile: str, package_id: str, build_
     report = asyncio.run(_check())
     click.echo(f"Status: {report.status}")
     click.echo(f"Safe to upload: {report.safe_to_upload}")
+    click.echo(f"Local digest: {build_digest or '(auto-computed from dist/)'}")
     if report.tenant_digest:
         click.echo(f"Tenant digest: {report.tenant_digest}")
     if report.recommendation:
@@ -666,14 +673,32 @@ def deploy_propose(project_path: Path, profile: str, package_id: str) -> None:
 @click.option("--package", "package_id", required=True, help="Package ID.")
 @click.option("--approver", required=True, help="Approver identity.")
 def deploy_approve(project_path: Path, profile: str, package_id: str, approver: str) -> None:
-    """Approve a proposed deployment (transition to APPROVED)."""
+    """Approve a proposed deployment (transition to APPROVED).
+
+    WP-08 PR-9: enforces the environment profile's deploymentPolicy —
+    when requiresApproval is true and an approvers list is configured,
+    the --approver identity MUST be on that list (this check was
+    specified in WP-05 but never implemented).
+    """
     from .deploy.state_machine import DeploymentEvent, DeploymentState, DeploymentStateMachine
+    from .environments import load_profile
+
+    prof = load_profile(project_path, profile)
+    policy = prof.deployment_policy
+    if policy.requires_approval and policy.approvers and approver not in policy.approvers:
+        click.echo(
+            f"error: '{approver}' is not on the approvers list for profile "
+            f"'{profile}' ({policy.approvers}). Approval refused.",
+            err=True,
+        )
+        raise click.Abort()
 
     sm = DeploymentStateMachine(project_path, profile, package_id)
     sm.transition(
         DeploymentEvent(target=DeploymentState.APPROVED, actor=approver, evidence={"approver": approver})
     )
-    click.echo(f"Deployment approved by {approver}. Current state: {sm.current_state.value}")
+    ttl_note = f" (valid for {policy.approval_ttl_hours}h)" if policy.requires_approval else ""
+    click.echo(f"Deployment approved by {approver}{ttl_note}. Current state: {sm.current_state.value}")
 
 
 @deploy.command("upload")
@@ -686,34 +711,100 @@ def deploy_approve(project_path: Path, profile: str, package_id: str, approver: 
 )
 @click.option("--profile", required=True, help="Environment profile.")
 @click.option("--package", "package_id", required=True, help="Package ID.")
-def deploy_upload(project_path: Path, profile: str, package_id: str) -> None:
-    """Upload the build artifact to the tenant (transition to UPLOADED)."""
-    import asyncio
+@click.option(
+    "--archive",
+    "archive_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Explicit archive to upload. Default: zip the dist/ build output.",
+)
+def deploy_upload(project_path: Path, profile: str, package_id: str, archive_path: Path | None) -> None:
+    """Upload the build artifact to the tenant (transition to UPLOADED).
 
+    WP-08 PR-9 seam fixes over the WP-05 prototype:
+      - uses build_tenant_adapter() (was: hardcoded mock),
+      - uploads REAL archive bytes + sha256 (was: b"mock-build-artifact"),
+      - runs the drift check first and blocks on DRIFT_DETECTED,
+      - enforces the approval TTL from deploymentPolicy.
+    """
+    import asyncio
+    from datetime import UTC, datetime, timedelta
+
+    from .deploy.bundle import find_build_dir, zip_build_dir
+    from .deploy.drift import DriftDetector
     from .deploy.state_machine import DeploymentEvent, DeploymentState, DeploymentStateMachine
     from .environments import load_profile
-    from .tenant import MockSapCiTenantAdapter
+    from .tenant import build_tenant_adapter
 
     prof = load_profile(project_path, profile)
-    adapter = MockSapCiTenantAdapter(state_dir=project_path / ".oiw" / "mock-tenant")
+    policy = prof.deployment_policy
     sm = DeploymentStateMachine(project_path, profile, package_id)
+
+    # Approval TTL enforcement (specified WP-05, implemented PR-9)
+    if sm.is_approved() and policy.requires_approval:
+        approved = [
+            r for r in sm.get_history() if getattr(r.to_state, "value", str(r.to_state)) == "APPROVED"
+        ]
+        if approved:
+            ts = datetime.fromisoformat(approved[-1].timestamp)
+            age = datetime.now(tz=UTC) - ts
+            if age > timedelta(hours=policy.approval_ttl_hours):
+                click.echo(
+                    f"error: approval from {approved[-1].actor} at {approved[-1].timestamp} "
+                    f"is older than the {policy.approval_ttl_hours}h TTL. Re-run "
+                    f"`oiw deploy approve`.",
+                    err=True,
+                )
+                raise click.Abort()
+
+    # Build the REAL payload
+    import hashlib as _hashlib
+
+    try:
+        if archive_path:
+            archive = archive_path.read_bytes()
+            digest = "sha256:" + _hashlib.sha256(archive).hexdigest()
+        else:
+            build_dir = find_build_dir(project_path)
+            archive, digest = zip_build_dir(build_dir)
+    except FileNotFoundError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise click.Abort() from exc
+
+    adapter = build_tenant_adapter(mock_state_dir=project_path / ".oiw" / "mock-tenant")
 
     async def _upload():
         await adapter.connect(prof)
-        archive = b"mock-build-artifact"
-        digest = "sha256:mock-" + package_id
-        result = await adapter.upload_package(package_id, archive, digest)
-        await adapter.disconnect()
-        return result
+        try:
+            # Drift gate: block when tenant content differs and wasn't built by us
+            report = await DriftDetector().detect_drift(digest, adapter, package_id)
+            if report.status == "DRIFT_DETECTED" and not report.safe_to_upload:
+                return ("drift-blocked", None, None)
+            result = await adapter.upload_package(package_id, archive, digest)
+            return (None, result, report)
+        finally:
+            await adapter.disconnect()
 
-    upload = asyncio.run(_upload())
-    if not upload.success:
-        click.echo(f"Upload failed: {upload.error}", err=True)
+    outcome, upload, _report = asyncio.run(_upload())
+    if outcome == "drift-blocked":
+        click.echo(
+            "error: drift detected — the tenant artifact differs from the local build. "
+            "Run `oiw deploy check-drift` for details. Upload refused.",
+            err=True,
+        )
+        raise click.Abort()
+    if upload is None or not upload.success:
+        click.echo(f"Upload failed: {upload.error if upload else 'unknown'}", err=True)
         raise click.Abort()
     sm.transition(
-        DeploymentEvent(target=DeploymentState.UPLOADED, actor="cli", evidence={"version": upload.version})
+        DeploymentEvent(
+            target=DeploymentState.UPLOADED,
+            actor="cli",
+            evidence={"version": upload.version, "digest": digest, "bytes": len(archive)},
+        )
     )
-    click.echo(f"Uploaded version {upload.version}. Current state: {sm.current_state.value}")
+    click.echo(f"Uploaded {len(archive)} bytes ({digest[:19]}…) as version {upload.version}.")
+    click.echo(f"Current state: {sm.current_state.value}")
 
 
 @deploy.command("execute")
@@ -727,26 +818,29 @@ def deploy_upload(project_path: Path, profile: str, package_id: str) -> None:
 @click.option("--profile", required=True, help="Environment profile.")
 @click.option("--package", "package_id", required=True, help="Package ID.")
 def deploy_execute(project_path: Path, profile: str, package_id: str) -> None:
-    """Deploy (activate) the uploaded artifact (transition to DEPLOYED)."""
+    """Deploy (activate) the uploaded artifact (transition to DEPLOYED).
+
+    WP-08 PR-9 seam fix: uses build_tenant_adapter() (was: hardcoded mock).
+    """
     import asyncio
 
     from .deploy.state_machine import DeploymentEvent, DeploymentState, DeploymentStateMachine
     from .environments import load_profile
-    from .tenant import MockSapCiTenantAdapter
+    from .tenant import build_tenant_adapter
 
     prof = load_profile(project_path, profile)
-    adapter = MockSapCiTenantAdapter(state_dir=project_path / ".oiw" / "mock-tenant")
+    adapter = build_tenant_adapter(mock_state_dir=project_path / ".oiw" / "mock-tenant")
     sm = DeploymentStateMachine(project_path, profile, package_id)
 
     async def _deploy():
         await adapter.connect(prof)
-        version_info = await adapter.get_artifact_version(package_id)
-        if version_info is None:
+        try:
+            version_info = await adapter.get_artifact_version(package_id)
+            if version_info is None:
+                return None
+            return await adapter.deploy(package_id, version_info.version)
+        finally:
             await adapter.disconnect()
-            return None
-        result = await adapter.deploy(package_id, version_info.version)
-        await adapter.disconnect()
-        return result
 
     deploy_result = asyncio.run(_deploy())
     if deploy_result is None or not deploy_result.success:
@@ -774,17 +868,71 @@ def deploy_execute(project_path: Path, profile: str, package_id: str) -> None:
 )
 @click.option("--profile", required=True, help="Environment profile.")
 @click.option("--package", "package_id", required=True, help="Package ID.")
-def deploy_verify(project_path: Path, profile: str, package_id: str) -> None:
-    """Run smoke tests and transition to VERIFIED (or FAILED)."""
-    from .deploy.state_machine import DeploymentEvent, DeploymentState, DeploymentStateMachine
+@click.option("--timeout-seconds", type=int, default=120, help="How long to poll deployment status.")
+def deploy_verify(project_path: Path, profile: str, package_id: str, timeout_seconds: int) -> None:
+    """Verify a real deployment by polling the tenant (transition to VERIFIED).
 
+    WP-08 PR-9 seam fix over the WP-05 stub: reads the deployment_id from
+    this profile's state history, polls poll_deployment() until a terminal
+    status or timeout, and pulls MessageProcessingLogs as evidence.
+    """
+    import asyncio
+    import contextlib
+    import time as _time
+
+    from .deploy.state_machine import DeploymentEvent, DeploymentState, DeploymentStateMachine
+    from .environments import load_profile
+    from .tenant import SapCiTenantError, build_tenant_adapter
+
+    prof = load_profile(project_path, profile)
     sm = DeploymentStateMachine(project_path, profile, package_id)
-    # WP-05 Task 7: smoke test. For MVP, we simulate a passing smoke test.
-    # Real implementation would call DeploymentVerifier against the tenant.
-    sm.transition(
-        DeploymentEvent(target=DeploymentState.VERIFIED, actor="cli", evidence={"smoke_test": "passed"})
-    )
-    click.echo(f"Verified. Current state: {sm.current_state.value}")
+    deployed_records = [
+        r for r in sm.get_history() if getattr(r.to_state, "value", str(r.to_state)) == "DEPLOYED"
+    ]
+    if not deployed_records:
+        click.echo(
+            "error: no DEPLOYED transition in state history — run `oiw deploy execute` first.", err=True
+        )
+        raise click.Abort()
+    evidence = deployed_records[-1].evidence or {}
+    deployment_id = str(evidence.get("deployment_id") or "")
+    if not deployment_id:
+        click.echo("error: last DEPLOYED transition has no deployment_id evidence.", err=True)
+        raise click.Abort()
+
+    adapter = build_tenant_adapter(mock_state_dir=project_path / ".oiw" / "mock-tenant")
+
+    async def _verify():
+        await adapter.connect(prof)
+        try:
+            start = _time.monotonic()
+            while True:
+                status = await adapter.poll_deployment(deployment_id)
+                if status.state in ("DEPLOYED", "FAILED"):
+                    logs = []
+                    with contextlib.suppress(SapCiTenantError):
+                        logs = await adapter.get_runtime_logs(package_id, since=None)
+                    return status.state, len(logs)
+                if _time.monotonic() - start > timeout_seconds:
+                    return "TIMEOUT", 0
+                await asyncio.sleep(5)
+        finally:
+            await adapter.disconnect()
+
+    final_state, log_count = asyncio.run(_verify())
+    if final_state == "DEPLOYED":
+        sm.transition(
+            DeploymentEvent(
+                target=DeploymentState.VERIFIED,
+                actor="cli",
+                evidence={"poll_status": final_state, "mpl_entries": log_count},
+            )
+        )
+        click.echo(f"Verified (deployment {deployment_id} DEPLOYED, {log_count} MPL entries).")
+        click.echo(f"Current state: {sm.current_state.value}")
+    else:
+        click.echo(f"error: deployment {deployment_id} reached {final_state}, not VERIFIED.", err=True)
+        raise click.Abort()
 
 
 @deploy.command("status")

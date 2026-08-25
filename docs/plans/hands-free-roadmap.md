@@ -126,25 +126,42 @@ Server groundwork exists (startup load + enriched `/emg/stats`). Remaining:
 
 Per WP-06 §7 sketch:
 
-1. Implement `SapCiTenantAdapter.upload_package`
+1. [x] Implement `SapCiTenantAdapter.upload_package`
    (PUT `/IntegrationDesigntimeArtifacts(Id='{id}',Version='{ver}')/$value`),
-   `deploy` (POST `/api/v1/IntegrationRuntimeArtifacts`), `poll_deployment`
+   `deploy` (POST `/IntegrationRuntimeArtifacts`), `poll_deployment`
    (GET poll endpoint), `get_runtime_logs` (MessageProcessingLogs).
-2. **Policy guards**: target-package allowlist (scratch package id only),
-   mandatory drift-check-before-upload, APPROVED state-machine gate, and
-   actual enforcement of `deploymentPolicy.approvers` + approval TTL
-   (specified since WP-05, never implemented).
-3. Fix CLI seams: `deploy upload|execute|check-drift` use
-   `build_tenant_adapter()` instead of hardcoded mocks; upload sends real
-   `dist/` bytes + recomputed sha256; `verify` polls real status/logs.
-4. Tests: `httpx.MockTransport` injection following
-   `apps/cli/tests/test_tenant.py` conventions; rewrite the
-   write-ops-guard test; add `@pytest.mark.skipif(not os.environ.get("OIW_TENANT_URL"))`
-   live-test class (manual only).
-5. Early de-risk probe: PUT payload-shape verification against the scratch
-   package before building the Phase 4 exporter around it.
-6. Live smoke: held-out example uploaded/deployed/verified against the scratch
-   package (manual, operator-run).
+   CSRF token fetched opportunistically (`X-CSRF-Token: fetch`) and
+   attached when the tenant issues one.
+2. [x] **Policy guards**: writable-package allowlist (`OIW_TENANT_WRITABLE_PACKAGES`
+   / `writable_packages=`; empty = read-only, every write refused loudly
+   BEFORE any network call), update-only target resolution (an empty
+   package is refused with remediation per T0-003), drift-check-before-upload,
+   APPROVED state-machine gate, and enforcement of
+   `deploymentPolicy.approvers` membership + approval TTL at upload time.
+3. [x] Fixed CLI seams: `deploy upload|execute|check-drift|verify` use
+   `build_tenant_adapter()` (mocks keep their durable state dir via a new
+   factory passthrough); upload sends real dist/ ZIP bytes + recomputed
+   sha256 (was: literal `b"mock-build-artifact"`); check-drift auto-computes
+   the local digest from the real build output (was: `"sha256:auto-computed"`).
+4. [x] Tests: 9 new MockTransport tests following test_tenant.py
+   conventions (allowlist refusals, PUT payload/CSRF assertions, deploy
+   POST shape, poll mapping, MPL parsing); rewrote the write-ops-guard
+   test from NotImplementedError to allowlist semantics.
+5. [ ] Live de-risk probe + smoke against **AdequareGST** (user-designated
+   scratch package) — manual, operator-run:
+   ```
+   export OIW_USE_REAL_TENANT=1 OIW_TENANT_URL=... OIW_TENANT_USER=... OIW_TENANT_PASSWORD=...
+   export OIW_TENANT_WRITABLE_PACKAGES=AdequareGST
+   oiw tenant list --top 50                      # confirm AdequareGST visible
+   oiw tenant artifacts --package AdequareGST    # needs ≥ 1 existing artifact (update-only)
+   cd examples/held-out-order-async && oiw build --target sap-cloud-integration-2026-07
+   oiw deploy propose --profile btp --package AdequareGST
+   oiw deploy approve --profile btp --package AdequareGST --approver <you>
+   oiw deploy upload --profile btp --package AdequareGST
+   oiw deploy execute --profile btp --package AdequareGST
+   oiw deploy verify --profile btp --package AdequareGST
+   ```
+6. [ ] Live smoke results recorded here.
 
 ### Phase 4 — CPI bundle exporter *(the hidden blocker, 4–5 days)*
 
@@ -255,3 +272,9 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   new EMGRetriever embedder param "disappeared"; fixed by resetting onto
   origin/main. Lesson recorded: always branch from origin/main, never
   local main, on this fork.
+- 2026-08-25 — P3 code complete (branch wp08/pr9-write-path) — update-only
+  write path landed: adapter write ops with CSRF + allowlist gating,
+  deploy CLI seams fixed (real bytes/digest/verify), approval approvers +
+  TTL enforcement, 9 new MockTransport tests, CLI suite 414 passed.
+  Scratch package designated by operator: **AdequareGST**. Live smoke
+  pending credentials in env.
