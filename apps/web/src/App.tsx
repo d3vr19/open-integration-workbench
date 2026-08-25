@@ -3,7 +3,7 @@ import type { Connection, Edge, Node, NodeMouseHandler, OnNodesDelete, OnEdgesDe
 import './App.css';
 
 import { api } from './api';
-import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus, SimulationResult, TraceEntry, ResourceSummary, StructuredDiff } from './api';
+import type { ProjectSummary, FlowSummary, IntegrationFlow, ValidationResult, TestResult, BuildResult, GitStatus, SimulationResult, TraceEntry, ResourceSummary, StructuredDiff, EmgHit } from './api';
 import { toReactFlowNodes, toReactFlowEdges } from './flow-utils';
 import { ResourceEditor } from './ResourceEditor';
 import { DiffViewer } from './DiffViewer';
@@ -30,6 +30,9 @@ function App() {
   const [rfNodes, setRfNodes] = useState<Node[]>([]);
   const [rfEdges, setRfEdges] = useState<Edge[]>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  // WP-08 PR-10 / OW-032: truthful EMG retrieval metadata from the last
+  // co-pilot round-trip. The ⚡ badge renders from this — never hardcoded.
+  const [lastEmgHit, setLastEmgHit] = useState<EmgHit | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [tests, setTests] = useState<TestResult[] | null>(null);
   const [build, setBuild] = useState<BuildResult | null>(null);
@@ -440,11 +443,12 @@ function App() {
               projectId={selectedProject}
               flowId={selectedFlow}
               onApplied={refreshFlow}
+              onEmgHit={setLastEmgHit}
             />
           </div>
-          {/* WP-06 E-003: EMG Insight Panel */}
+          {/* WP-06 E-003: EMG Insight Panel — badge driven by real agent metadata */}
           <div className="sidebar__section">
-            <EmgInsightPanel projectId={selectedProject} emgUsed={false} />
+            <EmgInsightPanel projectId={selectedProject} emgHit={lastEmgHit} />
           </div>
           {/* WP-06 E-002: Deploy Panel */}
           <div className="sidebar__section">

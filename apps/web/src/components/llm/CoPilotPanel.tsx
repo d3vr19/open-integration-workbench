@@ -28,7 +28,7 @@
 
 import { useState } from 'react';
 import { api } from '../../api';
-import type { AgentPlanResponse, AgentImplementResponse } from '../../api';
+import type { AgentPlanResponse, AgentImplementResponse, EmgHit } from '../../api';
 import { TrajectoryIndicator, type TrajectoryStatus } from './TrajectoryIndicator';
 import { PlanApprovalDialog } from './PlanApprovalDialog';
 import { PatchPreviewDialog } from './PatchPreviewDialog';
@@ -37,6 +37,9 @@ interface CoPilotPanelProps {
   projectId: string | null;
   flowId: string | null;
   onApplied?: () => void;
+  /** OW-032: fires with the server's truthful EMG retrieval metadata after
+   * each plan/implement round-trip so the ⚡ badge reflects reality. */
+  onEmgHit?: (hit: EmgHit | null) => void;
 }
 
 type PanelState =
@@ -54,7 +57,7 @@ const SUGGESTIONS = [
   'Add a test for the happy path',
 ];
 
-export function CoPilotPanel({ projectId, flowId, onApplied }: CoPilotPanelProps) {
+export function CoPilotPanel({ projectId, flowId, onApplied, onEmgHit }: CoPilotPanelProps) {
   const [input, setInput] = useState('');
   const [state, setState] = useState<PanelState>({ kind: 'idle' });
   const [trajectoryStatus, setTrajectoryStatus] = useState<TrajectoryStatus>('idle');
@@ -71,6 +74,8 @@ export function CoPilotPanel({ projectId, flowId, onApplied }: CoPilotPanelProps
     try {
       const plan = await api.plan(projectId, requirement, flowId ?? undefined);
       setState({ kind: 'plan-ready', requirement, plan });
+      // OW-032: report what the server actually said about EMG retrieval.
+      onEmgHit?.(plan.emg ?? null);
       // Trajectory is "recorded" up to this point (the server records
       // every agent session, including plan-only calls).
       setTrajectoryStatus('recorded');
@@ -90,6 +95,7 @@ export function CoPilotPanel({ projectId, flowId, onApplied }: CoPilotPanelProps
       setState({ kind: 'applied', result });
       setTrajectoryStatus(result.success ? 'recorded' : 'failed');
       setTrajectoryId(result.trajectoryId ?? undefined);
+      onEmgHit?.(result.emg ?? null);
       setHistory((h) => [...h, { requirement, success: result.success, timestamp: Date.now() }]);
       if (result.success && onApplied) {
         onApplied();
