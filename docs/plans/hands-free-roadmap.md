@@ -72,23 +72,31 @@ Note: ruff reports 59 pre-existing E402s under `packages/seed-corpus/`
 
 ### Phase 1 — Real embeddings, loudly (OW-033) *(2–3 days)*
 
-1. Install `oiw[embeddings]` (sentence-transformers + CPU torch) into the 3.12 venv.
-2. Point `OIW_EMBEDDING_MODEL` at the cached model (`unsloth/embeddinggemma-300m`)
-   or pre-fetch `google/embeddinggemma-300m` so backend/model/dim stamps match
-   documented defaults exactly.
-3. **Kill the silent fallback**: new `OIW_EMBEDDING_STRICT=1` mode makes
-   `embed()` raise instead of pseudo-degrading; `oiw emg status` gains an
-   honest real-vs-pseudo field; learning-session commands refuse non-real
-   backends unless explicitly overridden (new DEV registry entry documenting
-   the behavior change).
-4. `oiw emg reindex --backend gemma --dim 768` — idempotent; dim-mismatch
-   protection handles migration of existing store content.
-5. **Acceptance test**: re-run the held-out proof
-   (`docs/emg/wp08-held-out-proof.yaml`, was similarity 0.35 under pseudo
-   embeddings) and the CodeJam retrieval proof with real embeddings. Numbers
-   must measurably improve or at minimum hold; record before/after here and
-   in DEVELOPMENT_LOG.md.
-6. CI untouched (TF-IDF).
+1. [x] Install `oiw[embeddings]` (sentence-transformers 5.x + torch 2.13 CPU) into the 3.12 venv.
+2. [x] Point `OIW_EMBEDDING_MODEL` at the cached model (`unsloth/embeddinggemma-300m`).
+3. [x] **Kill the silent fallback**: new `OIW_EMBEDDING_STRICT=1` mode makes
+   `embed()` raise instead of pseudo-degrading; `oiw emg status` gained
+   honest fields (`backendUsable`, mismatch counts); learning paths refuse
+   fake vectors (see "honesty seams fixed" below).
+4. [x] Reindexed the CodeJam store to `gemma / unsloth/embeddinggemma-300m / dim=768`
+   — `Vectors verified against manifest: OK`, 0 mismatches.
+5. [x] **Acceptance evidence** (see progress log for numbers): paraphrase
+   separation 0.851 vs 0.693; held-out gate re-PASSED with real-vector
+   retrieval probe at similarity **0.4831** (TF-IDF control query: 0.0000 —
+   dim-mismatch guard proves backends are never mixed).
+6. [x] CI untouched (TF-IDF).
+
+**Honesty seams fixed during this phase (all found by reading the code, not
+by trusting docs):**
+
+| Seam | Before | After |
+|---|---|---|
+| `GemmaEmbedder.embed()` | silent hash-pseudo fallback | raises under `OIW_EMBEDDING_STRICT`; else records `last_embed_pseudo` |
+| `emg reindex` (cli.py) | hardcoded TF-IDF embedder while stamping ANY manifest backend | builds the real backend, canary-embeds before wiping anything, stamps resolved backend/model/dim from the embedder instance |
+| `build_emg_store` | env backend ignored; always TF-IDF embedder | constructs the declared backend or fails loudly |
+| `EMGRetriever` | hardcoded TF-IDF query embedder | explicit arg > env backend (loud failure) > TF-IDF default |
+| `oiw emg status` | parroted the manifest | probes actual usability + reports vector/dim mismatches |
+| seed-corpus task nodes | indexed `confidentialityScope: project` → invisible to all cross-project retrieval | ingested as `organization` scope (public Apache-2.0 material); reindex preserves per-node scope/approval |
 
 ### Phase 2 — UI reads the real store (OW-032 / WP-08 PR-10) *(~2 days)*
 
@@ -215,3 +223,19 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
 - 2026-08-25 — P0 complete — uv-managed CPython 3.12.14 venv at `.venv/`;
   all editable installs; baseline green (see table above). Fork PR #1 open
   for visibility. Starting Phase 1 (real embeddings).
+- 2026-08-25 — P1 complete — Real EmbeddingGemma-300m (cached
+  `unsloth/embeddinggemma-300m`, offline) now powers the EMG:
+  - Six honesty seams fixed (table above); 24 new tests, CLI suite 400 passed.
+  - Paraphrase separation: 0.851 related vs 0.693 unrelated (real vectors).
+  - Held-out gate re-run under gemma/768: **PASS** — mechanics-first hit
+    intact; new vector-retrieval probe: best match 0.4831 with the store's
+    own backend vs 0.0000 for a TF-IDF control query (dim-mismatch guard).
+    Proof regenerated at `docs/emg/wp08-held-out-proof.yaml`
+    (`embeddingRetrievalProbe` section).
+  - Found + fixed a latent confidentiality bug while proving retrieval:
+    seed-corpus task nodes were indexed project-private, making them
+    unreachable by cross-project search — the "real embeddings" proof would
+    have silently read zero rows without this fix.
+  - Dev env contract: `OIW_EMBEDDING_BACKEND=gemma`,
+    `OIW_EMBEDDING_MODEL=unsloth/embeddinggemma-300m`, `OIW_EMBEDDING_DIM=768`,
+    `OIW_EMBEDDING_STRICT=1` for any real learning work.

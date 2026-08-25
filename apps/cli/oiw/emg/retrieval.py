@@ -18,6 +18,7 @@ patterns) and more reliable (expert trajectories have verified outcomes).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -71,17 +72,39 @@ class EMGRetriever:
         task_store: Any = None,
         edge_store: Any = None,
         avoid_pattern_store: AvoidPatternStore | None = None,
+        embedder: Any | None = None,
     ):
         self.store = store or InMemoryInsightStore()
         self.task_store = task_store
         self.edge_store = edge_store
         self.avoid_pattern_store = avoid_pattern_store or AvoidPatternStore()
-        # Lazy-init embedder only if task_store is provided
+        # Embedder for cross-task vector search. Resolution order (OW-033):
+        #   1. explicit `embedder` arg (pass the DURABLE STORE's embedder so
+        #      query vectors match the stored vectors' backend/dim),
+        #   2. OIW_EMBEDDING_BACKEND env via create_embedder() — a configured
+        #      but unbuildable backend raises LOUDLY (never silently TF-IDF),
+        #   3. TF-IDF default (keyword-level; honest about what it is).
         self._embedder = None
         if self.task_store is not None:
-            from .embedding import RequirementEmbedder
+            if embedder is not None:
+                self._embedder = embedder
+            else:
+                from .embedding import RequirementEmbedder, create_embedder
 
-            self._embedder = RequirementEmbedder()
+                backend = os.environ.get("OIW_EMBEDDING_BACKEND", "tfidf")
+                if backend == "tfidf":
+                    self._embedder = RequirementEmbedder()
+                else:
+                    try:
+                        self._embedder = create_embedder(backend)
+                    except Exception as exc:
+                        raise RuntimeError(
+                            f"OIW_EMBEDDING_BACKEND={backend!r} is configured but the "
+                            f"embedder cannot be built: {exc}. The task store may hold "
+                            f"{backend} vectors — querying them with a different embedder "
+                            "would silently return garbage similarity. Fix the config or "
+                            "pass embedder= explicitly."
+                        ) from exc
 
     def retrieve(
         self,
