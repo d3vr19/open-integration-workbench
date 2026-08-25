@@ -100,3 +100,155 @@ class TestEmgGroup:
         assert result.exit_code == 0
         assert "report" in result.output
         assert "provenance" in result.output
+
+
+def _make_tfidf_store(root, n_tasks: int = 2):
+    """Build a small durable TF-IDF store for CLI honesty tests (OW-033)."""
+    import os
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
+    from oiw.agent.interpreter import NormalizedRequirement
+    from oiw.emg.embedding import RequirementEmbedder
+    from oiw.emg.store import JsonlEmgStore
+
+    old = os.environ.get("OIW_EMBEDDING_BACKEND")
+    os.environ.pop("OIW_EMBEDDING_BACKEND", None)
+    try:
+        store = JsonlEmgStore(
+            root=root,
+            embedder=RequirementEmbedder(),
+            embedding_backend="tfidf",
+            embedding_model="oiw-builtin-tfidf",
+            embedding_dim=len(RequirementEmbedder.VOCABULARY),
+        )
+        store.load()
+        for i in range(n_tasks):
+            store.upsert_task_from_requirement(
+                NormalizedRequirement(
+                    intent="create-flow",
+                    raw=f"https to sftp order drop {i}",
+                    source_protocol="https",
+                    target_protocol="sftp",
+                ),
+                task_id=f"task-{i}",
+            )
+        store.save()
+    finally:
+        if old is not None:
+            os.environ["OIW_EMBEDDING_BACKEND"] = old
+    return store
+
+
+class TestEmgStatusHonesty:
+    """OW-033: `oiw emg status` reports whether the backend is REAL."""
+
+    def test_status_json_includes_honesty_fields(self, tmp_path: Path, monkeypatch) -> None:
+        """JSON output has backendUsable + mismatch counts; a healthy tfidf store is usable."""
+        from oiw.emg.store import build_emg_store
+
+        root = tmp_path / "emg"
+        _make_tfidf_store(root)
+        for var in ("OIW_EMBEDDING_BACKEND", "OIW_EMBEDDING_MODEL", "OIW_EMBEDDING_DIM"):
+            monkeypatch.delenv(var, raising=False)
+
+        # Sanity: the persisted store loads and claims what it is
+        check = build_emg_store(root=root, create_if_missing=False)
+        check.load()
+        assert check.manifest().embedding_backend == "tfidf"
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["emg", "status", "--store-root", str(root), "--json"])
+        assert result.exit_code == 0, result.output
+        import json as _json
+
+        doc = _json.loads(result.output)
+        assert doc["backendUsable"] is True  # tfidf always works
+        assert doc["vectorBackendMismatches"] == 0
+        assert doc["vectorDimMismatches"] == 0
+
+    def test_status_flags_vectors_from_wrong_backend(self, tmp_path: Path, monkeypatch) -> None:
+        """A node stamped with a different backend than the manifest is reported."""
+        import json as _json
+
+        from oiw.emg import store as store_mod
+
+        root = tmp_path / "emg"
+        store = _make_tfidf_store(root)
+        # Corrupt one node's sidecar backend and persist the lie
+        nodes = list(store._task_store._nodes.values())
+        store_mod._NODE_BACKENDS[nodes[0].id] = "gemma"
+        store.save()
+
+        for var in ("OIW_EMBEDDING_BACKEND",):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setattr("oiw.emg.embedding.probe_backend", lambda b, m=None: (True, "forced"))
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["emg", "status", "--store-root", str(root), "--json"])
+        assert result.exit_code == 0, result.output
+        doc = _json.loads(result.output)
+        assert doc["vectorBackendMismatches"] == 1
+        # Text mode carries the remediation hint; JSON stays machine-readable
+        text = runner.invoke(main, ["emg", "status", "--store-root", str(root)])
+        assert "reindex" in text.output.lower()
+
+    def test_status_reports_unusable_backend_when_probe_fails(self, tmp_path: Path, monkeypatch) -> None:
+        """If the probe says the machine can't embed under the manifest backend, say NO."""
+        from oiw.emg import embedding as emb_mod
+
+        root = tmp_path / "emg"
+        _make_tfidf_store(root)
+        monkeypatch.setattr(emb_mod, "probe_backend", lambda b, m=None: (False, "forced by test"))
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["emg", "status", "--store-root", str(root)])
+        assert result.exit_code == 0, result.output
+        assert "Real backend:  NO (forced by test)" in result.output
+        assert "WARNING" in result.output
+
+
+class TestEmgReindexHonesty:
+    """OW-033: `oiw emg reindex` must never write fake vectors under a real name."""
+
+    def test_reindex_tfidf_succeeds_and_verifies(self, tmp_path: Path) -> None:
+        """Default TF-IDF reindex completes and verifies vectors against the manifest."""
+        root = tmp_path / "emg"
+        _make_tfidf_store(root)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["emg", "reindex", "--store-root", str(root)])
+        assert result.exit_code == 0, f"{result.output}\n{result.exception}"
+        assert "Vectors verified against manifest: OK" in result.output
+
+    def test_reindex_gemma_aborts_when_backend_cannot_embed(self, tmp_path: Path, monkeypatch) -> None:
+        """Without sentence-transformers, a gemma reindex exits 2 and leaves the store untouched."""
+        from oiw.emg import embedding as emb_mod
+
+        root = tmp_path / "emg"
+        _make_tfidf_store(root)
+        manifest_before = (root / "manifest.yaml").read_text()
+        tasks_before = (root / "tasks.jsonl").read_text()
+
+        monkeypatch.setattr(emb_mod, "_ST_IMPORT_OK", False)
+        monkeypatch.setattr(emb_mod, "_ST_IMPORT_ATTEMPTED", True)
+        monkeypatch.delenv("OIW_EMBEDDING_STRICT", raising=False)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["emg", "reindex", "--store-root", str(root), "--backend", "gemma"])
+        assert result.exit_code == 2
+        assert "NOT modified" in result.output or "not modified" in result.output
+        # The on-disk store was not wiped/re-stamped by a lying run
+        assert (root / "manifest.yaml").read_text() == manifest_before
+        assert (root / "tasks.jsonl").read_text() == tasks_before
+
+    def test_reindex_unknown_backend_aborts_cleanly(self, tmp_path: Path) -> None:
+        """An unknown --backend fails before touching files."""
+        root = tmp_path / "emg"
+        _make_tfidf_store(root)
+        tasks_before = (root / "tasks.jsonl").read_text()
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["emg", "reindex", "--store-root", str(root), "--backend", "bogus"])
+        assert result.exit_code == 2
+        assert (root / "tasks.jsonl").read_text() == tasks_before

@@ -194,6 +194,9 @@ def _upsert_task_for_trajectory(
             project_id=project_id,
             insight_ref=record.id,
             reward={},
+            # Seed corpus = global knowledge; project-scoped nodes would
+            # be invisible to cross-task retrieval from other projects.
+            confidentiality_scope="organization",
         )
     except Exception:
         # If requirement normalization fails, upsert a node with the raw
@@ -213,6 +216,7 @@ def _upsert_task_for_trajectory(
                     insight_ref=record.id,
                     approval="PROJECT_APPROVED",
                     project_id=project_id,
+                    confidentiality_scope="organization",
                 )
                 durable_store.upsert_task(node)
             except Exception:

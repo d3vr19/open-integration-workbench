@@ -32,7 +32,7 @@ wp08TrackD:
     structuralOverlap: 0.4
     llmUsed: false
     emgUsed: false
-    latencyMs: 7
+    latencyMs: 5
     warnings:
     - 'OIW-W014: LLM interpreter unavailable; using keyword fallback. Install an API
       key for full interpretation.'
@@ -53,12 +53,24 @@ wp08TrackD:
     emgUsed: true
     retrievalFound: true
     retrievalConfidence: 0.35
-    latencyMs: 51
+    latencyMs: 23
     warnings:
     - 'OIW-W014: LLM interpreter unavailable; using keyword fallback. Install an API
       key for full interpretation.'
     - 'OIW-I001: EMG insight retrieved (confidence=0.35); using expert workflow instead
       of LLM planner'
+  embeddingRetrievalProbe:
+    storeBackend: gemma
+    storeModel: unsloth/embeddinggemma-300m
+    storeDim: 768
+    pseudoFallbackActive: false
+    sameBackendQuery:
+      bestTaskId: codejam-send-bp-dependants-request-log-to-bigquery__51cbb237
+      bestSimilarity: 0.4831
+    tfidfControlQuery:
+      bestSimilarity: 0.0
+      note: dim-mismatch guard returns 0 — vectors from different backends are never
+        mixed
   passCriteria:
     realProvenance:
       required: true

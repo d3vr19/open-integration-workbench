@@ -38,6 +38,19 @@ from typing import Any
 
 from ..agent.interpreter import NormalizedRequirement
 
+_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def strict_embedding_mode() -> bool:
+    """True when OIW_EMBEDDING_STRICT is set to a truthy value.
+
+    Strict mode makes real-model embedders FAIL LOUDLY instead of
+    silently degrading to hash pseudo-embeddings / TF-IDF padding.
+    Learning on vectors that don't match their claimed backend poisons
+    the EMG, so any environment doing real learning should set this.
+    """
+    return os.environ.get("OIW_EMBEDDING_STRICT", "").strip().lower() in _TRUTHY
+
 
 @dataclass
 class RequirementEmbedding:
@@ -63,7 +76,13 @@ class RequirementEmbedder:
 
     Kept as the fallback in the auto-select chain. See `create_embedder()`
     for the Gemma-aware factory.
+
+    NOTE: this is keyword-level matching, NOT a semantic embedding.
+    `semantic_backend` is False so callers can be honest about what the
+    vectors mean.
     """
+
+    semantic_backend = False
 
     VOCABULARY: list[str] = [
         "create-flow",
@@ -127,6 +146,18 @@ class RequirementEmbedder:
         self._vocab_size = len(self.VOCABULARY)
         self._df = {term: 1 for term in self.VOCABULARY}
         self._total_docs = len(self.VOCABULARY)
+
+    @property
+    def backend_name(self) -> str:
+        return "tfidf"
+
+    @property
+    def model_name(self) -> str:
+        return "oiw-builtin-tfidf"
+
+    @property
+    def dim(self) -> int:
+        return self._vocab_size
 
     def embed(self, requirement: NormalizedRequirement) -> RequirementEmbedding:
         text = self._requirement_to_text(requirement)
@@ -208,10 +239,20 @@ class GemmaEmbedder:
 
     License: EmbeddingGemma is under Google's Gemma terms, not Apache-2.0.
     We do NOT vendor weights.
+
+    Honesty contract (WP-08 A-002 follow-up / OW-033):
+    - If the model cannot be loaded, embed() degrades to a hash
+      pseudo-embedding ONLY when OIW_EMBEDDING_STRICT is unset. The flag
+      `last_embed_pseudo` records what actually happened.
+    - With OIW_EMBEDDING_STRICT=1 (any truthy value), embed() RAISES
+      instead — learning environments must never write pseudo vectors
+      under a gemma manifest.
     """
 
     MODEL_NAME = "google/embeddinggemma-300m"
     DEFAULT_DIM = 768
+
+    semantic_backend = True
 
     def __init__(
         self,
@@ -223,6 +264,9 @@ class GemmaEmbedder:
         self.model_name = model_name or os.environ.get("OIW_EMBEDDING_MODEL", self.MODEL_NAME)
         self.dim = dim or int(os.environ.get("OIW_EMBEDDING_DIM", str(self.DEFAULT_DIM)))
         self._model: Any = None
+        # True when the most recent embed() used the hash pseudo-fallback.
+        # None before the first embed() call.
+        self.last_embed_pseudo: bool | None = None
         if eager_load:
             self._load_model()
 
@@ -248,10 +292,12 @@ class GemmaEmbedder:
         """Embed a requirement using EmbeddingGemma-300m.
 
         Falls back to a deterministic hash-based pseudo-embedding if the
-        model can't be loaded — never crashes the caller. The pseudo-
-        embedding preserves term-overlap similarity (so two requirements
-        with the same intent/components still match) but loses paraphrase
-        detection (which is the whole point of using Gemma).
+        model can't be loaded AND OIW_EMBEDDING_STRICT is unset — never
+        crashes the caller. The pseudo-embedding preserves term-overlap
+        similarity (so two requirements with the same intent/components
+        still match) but loses paraphrase detection (which is the whole
+        point of using Gemma). With OIW_EMBEDDING_STRICT=1 this raises
+        instead of degrading.
         """
         text = self._requirement_to_text(requirement)
         try:
@@ -266,11 +312,19 @@ class GemmaEmbedder:
                 if mag > 0:
                     vec = [v / mag for v in vec]
             vector = [float(v) for v in vec]
-        except Exception:
+            self.last_embed_pseudo = False
+        except Exception as exc:
+            if strict_embedding_mode():
+                # Fail LOUDLY: a pseudo vector stamped "gemma" poisons the
+                # store. Strict environments must see this immediately.
+                raise RuntimeError(
+                    f"Gemma backend unavailable and OIW_EMBEDDING_STRICT is set: {exc}"
+                ) from exc
             # Fallback: deterministic hash-based pseudo-embedding of the
             # same dimension. This is NOT a real embedding — it only
             # preserves exact-match similarity.
             vector = self._hash_pseudo_embedding(text)
+            self.last_embed_pseudo = True
         req_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
         return RequirementEmbedding(vector=vector, text=text, requirement_hash=req_hash)
 
@@ -312,15 +366,22 @@ class FastembedEmbedder:
 
     Kept as the second-choice backend for environments where Gemma is too
     heavy. Requires `pip install fastembed`.
+
+    Honesty contract mirrors GemmaEmbedder: with OIW_EMBEDDING_STRICT set,
+    a load failure raises instead of silently writing padded TF-IDF
+    vectors under a fastembed manifest.
     """
 
     MODEL_NAME = "BAAI/bge-small-en-v1.5"
     DEFAULT_DIM = 384
 
+    semantic_backend = True
+
     def __init__(self, model_name: str | None = None, dim: int | None = None):
         self.model_name = model_name or self.MODEL_NAME
         self.dim = dim or self.DEFAULT_DIM
         self._model: Any = None
+        self.last_embed_pseudo: bool | None = None
 
     @property
     def backend_name(self) -> str:
@@ -344,16 +405,78 @@ class FastembedEmbedder:
             self._load_model()
             vec = next(self._model.embed([text]))
             vector = [float(v) for v in vec]
-        except Exception:
+            self.last_embed_pseudo = False
+        except Exception as exc:
+            if strict_embedding_mode():
+                raise RuntimeError(
+                    f"fastembed backend unavailable and OIW_EMBEDDING_STRICT is set: {exc}"
+                ) from exc
             # Fallback to TF-IDF embedding (different dim — caller must handle)
             tfidf = RequirementEmbedder()
             emb = tfidf.embed(requirement)
             # Pad with zeros to fastembed dim — better than crashing
             vector = emb.vector + [0.0] * max(0, self.dim - len(emb.vector))
             vector = vector[: self.dim]
+            self.last_embed_pseudo = True
             return RequirementEmbedding(vector=vector, text=text, requirement_hash=emb.requirement_hash)
         req_hash = hashlib.sha256(text.encode()).hexdigest()[:16]
         return RequirementEmbedding(vector=vector, text=text, requirement_hash=req_hash)
+
+
+# ---------------------------------------------------------------------------
+# Backend usability probe (honest `oiw emg status`)
+# ---------------------------------------------------------------------------
+
+
+def probe_backend(backend: str, model: str | None = None) -> tuple[bool, str]:
+    """Check whether a backend can ACTUALLY embed right now.
+
+    Returns (usable, reason). This is what powers the honesty fields on
+    `oiw emg status`: a manifest can claim "gemma" while the machine
+    cannot load the model — status must say so, not parrot the manifest.
+
+    For gemma this eagerly loads the weights from the local HF cache
+    (`local_files_only=True`) so it never triggers a surprise download.
+    """
+    if backend == "tfidf":
+        return True, "always available"
+
+    if backend == "gemma":
+        ok, err = _try_import_sentence_transformers()
+        if not ok:
+            return False, f"sentence-transformers not installed ({err})"
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            name = model or os.environ.get("OIW_EMBEDDING_MODEL", GemmaEmbedder.MODEL_NAME)
+            try:
+                SentenceTransformer(name, local_files_only=True)
+            except TypeError:
+                # Older sentence-transformers without the kwarg
+                SentenceTransformer(name)
+            return True, f"model loaded ({name})"
+        except Exception as exc:
+            return False, f"model not loadable locally: {exc}"
+
+    if backend == "fastembed":
+        try:
+            import fastembed  # noqa: F401
+        except Exception as exc:
+            return False, f"fastembed not installed ({exc})"
+        try:
+            from fastembed import TextEmbedding
+
+            TextEmbedding(model_name=model or FastembedEmbedder.MODEL_NAME)
+            return True, "model loaded"
+        except Exception as exc:
+            return False, f"model not loadable: {exc}"
+
+    if backend == "openai":
+        if os.environ.get("OIW_EMBEDDING_API_KEY"):
+            return False, "documented but not implemented (see create_embedder)"
+        return False, "OIW_EMBEDDING_API_KEY not set"
+
+    return False, f"unknown backend {backend!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -429,4 +552,6 @@ __all__ = [
     "GemmaEmbedder",
     "FastembedEmbedder",
     "create_embedder",
+    "strict_embedding_mode",
+    "probe_backend",
 ]

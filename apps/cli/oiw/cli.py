@@ -918,7 +918,14 @@ def emg_status(store_root: Path | None, json_output: bool) -> None:
     Acceptance: `oiw emg status` shows backend, model, dim, insight count,
     task count, edge count, store path. If the store does not exist,
     prints an empty-state summary so callers can detect first-run.
+
+    OW-033 honesty fields: `backendUsable` probes whether the manifest's
+    backend can ACTUALLY embed on this machine right now (deps installed,
+    model cached), and the mismatch counts report stored vectors that
+    disagree with the manifest claim. A manifest that says "gemma" while
+    the machine can't load gemma is reported as unusable — not parroted.
     """
+    from .emg.embedding import probe_backend
     from .emg.store import build_emg_store
 
     store = build_emg_store(root=store_root, create_if_missing=False)
@@ -930,6 +937,8 @@ def emg_status(store_root: Path | None, json_output: bool) -> None:
 
     manifest = store.manifest()
     stats = store.stats()
+    usable, reason = probe_backend(manifest.embedding_backend, manifest.embedding_model)
+    mismatch = store.backend_vector_mismatches()
 
     if json_output:
         import json as _json
@@ -941,6 +950,10 @@ def emg_status(store_root: Path | None, json_output: bool) -> None:
                     "compatible": store.compatible,
                     "manifest": manifest.to_dict(),
                     "stats": stats,
+                    "backendUsable": usable,
+                    "backendUsableReason": reason,
+                    "vectorBackendMismatches": mismatch["backend"],
+                    "vectorDimMismatches": mismatch["dim"],
                 },
                 indent=2,
             )
@@ -952,18 +965,33 @@ def emg_status(store_root: Path | None, json_output: bool) -> None:
     click.echo(f"Backend:       {manifest.embedding_backend}")
     click.echo(f"Model:         {manifest.embedding_model}")
     click.echo(f"Dimension:     {manifest.embedding_dim}")
+    click.echo(f"Real backend:  {'yes' if usable else 'NO'} ({reason})")
     click.echo(f"Schema ver:    {manifest.schema_version}")
     click.echo(f"Created at:    {manifest.created_at or '(empty)'}")
     click.echo(f"Last updated:  {manifest.last_updated or '(never)'}")
     click.echo(f"Insights:      {stats['insights']}")
     click.echo(f"Tasks:         {stats['tasks']}")
     click.echo(f"Edges:         {stats['edges']}")
+    problems: list[str] = []
     if not store.compatible:
-        click.echo("")
-        click.echo(
-            "WARNING: store manifest does not match the current embedder. "
-            "Search will return empty results. Run `oiw emg reindex` to re-embed."
+        problems.append(
+            "store manifest does not match the current embedder config; " "search will return empty results"
         )
+    if not usable:
+        problems.append(
+            f"backend {manifest.embedding_backend!r} cannot embed on this "
+            f"machine ({reason}); any NEW writes will fail or degrade"
+        )
+    if mismatch["backend"] or mismatch["dim"]:
+        problems.append(
+            f"{mismatch['backend']} task vector(s) were embedded by a different "
+            f"backend than the manifest claims and {mismatch['dim']} vector(s) have "
+            "the wrong dimension; run `oiw emg reindex` to re-embed honestly"
+        )
+    if problems:
+        click.echo("")
+        for p in problems:
+            click.echo(f"WARNING: {p}")
 
 
 @emg.command("reindex")
@@ -997,13 +1025,16 @@ def emg_reindex(store_root: Path | None, backend: str | None, model: str | None,
     and persists. Vectors from a different backend/dim are skipped on
     search until reindex completes — this command is the way to fix that.
 
-    Per WP-08 A-002: the Gemma backend requires `pip install oiw[embeddings]`
-    and a model download. If unavailable, this command falls back to TF-IDF
-    and prints a warning; it does not silently leave the store in a broken state.
+    Per WP-08 A-002 + OW-033: the target backend must ACTUALLY work —
+    the command builds the real embedder, runs a canary embed, and
+    aborts loudly (exit 2, before touching any file) if the backend is
+    unavailable or silently degraded to pseudo/TF-IDF vectors. A store
+    re-indexed under `--backend gemma` genuinely contains gemma vectors.
     """
     # Resolve target backend config
     import os as _os
 
+    from .emg.embedding import create_embedder
     from .emg.store import build_emg_store
 
     target_backend = backend or _os.environ.get("OIW_EMBEDDING_BACKEND", "tfidf")
@@ -1014,18 +1045,60 @@ def emg_reindex(store_root: Path | None, backend: str | None, model: str | None,
     store.load()
     before = store.stats()
 
+    # Build the REAL embedder for the target backend. No hardcoded TF-IDF:
+    # the manifest must never claim a backend whose vectors it doesn't hold.
+    from typing import Any as _Any
+
+    embedder_kwargs: dict[str, _Any] = {}
+    if target_backend == "gemma":
+        embedder_kwargs["model_name"] = None if target_model == "oiw-builtin-tfidf" else target_model
+        embedder_kwargs["dim"] = target_dim
+        embedder_kwargs["eager_load"] = True  # fail HERE, not mid-reindex
+    elif target_backend == "fastembed":
+        embedder_kwargs["dim"] = target_dim
+    try:
+        embedder = create_embedder(target_backend, **embedder_kwargs)
+    except Exception as exc:
+        click.echo(
+            f"error: cannot build embedder for backend {target_backend!r}: {exc}\n"
+            "The store was NOT modified. Install the missing dependency "
+            "(pip install 'oiw[embeddings]') or choose another --backend.",
+            err=True,
+        )
+        sys.exit(2)
+
+    # Canary: prove the embedder produces REAL vectors before we wipe the
+    # store. Catches lazy-load failures and silent pseudo/TF-IDF fallbacks.
+    from .agent.interpreter import NormalizedRequirement as _CanaryReq
+
+    _canary_req = _CanaryReq(raw="canary", intent="create-flow")
+    embedder.embed(_canary_req)
+    if getattr(embedder, "last_embed_pseudo", False):
+        click.echo(
+            f"error: backend {target_backend!r} silently degraded to a hash "
+            "pseudo-embedding (model not loadable). The store was NOT modified. "
+            "Set OIW_EMBEDDING_STRICT=1 to make this fatal everywhere.",
+            err=True,
+        )
+        sys.exit(2)
+
+    # Stamp what we ACTUALLY used — resolved from the embedder instance,
+    # never from the flag string.
+    resolved_backend = getattr(embedder, "backend_name", target_backend)
+    resolved_model = str(getattr(embedder, "model_name", target_model))
+    resolved_dim = int(getattr(embedder, "dim", target_dim))
+
     # Re-embed every task node's normalized requirement with the new embedder.
     # Build a fresh JsonlEmgStore that writes to the same root but with the
     # new manifest. Easiest path: reload with new config, re-upsert nodes.
-    from .emg.embedding import RequirementEmbedder as _Embedder
     from .emg.store import JsonlEmgStore as _Store
 
     reindexed = _Store(
         root=store.root_path,
-        embedder=_Embedder(),  # Always TF-IDF here; A-002 will inject Gemma
-        embedding_backend=target_backend,
-        embedding_model=target_model,
-        embedding_dim=target_dim,
+        embedder=embedder,
+        embedding_backend=resolved_backend,
+        embedding_model=resolved_model,
+        embedding_dim=resolved_dim,
     )
     # Start with a clean in-memory state — we want a fresh manifest + fresh
     # tasks.jsonl. Insights/edges/tasks will be re-upserted from the old store.
@@ -1077,18 +1150,31 @@ def emg_reindex(store_root: Path | None, backend: str | None, model: str | None,
             project_id=node.project_id,
             insight_ref=node.insight_ref,
             reward=node.reward,
+            # Preserve the node's original lifecycle + confidentiality
+            # metadata — reindex re-embeds vectors, it must not silently
+            # change who can see the node or from where.
+            approval=getattr(node, "approval", "PROJECT_APPROVED") or "PROJECT_APPROVED",
+            confidentiality_scope=getattr(node, "confidentiality_scope", "project") or "project",
         )
         reembedded += 1
 
     reindexed.save()
     after = reindexed.stats()
+    mismatch = reindexed.backend_vector_mismatches()
 
     click.echo("Reindex complete.")
-    click.echo(f"  Target backend: {target_backend} / {target_model} / dim={target_dim}")
+    click.echo(f"  Backend (resolved): {resolved_backend} / {resolved_model} / dim={resolved_dim}")
     click.echo(f"  Tasks re-embedded: {reembedded} (skipped {skipped_dupes} duplicates)")
     click.echo(f"  Insights preserved: {before['insights']} → {after['insights']}")
     click.echo(f"  Edges preserved: {before['edges']} → {after['edges']}")
     click.echo(f"  Store path: {reindexed.root_path}")
+    if mismatch["backend"] or mismatch["dim"]:
+        click.echo(
+            f"  WARNING: {mismatch['backend']} backend / {mismatch['dim']} dim "
+            "vector mismatches remain — some nodes could not be re-embedded.",
+        )
+    else:
+        click.echo("  Vectors verified against manifest: OK")
 
 
 # ---------------------------------------------------------------------------

@@ -177,10 +177,12 @@ def ingest_one_iflow(
     if parsed.get("receiver"):
         recognized.append({"component": "receiver", "fidelity": "simulated"})
     for step in parsed.get("steps", []):
-        recognized.append({
-            "component": f"step:{step.get('type', 'unknown')}",
-            "fidelity": step.get("fidelity", "simulated"),
-        })
+        recognized.append(
+            {
+                "component": f"step:{step.get('type', 'unknown')}",
+                "fidelity": step.get("fidelity", "simulated"),
+            }
+        )
 
     # Redact IR
     redactor = Redactor()
@@ -188,7 +190,9 @@ def ingest_one_iflow(
 
     # Write flow.yaml
     (out_dir / "flow.yaml").write_text(
-        yaml.safe_dump(redacted_ir, sort_keys=False, default_flow_style=False, allow_unicode=True),
+        yaml.safe_dump(
+            redacted_ir, sort_keys=False, default_flow_style=False, allow_unicode=True
+        ),
         encoding="utf-8",
     )
 
@@ -239,7 +243,9 @@ def ingest_one_iflow(
     )
 
     # Persist a task node to the EMG store
-    node_types = [n.get("type", "") for n in redacted_ir.get("spec", {}).get("nodes", [])]
+    node_types = [
+        n.get("type", "") for n in redacted_ir.get("spec", {}).get("nodes", [])
+    ]
     nr = NormalizedRequirement(
         intent="codejam-artifact",
         raw=f"CodeJam artifact: {iflw_name}",
@@ -254,6 +260,10 @@ def ingest_one_iflow(
         task_id=f"codejam-{artifact_id}",
         project_id="codejam-corpus",
         insight_ref=None,
+        # Public Apache-2.0 CodeJam material is organization-wide knowledge:
+        # indexing it project-private makes it invisible to every other
+        # project's cross-task retrieval (OW-033 fix).
+        confidentiality_scope="organization",
     )
 
     return IngestionResult(
@@ -285,9 +295,12 @@ def main() -> int:
 
     if not args.codejam_root.is_dir():
         print(f"FAIL: CodeJam repo not found at {args.codejam_root}", file=sys.stderr)
-        print("Clone with: git clone --depth 1 "
-              "https://github.com/SAP-samples/connecting-systems-services-integration-suite-codejam.git "
-              f"{args.codejam_root}", file=sys.stderr)
+        print(
+            "Clone with: git clone --depth 1 "
+            "https://github.com/SAP-samples/connecting-systems-services-integration-suite-codejam.git "
+            f"{args.codejam_root}",
+            file=sys.stderr,
+        )
         return 2
 
     print(f"CodeJam root: {args.codejam_root}")
@@ -305,12 +318,16 @@ def main() -> int:
     # Load (or create) the durable EMG store
     emg_store = build_emg_store(root=args.emg_store_root, create_if_missing=True)
     emg_store.load()
-    print(f"EMG store: backend={emg_store.manifest().embedding_backend} "
-          f"dim={emg_store.manifest().embedding_dim}")
+    print(
+        f"EMG store: backend={emg_store.manifest().embedding_backend} "
+        f"dim={emg_store.manifest().embedding_dim}"
+    )
     print()
 
     # Walk each ZIP, extract iFlows, ingest each
-    seen_iflows: set[str] = set()  # dedup by sha256(content) — same iFlow may appear in multiple ZIPs
+    seen_iflows: set[str] = (
+        set()
+    )  # dedup by sha256(content) — same iFlow may appear in multiple ZIPs
     results: list[IngestionResult] = []
 
     for zip_path, _ in zip_paths:
@@ -318,21 +335,25 @@ def main() -> int:
         for iflw_name, iflw_bytes in iflows:
             content_hash = hashlib.sha256(iflw_bytes).hexdigest()
             if content_hash in seen_iflows:
-                results.append(IngestionResult(
-                    artifact_id=normalize_artifact_id(iflw_name),
-                    source_zip=str(zip_path),
-                    iflw_path=iflw_name,
-                    status="skipped",
-                    reason="duplicate (same content hash)",
-                ))
+                results.append(
+                    IngestionResult(
+                        artifact_id=normalize_artifact_id(iflw_name),
+                        source_zip=str(zip_path),
+                        iflw_path=iflw_name,
+                        status="skipped",
+                        reason="duplicate (same content hash)",
+                    )
+                )
                 continue
             seen_iflows.add(content_hash)
             result = ingest_one_iflow(iflw_name, iflw_bytes, zip_path, emg_store)
             results.append(result)
             status_marker = "✓" if result.status == "imported" else "⊘"
-            print(f"  {status_marker} [{result.status}] {iflw_name} "
-                  f"→ {result.out_dir or '(skipped)'} "
-                  f"({result.recognized_count} recognized, {result.unsupported_count} unsupported)")
+            print(
+                f"  {status_marker} [{result.status}] {iflw_name} "
+                f"→ {result.out_dir or '(skipped)'} "
+                f"({result.recognized_count} recognized, {result.unsupported_count} unsupported)"
+            )
 
     emg_store.save()
     print()
@@ -352,9 +373,13 @@ def main() -> int:
     # WP-08 B-001 acceptance check: ≥ 8 distinct artifacts OR a written inventory
     imported_count = sum(1 for r in results if r.status == "imported")
     if imported_count >= 8:
-        print(f"\nWP-08 B-001 acceptance: ✅ ≥ 8 CodeJam artifacts imported ({imported_count})")
+        print(
+            f"\nWP-08 B-001 acceptance: ✅ ≥ 8 CodeJam artifacts imported ({imported_count})"
+        )
     else:
-        print(f"\nWP-08 B-001 acceptance: ⚠️ only {imported_count} imported (target: ≥ 8)")
+        print(
+            f"\nWP-08 B-001 acceptance: ⚠️ only {imported_count} imported (target: ≥ 8)"
+        )
         print("  See skipped/failed entries above — every gap is documented.")
 
     return 0

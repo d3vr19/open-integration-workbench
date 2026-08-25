@@ -197,3 +197,224 @@ def test_create_embedder_unknown_backend_raises() -> None:
     """Unknown backend name raises ValueError."""
     with pytest.raises(ValueError, match="unknown embedding backend"):
         create_embedder("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# OW-033: strict mode, honesty flags, backend probe
+# ---------------------------------------------------------------------------
+
+
+def test_strict_embedding_mode_parses_env(monkeypatch) -> None:
+    """OIW_EMBEDDING_STRICT accepts 1/true/yes/on (case-insensitive)."""
+    from oiw.emg.embedding import strict_embedding_mode
+
+    for val in ("1", "true", "YES", "on", "True"):
+        monkeypatch.setenv("OIW_EMBEDDING_STRICT", val)
+        assert strict_embedding_mode() is True, f"{val!r} should be truthy"
+    monkeypatch.delenv("OIW_EMBEDDING_STRICT")
+    assert strict_embedding_mode() is False
+    monkeypatch.setenv("OIW_EMBEDDING_STRICT", "0")
+    assert strict_embedding_mode() is False
+
+
+def test_gemma_strict_raises_instead_of_pseudo_fallback(monkeypatch) -> None:
+    """With OIW_EMBEDDING_STRICT=1, an unloadable model RAISES — no silent pseudo vectors."""
+    from oiw.emg import embedding as emb_mod
+
+    monkeypatch.setattr(emb_mod, "_ST_IMPORT_OK", False)
+    monkeypatch.setattr(emb_mod, "_ST_IMPORT_ATTEMPTED", True)
+    monkeypatch.setattr(emb_mod, "_ST_IMPORT_ERROR", "ImportError forced by test")
+    monkeypatch.setenv("OIW_EMBEDDING_STRICT", "1")
+
+    gemma = GemmaEmbedder(dim=128)
+    with pytest.raises(RuntimeError, match="OIW_EMBEDDING_STRICT"):
+        gemma.embed(_make_req())
+
+
+def test_gemma_non_strict_records_pseudo_flag(monkeypatch) -> None:
+    """Without strict mode the fallback still works, and last_embed_pseudo tells the truth."""
+    from oiw.emg import embedding as emb_mod
+
+    monkeypatch.setattr(emb_mod, "_ST_IMPORT_OK", False)
+    monkeypatch.setattr(emb_mod, "_ST_IMPORT_ATTEMPTED", True)
+    monkeypatch.delenv("OIW_EMBEDDING_STRICT", raising=False)
+
+    gemma = GemmaEmbedder(dim=128)
+    assert gemma.last_embed_pseudo is None  # unknown before first embed
+    gemma.embed(_make_req())
+    assert gemma.last_embed_pseudo is True
+
+
+def test_gemma_real_path_clears_pseudo_flag(monkeypatch) -> None:
+    """A successful model encode records last_embed_pseudo=False."""
+    gemma = GemmaEmbedder(dim=64)
+
+    class _FakeModel:
+        def encode(self, text: str, normalize_embeddings: bool = True):
+            return [0.1] * 768
+
+    monkeypatch.setattr(gemma, "_load_model", lambda: None)
+    gemma._model = _FakeModel()
+
+    emb = gemma.embed(_make_req())
+    assert gemma.last_embed_pseudo is False
+    # Matryoshka truncation to the configured dim still applies
+    assert len(emb.vector) == 64
+
+
+def test_fastembed_strict_raises_instead_of_tfidf_padding(monkeypatch) -> None:
+    """With OIW_EMBEDDING_STRICT=1, fastembed unavailability RAISES instead of padding TF-IDF."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "fastembed":
+            raise ImportError("forced by test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setenv("OIW_EMBEDDING_STRICT", "1")
+
+    fe = FastembedEmbedder(dim=384)
+    with pytest.raises(RuntimeError, match="OIW_EMBEDDING_STRICT"):
+        fe.embed(_make_req())
+
+
+def test_semantic_backend_flags_are_honest() -> None:
+    """TF-IDF is keyword-level (semantic=False); Gemma/Fastembed are semantic."""
+    assert RequirementEmbedder().semantic_backend is False
+    assert GemmaEmbedder().semantic_backend is True
+    assert FastembedEmbedder().semantic_backend is True
+
+
+def test_probe_backend_reports_tfidf_usable() -> None:
+    from oiw.emg.embedding import probe_backend
+
+    usable, reason = probe_backend("tfidf")
+    assert usable is True
+    assert "always available" in reason
+
+
+def test_probe_backend_unknown_backend_is_not_usable() -> None:
+    from oiw.emg.embedding import probe_backend
+
+    usable, reason = probe_backend("warp-drive")
+    assert usable is False
+    assert "unknown backend" in reason
+
+
+def test_probe_backend_gemma_false_when_st_missing(monkeypatch) -> None:
+    from oiw.emg import embedding as emb_mod
+
+    monkeypatch.setattr(emb_mod, "_ST_IMPORT_OK", False)
+    monkeypatch.setattr(emb_mod, "_ST_IMPORT_ATTEMPTED", True)
+    monkeypatch.setattr(emb_mod, "_ST_IMPORT_ERROR", "ImportError forced by test")
+
+    usable, reason = emb_mod.probe_backend("gemma")
+    assert usable is False
+    assert "sentence-transformers not installed" in reason
+
+
+def test_build_emg_store_default_env_uses_real_tfidf(tmp_path, monkeypatch) -> None:
+    """Without OIW_EMBEDDING_BACKEND, build_emg_store keeps the TF-IDF embedder."""
+    from oiw.emg.store import JsonlEmgStore, build_emg_store
+
+    for var in ("OIW_EMBEDDING_BACKEND", "OIW_EMBEDDING_MODEL", "OIW_EMBEDDING_DIM"):
+        monkeypatch.delenv(var, raising=False)
+
+    store = build_emg_store(root=tmp_path / "emg", create_if_missing=True)
+    assert isinstance(store, JsonlEmgStore)
+    assert store.manifest().embedding_backend == "tfidf"
+    assert store._embedder.semantic_backend is False  # genuinely TF-IDF
+
+
+def test_build_emg_store_honors_declared_backend(tmp_path, monkeypatch) -> None:
+    """OIW_EMBEDDING_BACKEND=gemma constructs a GemmaEmbedder (not a lying TF-IDF)."""
+    from oiw.emg.store import build_emg_store
+
+    monkeypatch.setenv("OIW_EMBEDDING_BACKEND", "gemma")
+    monkeypatch.setenv("OIW_EMBEDDING_MODEL", "google/embeddinggemma-300m")
+    monkeypatch.setenv("OIW_EMBEDDING_DIM", "768")
+
+    store = build_emg_store(root=tmp_path / "emg", create_if_missing=True)
+    assert store._embedder.backend_name == "gemma"
+    assert store.manifest().embedding_backend == "gemma"
+
+
+def test_build_emg_store_unknown_backend_raises_loudly(tmp_path, monkeypatch) -> None:
+    """An unknown OIW_EMBEDDING_BACKEND fails at construction — never silently TF-IDF."""
+    from oiw.emg.store import build_emg_store
+
+    monkeypatch.setenv("OIW_EMBEDDING_BACKEND", "bogus-backend")
+
+    with pytest.raises(ValueError, match="unknown embedding backend"):
+        build_emg_store(root=tmp_path / "emg", create_if_missing=True)
+
+
+def test_store_backend_vector_mismatches_counts_liars(tmp_path) -> None:
+    """backend_vector_mismatches reports nodes whose sidecar/dim disagree with the manifest."""
+    from oiw.emg import store as store_mod
+    from oiw.emg.store import JsonlEmgStore
+
+    root = tmp_path / "emg"
+    store = JsonlEmgStore(root=root, embedding_dim=len(RequirementEmbedder.VOCABULARY))
+    store.load()
+    node = store.upsert_task_from_requirement(_make_req(), task_id="t-1")
+
+    assert store.backend_vector_mismatches() == {"backend": 0, "dim": 0}
+
+    # Simulate a vector written by a different backend than the manifest claims
+    store_mod._NODE_BACKENDS[node.id] = "gemma"
+    assert store.backend_vector_mismatches()["backend"] == 1
+    assert store.backend_vector_mismatches()["dim"] == 0
+
+    # Simulate a wrong-dimension vector
+    store_mod._NODE_BACKENDS[node.id] = "tfidf"
+    node.requirement_embedding = [0.0] * 999
+    assert store.backend_vector_mismatches()["dim"] == 1
+
+
+# ---------------------------------------------------------------------------
+# OW-033: EMGRetriever embedder resolution
+# ---------------------------------------------------------------------------
+
+
+def test_retriever_defaults_to_tfidf_without_env(monkeypatch) -> None:
+    """No env config → TF-IDF query embedder (CI behavior unchanged)."""
+    from oiw.emg.embedding import RequirementEmbedder
+    from oiw.emg.retrieval import EMGRetriever
+
+    monkeypatch.delenv("OIW_EMBEDDING_BACKEND", raising=False)
+    r = EMGRetriever(task_store=object())
+    assert isinstance(r._embedder, RequirementEmbedder)
+
+
+def test_retriever_honors_env_backend(monkeypatch) -> None:
+    """OIW_EMBEDDING_BACKEND=gemma → the retriever queries with a GemmaEmbedder."""
+    from oiw.emg.embedding import GemmaEmbedder
+    from oiw.emg.retrieval import EMGRetriever
+
+    monkeypatch.setenv("OIW_EMBEDDING_BACKEND", "gemma")
+    r = EMGRetriever(task_store=object())
+    assert isinstance(r._embedder, GemmaEmbedder)
+
+
+def test_retriever_explicit_embedder_beats_env(monkeypatch) -> None:
+    """An explicitly passed embedder always wins over env resolution."""
+    from oiw.emg.embedding import RequirementEmbedder
+    from oiw.emg.retrieval import EMGRetriever
+
+    monkeypatch.setenv("OIW_EMBEDDING_BACKEND", "gemma")
+    mine = RequirementEmbedder()
+    r = EMGRetriever(task_store=object(), embedder=mine)
+    assert r._embedder is mine
+
+
+def test_retriever_unknown_env_backend_raises_loudly(monkeypatch) -> None:
+    """A configured-but-unbuildable backend RAISES — never silently TF-IDF."""
+    from oiw.emg.retrieval import EMGRetriever
+
+    monkeypatch.setenv("OIW_EMBEDDING_BACKEND", "bogus-backend")
+    with pytest.raises(RuntimeError, match="would silently return garbage"):
+        EMGRetriever(task_store=object())

@@ -347,11 +347,19 @@ class JsonlEmgStore:
         project_id: str | None = None,
         insight_ref: str | None = None,
         reward: dict[str, Any] | None = None,
+        approval: str = "PROJECT_APPROVED",
+        confidentiality_scope: str = "project",
     ) -> Any:
         """Create + persist a task node from a requirement.
 
         Convenience wrapper that embeds the requirement (using the
         configured embedder) and stamps `embeddingBackend` on the node.
+
+        `confidentiality_scope`: "project" (default) nodes are only
+        retrievable within their own project; "organization" nodes are
+        global knowledge (seed corpus, public material). Seed-corpus
+        ingestion MUST pass "organization" — a CodeJam pattern indexed as
+        project-private is invisible to every other project's retrieval.
         """
         from .task_store import TaskMemoryNode
 
@@ -363,8 +371,9 @@ class JsonlEmgStore:
             normalized_requirement=requirement.to_dict(),
             insight_ref=insight_ref,
             reward=reward or {},
-            approval="PROJECT_APPROVED",
+            approval=approval,
             project_id=project_id,
+            confidentiality_scope=confidentiality_scope,
         )
         # Stamp backend via a sidecar attribute (dataclass is frozen-ish;
         # we use a module-level dict to track backends per node id).
@@ -401,6 +410,27 @@ class JsonlEmgStore:
             "tasks": self._task_store.count(),
             "edges": self._edge_store.count(),
         }
+
+    def backend_vector_mismatches(self) -> dict[str, int]:
+        """Count stored task vectors that DON'T match the manifest claim.
+
+        Honesty check for `oiw emg status`: a node can disagree with the
+        manifest in two ways — its sidecar embeddingBackend differs from
+        the manifest backend, or its vector length differs from the
+        manifest dim. Either way the vector is not what the manifest says
+        it is. After an honest reindex both counts are 0.
+        """
+        backend_mismatch = 0
+        dim_mismatch = 0
+        want_backend = self._manifest.embedding_backend
+        want_dim = self._manifest.embedding_dim
+        for node_id, node in self._task_store._nodes.items():
+            if _NODE_BACKENDS.get(node_id, "tfidf") != want_backend:
+                backend_mismatch += 1
+            vec = getattr(node, "requirement_embedding", None) or []
+            if vec and len(vec) != want_dim:
+                dim_mismatch += 1
+        return {"backend": backend_mismatch, "dim": dim_mismatch}
 
     @property
     def compatible(self) -> bool:
@@ -664,14 +694,19 @@ def build_emg_store(
       3. $PWD/.oiw/emg/             (project-scoped)
       4. ./oiw-emg/                  (fallback)
 
-    Embedding backend config (A-002, future):
+    Embedding backend config (A-002 + OW-033 honesty fix):
       OIW_EMBEDDING_BACKEND=gemma|fastembed|openai|tfidf  (default: tfidf in CI;
                                                             gemma when extras installed)
       OIW_EMBEDDING_MODEL=...
       OIW_EMBEDDING_DIM=...
 
-    For now defaults to the existing TF-IDF RequirementEmbedder so the
-    store is functional without torch. A-002 swaps this for Gemma.
+    When the resolved backend is NOT tfidf, the real embedder is
+    constructed via `create_embedder()` so stored vectors genuinely come
+    from the backend named in the manifest. If that backend is
+    unavailable (deps missing, model not cached), this RAISES — callers
+    (CLI, server startup) surface the error loudly instead of writing
+    TF-IDF vectors under a lying manifest. Pass `embedder=` explicitly to
+    override (tests do this).
     """
     if root is None:
         ws = os.environ.get("OIW_WORKSPACE")
@@ -685,6 +720,17 @@ def build_emg_store(
     backend = os.environ.get("OIW_EMBEDDING_BACKEND", "tfidf")
     model = os.environ.get("OIW_EMBEDDING_MODEL", "oiw-builtin-tfidf")
     dim = int(os.environ.get("OIW_EMBEDDING_DIM", "53"))  # matches RequirementEmbedder.VOCABULARY length
+
+    if embedder is None and backend != "tfidf":
+        from .embedding import create_embedder
+
+        kwargs: dict[str, Any] = {}
+        if backend == "gemma":
+            kwargs["model_name"] = model if model != "oiw-builtin-tfidf" else None
+            kwargs["dim"] = dim
+        elif backend == "fastembed":
+            kwargs["dim"] = dim
+        embedder = create_embedder(backend, **kwargs)
 
     return JsonlEmgStore(
         root=root,
