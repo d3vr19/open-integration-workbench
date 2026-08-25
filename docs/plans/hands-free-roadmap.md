@@ -48,11 +48,27 @@ These come from WP-08 and the threat model; every phase below operates inside th
 ### Phase 0 — Fork & baseline (½ day)
 
 - [x] Fork under `d3vr19`; remotes `origin=d3vr19/…`, `upstream=hehenaice/…`.
-- [ ] Python 3.12 venv (uv-managed) — local Arch system Python is 3.14;
+- [x] Python 3.12 venv (uv-managed) — local Arch system Python is 3.14;
       torch support there is not dependable, CI uses 3.12.
-- [ ] Baseline proof on the fork: all four pytest suites (cli, server,
+- [x] Baseline proof on the fork: all four pytest suites (cli, server,
       mcp-server, gateway) + seed-corpus suite + ruff + SPA build green.
       Record results in this file before any functional change.
+
+**Baseline results (2026-08-25, CPython 3.12.14 via uv):**
+
+| Suite | Result |
+|---|---|
+| `apps/cli` pytest | 381 passed, 6 skipped |
+| `apps/server-python-prototype` pytest (`OIW_WORKSPACE=examples`) | 87 passed |
+| `apps/mcp-server` pytest | 20 passed |
+| `services/model-gateway-python` pytest | 43 passed |
+| `packages/seed-corpus` pytest | 132 passed |
+| ruff check + format (CI scope: apps/cli, server, mcp-server, gateway) | clean |
+| SPA build (`tsc -b && vite build`) | ✓ 391 kB bundle |
+
+Note: ruff reports 59 pre-existing E402s under `packages/seed-corpus/`
+(sys.path-insert idiom); out of CI lint scope by upstream design — do not
+"fix" opportunistically, it would poison diffs against upstream.
 
 ### Phase 1 — Real embeddings, loudly (OW-033) *(2–3 days)*
 
@@ -196,3 +212,6 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
 - 2026-08-25 — P0.0 — Plan ratified; fork `d3vr19/open-integration-workbench`
   created; remotes wired (`origin`=fork, `upstream`=hehenaice); branch
   `plans/hands-free-roadmap` opened with this document.
+- 2026-08-25 — P0 complete — uv-managed CPython 3.12.14 venv at `.venv/`;
+  all editable installs; baseline green (see table above). Fork PR #1 open
+  for visibility. Starting Phase 1 (real embeddings).
