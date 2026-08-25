@@ -302,3 +302,122 @@ def test_implement_dry_run_returns_null_trajectory_id(temp_workspace, client: Te
     assert r.status_code == 200
     body = r.json()
     assert body["trajectoryId"] is None
+
+
+# ---------------------------------------------------------------------
+# OW-032 / WP-08 PR-10: truthful EMG metadata on agent endpoints
+# ---------------------------------------------------------------------
+
+
+def _seed_durable_emg_store(monkeypatch, tmp_path: Path):
+    """Build a real JsonlEmgStore holding one approved insight whose expert
+    workflow contains the validator component, and install it as the
+    server's durable store."""
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
+
+    from oiw.emg.insight.compiler import InsightProvenance, IntraTaskInsight
+    from oiw.emg.promotion import InsightRecord, MemoryPromotionState
+    from oiw.emg.store import JsonlEmgStore
+
+    insight = IntraTaskInsight(
+        task_id="codejam-order-validation",
+        successful_workflow=[
+            {"action": ["flow.patch", "addNode", "sender.http"]},
+            {"action": ["flow.patch", "addNode", "validator.json-schema"]},
+            {"action": ["flow.patch", "addNode", "receiver.http"]},
+        ],
+        corrections=[],
+        provenance=InsightProvenance(
+            exploration_trajectory_id="traj-expl",
+            expert_trajectory_id="traj-expert-codejam",
+            match_stage="rule-based",
+        ),
+    )
+    record = InsightRecord(
+        id="insight-emg-api-test-1",
+        state=MemoryPromotionState.PROJECT_APPROVED,
+        trajectory_id="traj-expert-codejam",
+        project_id=None,  # global knowledge → retrievable cross-project
+        insight=insight,
+    )
+
+    from oiw.emg.embedding import RequirementEmbedder
+
+    store = JsonlEmgStore(
+        root=tmp_path / "emg",
+        embedder=RequirementEmbedder(),
+        embedding_backend="tfidf",
+        embedding_model="oiw-builtin-tfidf",
+        embedding_dim=len(RequirementEmbedder.VOCABULARY),
+    )
+    store.load()
+    store.upsert_insight(record)
+    monkeypatch.setattr("oiw_server.routes.emg._EMG_STORE", store)
+    return store
+
+
+def test_plan_returns_none_emg_without_durable_store(temp_workspace, client: TestClient, monkeypatch) -> None:
+    """Fresh workspace (no store loaded): emg is None — 'no store' ≠ 'no hit'."""
+    monkeypatch.setattr("oiw_server.routes.emg._EMG_STORE", None)
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:plan",
+        json={"requirement": "Add JSON schema validation to the order flow"},
+    )
+    assert r.status_code == 200
+    assert r.json()["emg"] is None
+
+
+def test_plan_reports_truthful_emg_hit(
+    temp_workspace, client: TestClient, tmp_path: Path, monkeypatch
+) -> None:
+    """With a seeded durable store, plan returns used=true + confidence ≥ 0.3."""
+    _seed_durable_emg_store(monkeypatch, tmp_path)
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:plan",
+        json={"requirement": "Add JSON schema validation to the order flow"},
+    )
+    assert r.status_code == 200
+    emg = r.json()["emg"]
+    assert emg is not None
+    assert emg["used"] is True
+    assert emg["confidence"] >= 0.3
+    assert emg["insightId"] == "insight-emg-api-test-1"
+    assert emg["taskId"] == "codejam-order-validation"
+    assert emg["provenance"]["matchStage"] == "rule-based"
+
+
+def test_implement_reports_truthful_emg_hit(
+    temp_workspace, client: TestClient, tmp_path: Path, monkeypatch
+) -> None:
+    """The implement endpoint carries the same truthful emg block."""
+    _seed_durable_emg_store(monkeypatch, tmp_path)
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:implement",
+        json={
+            "requirement": "Add JSON schema validation to the order flow",
+            "flowId": "order-to-s4",
+            "dryRun": True,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["emg"] is not None
+    assert body["emg"]["used"] is True
+
+
+def test_emg_miss_reports_used_false_not_null(
+    temp_workspace, client: TestClient, tmp_path: Path, monkeypatch
+) -> None:
+    """Store loaded but nothing matches: used=false with a reason — never a silent lie."""
+    _seed_durable_emg_store(monkeypatch, tmp_path)
+    r = client.post(
+        "/api/v1/projects/order-to-s4/agents:plan",
+        json={"requirement": "Tell me a joke about integration flows"},
+    )
+    assert r.status_code == 200
+    emg = r.json()["emg"]
+    assert emg is not None
+    assert emg["used"] is False
+    assert emg["reason"]

@@ -227,6 +227,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ requirement, flowId, dryRun }),
     }),
+
+  // ---------------------------------------------------------------
+  // EMG endpoints (WP-06 E-003 + WP-08 PR-3/PR-10).
+  // ---------------------------------------------------------------
+  emgStats: () => fetchJSON<EmgStats>('/emg/stats'),
+  emgInsights: (projectId: string) =>
+    fetchJSON<EmgInsightSummary[]>(`/projects/${projectId}/emg/insights`),
+  emgInsightDetail: (insightId: string) =>
+    fetchJSON<EmgInsightDetail>(`/emg/insights/${encodeURIComponent(insightId)}`),
 };
 
 // -----------------------------------------------------------------
@@ -254,6 +263,7 @@ export interface AgentPlanResponse {
   steps: PlanStep[];
   assumptions: string[];
   risks: string[];
+  emg?: EmgHit | null;
 }
 
 export interface StepResult {
@@ -276,4 +286,52 @@ export interface AgentImplementResponse {
   success: boolean;
   errors: string[];
   trajectoryId?: string | null;
+  emg?: EmgHit | null;
+}
+
+// -----------------------------------------------------------------
+// EMG types (WP-08 PR-10 / OW-032). The UI must render what the
+// server actually reports — never a hardcoded guess.
+// -----------------------------------------------------------------
+
+/** Truthful EMG retrieval metadata attached to agent plan/implement responses. */
+export interface EmgHit {
+  used: boolean;
+  confidence: number;
+  insightId?: string | null;
+  taskId?: string | null;
+  reason: string;
+  provenance?: {
+    expertTrajectoryId?: string | null;
+    matchStage?: string | null;
+  } | null;
+}
+
+export interface EmgInsightSummary {
+  id: string;
+  taskId: string;
+  confidence: number;
+  supportCount: number;
+  workflowStepCount: number;
+  correctionCount: number;
+  provenance: Record<string, unknown> | null;
+  approval: string;
+}
+
+export interface EmgInsightDetail extends EmgInsightSummary {
+  successfulWorkflow: Array<Record<string, unknown>>;
+  corrections: Array<Record<string, unknown>>;
+}
+
+export interface EmgStats {
+  totalTrajectories: number;
+  approvedInsights: number;
+  crossTaskEdges: number;
+  retrievalHitRate: number;
+  adapterFamilies: string[];
+  embeddingBackend: string;
+  embeddingModel: string;
+  embeddingDim: number;
+  storePath: string;
+  compatible: boolean;
 }

@@ -10,13 +10,32 @@ interface Insight {
   provenance: Record<string, unknown> | null;
 }
 
-export function InsightCard({ insight }: { insight: Insight }) {
+interface InsightCardProps {
+  insight: Insight;
+  /** WP-08 PR-10: clicking the card toggles the TrajectoryViewer below it. */
+  expanded?: boolean;
+  onToggle?: () => void;
+}
+
+export function InsightCard({ insight, expanded = false, onToggle }: InsightCardProps) {
   const confPct = Math.round(insight.confidence * 100);
   const confColor = confPct >= 80 ? 'var(--oiw-success)' : confPct >= 50 ? 'var(--oiw-warning)' : 'var(--oiw-error)';
 
   return (
-    <div className="insight-card">
-      <div className="insight-card__header">
+    <div className={`insight-card ${expanded ? 'insight-card--expanded' : ''}`}>
+      <div
+        className="insight-card__header"
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle?.();
+          }
+        }}
+      >
         <span className="insight-card__name">{insight.taskId}</span>
         <span className="insight-card__support" title="Support count (times reused)">
           ×{insight.supportCount}

@@ -4,18 +4,26 @@ Spec ref: §12.2 (Agent Pipeline), §21.1 (POST /projects/{id}/agents:plan,
 POST /projects/{id}/agents:implement).
 WP-04 Task 6: every flow.patch step now carries baseRevision = current HEAD.
 OW-027: POST /agents:implement now returns trajectoryId.
+OW-032 / WP-08 PR-10: both endpoints consult the durable EMG store and
+return a truthful `emg` block (used / confidence / insightId) so the UI's
+⚡ EMG-hit badge reflects reality instead of a hardcoded false.
 """
 
 from __future__ import annotations
 
+import logging
 import subprocess
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..agent import execute_plan, interpret_requirement, plan_implementation
 from ..workspace import load_project
+from . import emg as emg_routes
+
+logger = logging.getLogger("oiw_server.agent")
 
 router = APIRouter(prefix="/api/v1", tags=["Agent"])
 
@@ -34,6 +42,9 @@ class PlanResponse(BaseModel):
     steps: list[dict]
     assumptions: list[str]
     risks: list[str]
+    # OW-032: truthful EMG retrieval metadata. None when no durable store
+    # is loaded; otherwise {used, confidence, insightId, taskId, reason}.
+    emg: dict | None = None
 
 
 class ImplementRequest(BaseModel):
@@ -56,6 +67,7 @@ class ImplementResponse(BaseModel):
     success: bool
     errors: list[str]
     trajectoryId: str | None = None
+    emg: dict | None = None
 
 
 def _git_head_sha(root) -> str:
@@ -72,6 +84,90 @@ def _git_head_sha(root) -> str:
         return "unknown"
 
 
+def _emg_lookup(project_id: str, requirement_text: str) -> dict | None:
+    """Consult the durable EMG store for a matching expert insight (OW-032).
+
+    Read-only lookup — mechanics-first INJECTION stays with the CLI
+    orchestrator (`oiw agent`); this route only reports what retrieval
+    found so the UI can be honest. Returns None when no durable store is
+    loaded (fresh workspaces), so callers can distinguish "no store" from
+    "store present but nothing matched".
+    """
+    store = emg_routes._EMG_STORE
+    if store is None:
+        return None
+
+    # Normalize with the CLI's deterministic interpreter so component
+    # extraction matches what the EMG corpus was built from.
+    lookup_req: Any = None
+    try:
+        from oiw.agent.interpreter import (  # type: ignore[import-not-found]
+            interpret_requirement_fallback,
+        )
+
+        lookup_req = interpret_requirement_fallback(requirement_text)
+    except Exception as exc:
+        logger.warning("CLI interpreter unavailable for EMG lookup: %s", exc)
+
+    if lookup_req is None:
+        return {
+            "used": False,
+            "confidence": 0.0,
+            "insightId": None,
+            "taskId": None,
+            "reason": "cli interpreter unavailable",
+        }
+
+    try:
+        from oiw.emg.retrieval import EMGRetriever  # type: ignore[import-not-found]
+
+        retriever = EMGRetriever(
+            store=store._insight_store,
+            task_store=store._task_store,
+            edge_store=store._edge_store,
+            embedder=getattr(store, "_embedder", None),
+        )
+        result = retriever.retrieve(lookup_req, project_id=project_id)
+        return _retrieval_payload(result, store, project_id)
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.warning("EMG lookup failed (reporting used=false): %s", exc)
+        return {
+            "used": False,
+            "confidence": 0.0,
+            "insightId": None,
+            "taskId": None,
+            "reason": f"lookup error: {exc}",
+        }
+
+
+def _retrieval_payload(result: Any, store: Any, project_id: str) -> dict:
+    """Shape an EMGRetriever result into the API's `emg` block."""
+    payload: dict = {
+        "used": bool(result.found),
+        "confidence": round(float(result.confidence), 4),
+        "insightId": None,
+        "taskId": None,
+        "reason": result.reason,
+    }
+    if result.insight is not None:
+        payload["taskId"] = getattr(result.insight, "task_id", None)
+        prov = getattr(result.insight, "provenance", None)
+        if prov is not None:
+            payload["provenance"] = {
+                "expertTrajectoryId": getattr(prov, "expert_trajectory_id", None),
+                "matchStage": getattr(prov, "match_stage", None),
+            }
+        # Resolve the insight's record id (search project-scoped first).
+        for scope in (project_id, None):
+            for rec in store.list_insights(project_id=scope):
+                if rec.insight is result.insight:
+                    payload["insightId"] = rec.id
+                    break
+            if payload["insightId"] is not None:
+                break
+    return payload
+
+
 @router.post("/projects/{project_id}/agents:plan", response_model=PlanResponse)
 def plan_endpoint(project_id: str, req: PlanRequest) -> PlanResponse:
     """Generate an implementation plan from a natural-language requirement.
@@ -79,6 +175,7 @@ def plan_endpoint(project_id: str, req: PlanRequest) -> PlanResponse:
     Spec §12.2: Requirements Interpreter → Integration Planner.
     WP-04 Task 6: baseRevision captured at planning time and injected
     into every flow.patch step.
+    OW-032: response carries truthful EMG retrieval metadata.
     """
     try:
         project = load_project(project_id)
@@ -88,12 +185,14 @@ def plan_endpoint(project_id: str, req: PlanRequest) -> PlanResponse:
     base_revision = _git_head_sha(project.root)
     normalized = interpret_requirement(req.requirement)
     plan = plan_implementation(normalized, project_id, req.flowId, base_revision=base_revision)
+    emg_info = _emg_lookup(project_id, req.requirement)
 
     return PlanResponse(
         requirement=plan.requirement.to_dict(),
         steps=[s.to_dict() for s in plan.steps],
         assumptions=plan.assumptions,
         risks=plan.risks,
+        emg=emg_info,
     )
 
 
@@ -116,6 +215,7 @@ def implement_endpoint(project_id: str, req: ImplementRequest) -> ImplementRespo
     base_revision = _git_head_sha(project.root)
     normalized = interpret_requirement(req.requirement)
     plan = plan_implementation(normalized, project_id, req.flowId, base_revision=base_revision)
+    emg_info = _emg_lookup(project_id, req.requirement)
 
     if req.dryRun:
         return ImplementResponse(
@@ -124,6 +224,7 @@ def implement_endpoint(project_id: str, req: ImplementRequest) -> ImplementRespo
             success=True,
             errors=["dry run — no steps executed"],
             trajectoryId=None,
+            emg=emg_info,
         )
 
     result = execute_plan(plan)
@@ -149,6 +250,7 @@ def implement_endpoint(project_id: str, req: ImplementRequest) -> ImplementRespo
         success=result.success,
         errors=result.errors,
         trajectoryId=trajectory_id,
+        emg=emg_info,
     )
 
 
