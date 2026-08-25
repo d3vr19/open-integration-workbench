@@ -102,18 +102,25 @@ by trusting docs):**
 
 Server groundwork exists (startup load + enriched `/emg/stats`). Remaining:
 
-1. Agent routes (`oiw_server/routes/agent.py`) return `emgUsed` /
-   retrieval-hit metadata in `PlanResponse`/`ImplementResponse`. Today they
-   carry zero EMG references, which forces the hardcoded
-   `emgUsed={false}` in `App.tsx`.
-2. Web: EMG types move into `api.ts`; `EmgInsightPanel` renders the enriched
-   stats chip (`embeddingBackend · dim · compatible ✓`); truthful ⚡ badge
-   threaded CoPilotPanel→App.
-3. Finish `TrajectoryViewer` (currently an unimported stub) using
-   `GET /emg/insights/{id}`.
-4. Add missing CSS for `.insight-card*` / `.pattern-browser*`.
-5. Playwright e2e: non-empty insights panel + hit-badge truthfulness
-   (per OW-032 acceptance definition).
+1. [x] Agent routes (`oiw_server/routes/agent.py`) return a truthful `emg`
+   block (`used`/`confidence`/`insightId`/`taskId`/`provenance`) on both
+   plan and implement responses. `None` when no durable store is loaded,
+   so the UI can distinguish "fresh workspace" from "no hit". Retrieval
+   normalization uses the CLI's deterministic interpreter for component
+   parity with corpus building.
+2. [x] Web: EMG types live in `api.ts`; `EmgInsightPanel` renders the
+   enriched stats chip (`backend·dim ✓/⚠`); truthful ⚡ badge threaded
+   CoPilotPanel→App via an `onEmgHit` callback — the hardcoded
+   `emgUsed={false}` is gone.
+3. [x] Finished `TrajectoryViewer` (was an unimported stub): fetches
+   `GET /emg/insights/{id}`, renders expert workflow steps + corrections.
+4. [x] Added missing CSS for `.insight-card*` / `.pattern-browser*` /
+   `.trajectory-viewer*`.
+5. [x] Playwright e2e (`emg-insights.spec.ts`): panel counts must equal
+   API truth; badge visibility must equal the server's `emg.used` claim.
+   Verified green in BOTH scenarios: fresh empty workspace AND a
+   gemma-seeded 7-insight store (where the incompatible-backend chip
+   correctly shows ⚠ because the server process ran with TF-IDF env).
 
 ### Phase 3 — Tenant update-only write path (OW-031 / WP-08 PR-9, D-004) *(3–4 days)*
 
@@ -239,3 +246,12 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   - Dev env contract: `OIW_EMBEDDING_BACKEND=gemma`,
     `OIW_EMBEDDING_MODEL=unsloth/embeddinggemma-300m`, `OIW_EMBEDDING_DIM=768`,
     `OIW_EMBEDDING_STRICT=1` for any real learning work.
+- 2026-08-25 — P2 complete — Truthful EMG end-to-end (commit bde8b85,
+  branch wp08/pr10-emg-ui): agent routes report real retrieval results;
+  ⚡ badge driven by server metadata; TrajectoryViewer finished; honesty
+  chips (backend·dim·compatible) in the panel; 2 new Playwright tests
+  proving UI==API truth in empty + seeded scenarios. Process note: branch
+  was initially cut from a stale local main (pre-P1) — caught because the
+  new EMGRetriever embedder param "disappeared"; fixed by resetting onto
+  origin/main. Lesson recorded: always branch from origin/main, never
+  local main, on this fork.
