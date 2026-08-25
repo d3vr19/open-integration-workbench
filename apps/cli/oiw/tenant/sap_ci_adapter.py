@@ -1,9 +1,10 @@
-"""Real SAP Cloud Integration tenant adapter (WP-08 Track 0).
+"""Real SAP Cloud Integration tenant adapter (WP-08 Track 0 + PR-9 / D-004).
 
 Spec ref: §18 (Tenant Connectivity), §18.3 (Adapter Interface).
-WP-08 reference: Track 0 — BTP Tenant Smoke. Track C — Learn From Existing Tenant Artifacts.
+WP-08 reference: Track 0 — BTP Tenant Smoke. Track C — Learn From Existing
+Tenant Artifacts. Track D-004 (PR-9) — scoped update-only WRITE path.
 
-Scope of THIS implementation (read-only, GET-only):
+READ operations (Track 0/C):
 
   - connect():                validate Basic auth by hitting the service root.
   - list_packages():          GET /IntegrationPackages
@@ -12,25 +13,33 @@ Scope of THIS implementation (read-only, GET-only):
   - get_artifact_version(pkg_id): latest version of the first artifact in a package (drift hook)
   - get_artifact_digest(pkg_id): sha256 of the latest artifact ZIP bytes (drift hook)
 
-Operations that MUTATE the tenant are intentionally NOT implemented:
-  - upload_package(), deploy(), poll_deployment(), get_runtime_logs()
+WRITE operations (Track D-004) — UPDATE-ONLY, allowlist-gated:
 
-This is deliberate. Per WP-08 §C-004 ("Track C is GET-only. No
-upload_package, no DeployIntegrationArtifact. The tenant is a library,
-not a scratchpad.") we do not mutate the tenant in this track. Write
-operations remain NotImplementedError so any caller that hits them
-fails loudly instead of silently corrupting tenant state.
+  Per T0-003 the tenant is a library, not a scratchpad: this adapter can
+  only UPDATE the designtime content of an artifact that ALREADY EXISTS
+  inside a package that a human pre-created. It never creates packages,
+  never creates artifacts, never touches anything outside the allowlist.
+
+  - upload_package(pkg, archive, digest): PUT .../IntegrationDesigntimeArtifacts(Id,V)/$value
+  - deploy(pkg, version):        POST /IntegrationRuntimeArtifacts
+  - poll_deployment(id):         GET  /IntegrationRuntimeArtifacts('{id}')
+  - get_runtime_logs(pkg, since): GET /MessageProcessingLogs?$filter=...
+
+  The allowlist comes from `writable_packages=` or env
+  OIW_TENANT_WRITABLE_PACKAGES (comma-separated). An EMPTY allowlist
+  makes every write raise — failing loudly beats guessing. This is the
+  code-level embodiment of WP-08 §D-004 ("only against that package id").
 
 Auth: HTTP Basic with S-user credentials resolved from env vars:
   - OIW_TENANT_URL            (overrides profile.tenant_url)
   - OIW_TENANT_USER           (Basic auth username; also accepts OIW_CRED_<ref>_USERNAME)
   - OIW_TENANT_PASSWORD       (Basic auth password; also accepts OIW_CRED_<ref>_PASSWORD)
   - OIW_USE_REAL_TENANT=1     (enables this adapter in build_tenant_adapter())
+  - OIW_TENANT_WRITABLE_PACKAGES (allowlist for write ops; empty = read-only)
 
-The legacy OAuth2 client-credentials path documented in WP-08 T0-001
-remains a future task; Basic auth against the public OData API is
-sufficient for read-only inventory + artifact download and is what
-S-user credentials (S0026012658-style IDs) are issued for.
+SAP's OData endpoint may require a CSRF token for mutating requests; the
+adapter fetches one opportunistically (X-CSRF-Token: fetch on the service
+root) and attaches it to writes when the tenant issues one.
 """
 
 from __future__ import annotations
@@ -39,6 +48,7 @@ import base64
 import hashlib
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
@@ -102,6 +112,7 @@ class SapCiTenantAdapter:
         *,
         timeout_seconds: float = 30.0,
         client: httpx.AsyncClient | None = None,
+        writable_packages: list[str] | None = None,
     ):
         self._tenant_url = (tenant_url or "").rstrip("/")
         self._username = username or ""
@@ -111,6 +122,11 @@ class SapCiTenantAdapter:
         self._owns_client = client is None
         self._connected = False
         self._profile: EnvironmentProfile | None = None
+        # Track D-004: update-only write path. Empty/None = read-only
+        # (every write raises). Resolved against env in connect().
+        self._explicit_writable = list(writable_packages) if writable_packages else []
+        self._writable: list[str] = list(self._explicit_writable)
+        self._csrf_token: str | None = None
 
     # ------------------------------------------------------------------
     # Connection
@@ -123,6 +139,11 @@ class SapCiTenantAdapter:
     @property
     def tenant_url(self) -> str:
         return self._tenant_url
+
+    @property
+    def writable_packages(self) -> list[str]:
+        """Packages this adapter may mutate (allowlist; possibly empty)."""
+        return list(self._writable)
 
     def _basic_auth_header(self) -> dict[str, str]:
         if not self._username or not self._password:
@@ -158,9 +179,24 @@ class SapCiTenantAdapter:
         if not self._password and ref:
             self._password = os.environ.get(f"OIW_CRED_{ref_key}_PASSWORD", "")
 
+    def _resolve_writable_packages_from_env(self) -> None:
+        """Merge the explicit allowlist with OIW_TENANT_WRITABLE_PACKAGES.
+
+        Comma-separated package ids. Explicit constructor entries win
+        (deduped, order-preserving). An empty result means read-only.
+        """
+        env_raw = os.environ.get("OIW_TENANT_WRITABLE_PACKAGES", "")
+        env_pkgs = [p.strip() for p in env_raw.split(",") if p.strip()]
+        merged: list[str] = []
+        for p in [*self._explicit_writable, *env_pkgs]:
+            if p and p not in merged:
+                merged.append(p)
+        self._writable = merged
+
     async def connect(self, profile: EnvironmentProfile) -> None:
         """Validate credentials by hitting the OData service root."""
         self._resolve_credentials_from_env(profile)
+        self._resolve_writable_packages_from_env()
         if not self._tenant_url:
             raise SapCiTenantError(
                 "tenant_url not configured: set OIW_TENANT_URL or "
@@ -289,30 +325,209 @@ class SapCiTenantAdapter:
         return "sha256:" + hashlib.sha256(blob).hexdigest()
 
     # ------------------------------------------------------------------
-    # Write operations — intentionally NOT implemented (WP-08 §C-004)
+    # Write operations — UPDATE-ONLY, allowlist-gated (WP-08 PR-9 / D-004)
     # ------------------------------------------------------------------
 
+    def _ensure_writable(self, package_id: str) -> None:
+        """Raise unless package_id is on the explicit write allowlist."""
+        if not self._writable:
+            raise SapCiTenantError(
+                "write refused: no writable packages configured. Set "
+                "OIW_TENANT_WRITABLE_PACKAGES (or writable_packages=) to the "
+                "human-created scratch package id(s). Per WP-08 §D-004 the "
+                "tenant is a library, not a scratchpad — OIW only ever "
+                "updates artifacts inside packages you explicitly allow."
+            )
+        if package_id not in self._writable:
+            raise SapCiTenantError(
+                f"write refused: package '{package_id}' is not on the writable "
+                f"allowlist {self._writable}. Only pre-created scratch "
+                f"packages may be updated (WP-08 §D-004 / T0-003)."
+            )
+
+    async def _ensure_csrf_token(self) -> None:
+        """Fetch a CSRF token if the tenant issues one (standard SAP pattern).
+
+        GET the service root with X-CSRF-Token: fetch; if the response
+        carries the header we cache and attach it to mutating requests.
+        Tenants without CSRF simply omit the header — that's fine.
+        """
+        if self._csrf_token is not None:
+            return
+        try:
+            resp = await self._client.get(
+                "/",
+                headers={**self._basic_auth_header(), "X-CSRF-Token": "fetch", "Accept": "application/json"},
+            )
+            self._csrf_token = resp.headers.get("x-csrf-token") or None
+        except httpx.HTTPError:
+            self._csrf_token = None
+
+    def _write_headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
+        headers = {
+            **self._basic_auth_header(),
+            **(extra or {}),
+        }
+        if self._csrf_token:
+            headers["x-csrf-token"] = self._csrf_token
+        return headers
+
+    async def _resolve_target_artifact(self, package_id: str) -> TenantArtifactSummary:
+        """Find the EXISTING designtime artifact to update in a package.
+
+        Update-only policy (T0-003): we never create artifacts. If the
+        package has none, fail with remediation instead of guessing.
+        """
+        artifacts = await self.list_artifacts(package_id, top=1)
+        if not artifacts:
+            raise SapCiTenantError(
+                f"package '{package_id}' has no designtime artifacts to update. "
+                f"Per T0-003 this adapter is update-only: create the artifact "
+                f"once in the tenant UI (any placeholder iFlow), then re-run."
+            )
+        return artifacts[0]
+
     async def upload_package(self, package_id: str, archive: bytes, digest: str) -> UploadResult:
-        raise NotImplementedError(
-            "SapCiTenantAdapter.upload_package is intentionally not implemented in WP-08 "
-            "Track 0/C. The tenant is read-only in this track (WP-08 §C-004). "
-            "Track D-004 will introduce a scoped, opt-in upload path for the held-out "
-            "test artifact only."
+        """Update an existing artifact's designtime content with `archive`.
+
+        PUT /IntegrationDesigntimeArtifacts(Id='{id}',Version='{version}')/$value
+        The archive must be a CPI designtime bundle. Empty archives are
+        rejected locally before anything touches the tenant.
+        """
+        # Policy refusals come FIRST — an out-of-allowlist write must fail
+        # even if the adapter isn't connected (no network needed to say no).
+        self._ensure_writable(package_id)
+        self._require_connected()
+        if not archive or len(archive) < 4:
+            return UploadResult(
+                success=False, version=None, error="empty or truncated archive", uploaded_at=None
+            )
+        target = await self._resolve_target_artifact(package_id)
+        await self._ensure_csrf_token()
+        url = f"/IntegrationDesigntimeArtifacts(Id='{target.id}',Version='{target.version}')/$value"
+        try:
+            resp = await self._client.put(
+                url,
+                content=archive,
+                headers=self._write_headers(
+                    {"Content-Type": "application/zip", "Accept": "application/json"}
+                ),
+            )
+        except httpx.HTTPError as exc:
+            raise SapCiTenantError(f"upload unreachable at {url}: {exc}") from exc
+        if resp.status_code >= 400:
+            self._raise_for_status(resp, "upload_package")
+        return UploadResult(
+            success=True,
+            version=target.version,
+            error=None,
+            uploaded_at=None,  # SAP doesn't echo a timestamp here
         )
 
     async def deploy(self, package_id: str, version: str) -> DeploymentResult:
-        raise NotImplementedError(
-            "SapCiTenantAdapter.deploy is intentionally not implemented in WP-08 Track 0/C "
-            "(WP-08 §C-004: no DeployIntegrationArtifact)."
+        """Deploy (activate) the artifact: POST /IntegrationRuntimeArtifacts.
+
+        Response shape varies across CPI releases; we read defensively
+        (Id/id, Status/status) and treat 2xx without a body as accepted.
+        """
+        self._ensure_writable(package_id)
+        self._require_connected()
+        target = await self._resolve_target_artifact(package_id)
+        await self._ensure_csrf_token()
+        payload = {"ArtifactId": target.id, "ArtifactVersion": version}
+        try:
+            resp = await self._client.post(
+                "/IntegrationRuntimeArtifacts",
+                json=payload,
+                headers=self._write_headers({"Accept": "application/json"}),
+            )
+        except httpx.HTTPError as exc:
+            raise SapCiTenantError(f"deploy unreachable: {exc}") from exc
+        if resp.status_code >= 400:
+            self._raise_for_status(resp, "deploy")
+        data: dict = {}
+        try:
+            body = resp.json()
+            data = (
+                body.get("d", {})
+                if isinstance(body, dict) and "d" in body
+                else (body if isinstance(body, dict) else {})
+            )
+        except Exception:
+            data = {}
+        deployment_id = data.get("Id") or data.get("id") or ""
+        status_raw = str(data.get("Status") or data.get("status") or "IN_PROGRESS").upper()
+        state = (
+            "DEPLOYED"
+            if status_raw in ("DEPLOYED", "STARTED", "SUCCESS")
+            else ("FAILED" if status_raw in ("FAILED", "ERROR") else "IN_PROGRESS")
+        )
+        return DeploymentResult(
+            success=state != "FAILED",
+            deployment_id=str(deployment_id),
+            status=state,  # type: ignore[arg-type]
+            error=None if state != "FAILED" else str(data.get("Message") or "deploy failed"),
         )
 
     async def poll_deployment(self, deployment_id: str) -> DeploymentStatus:
-        raise NotImplementedError("SapCiTenantAdapter.poll_deployment is not implemented (no deploy path).")
+        """GET /IntegrationRuntimeArtifacts('{deployment_id}') for status."""
+        self._require_connected()
+        resp = await self._client.get(
+            f"/IntegrationRuntimeArtifacts('{deployment_id}')",
+            headers={**self._basic_auth_header(), "Accept": "application/json"},
+        )
+        self._raise_for_status(resp, "poll_deployment")
+        try:
+            body = resp.json()
+            data = (
+                body.get("d", {})
+                if isinstance(body, dict) and "d" in body
+                else (body if isinstance(body, dict) else {})
+            )
+        except Exception:
+            data = {}
+        status_raw = str(data.get("Status") or data.get("status") or "IN_PROGRESS").upper()
+        state = (
+            "DEPLOYED"
+            if status_raw in ("DEPLOYED", "STARTED", "SUCCESS")
+            else ("FAILED" if status_raw in ("FAILED", "ERROR") else "IN_PROGRESS")
+        )
+        return DeploymentStatus(state=state, deployment_id=deployment_id, message=None, logs=[])
 
     async def get_runtime_logs(self, package_id: str, since: object) -> list[LogEntry]:
-        raise NotImplementedError(
-            "SapCiTenantAdapter.get_runtime_logs is not implemented in WP-08 Track 0/C."
+        """Read MessageProcessingLogs (best-effort mapping into LogEntry).
+
+        `$filter` uses `LogStart` gt <since> when `since` is datetime-ish;
+        otherwise the most recent entries are returned (top 50).
+        """
+        self._require_connected()
+        params: dict[str, str | int] = {"$top": 50, "$orderby": "LogEnd desc"}
+        if hasattr(since, "isoformat"):
+            params["$filter"] = f"LogEnd gt datetime'{since.isoformat()}'"  # type: ignore[attr-defined]
+        resp = await self._client.get(
+            "/MessageProcessingLogs",
+            params=params,
+            headers={**self._basic_auth_header(), "Accept": "application/json"},
         )
+        self._raise_for_status(resp, "get_runtime_logs")
+        try:
+            data = resp.json()
+            results = (
+                data.get("d", {}).get("results", []) if isinstance(data, dict) else data.get("value", [])
+            )
+        except Exception:
+            results = []
+        out: list[LogEntry] = []
+        for entry in results[:50]:
+            out.append(
+                LogEntry(
+                    timestamp=str(entry.get("LogStart") or entry.get("LogEnd") or ""),
+                    level=str(entry.get("Status") or "INFO"),
+                    message=str(entry.get("CustomStatus") or entry.get("MessageGuid") or ""),
+                    node_id=entry.get("IntegrationArtifactId"),
+                )
+            )
+        return out
 
     # ------------------------------------------------------------------
     # Internals
@@ -346,20 +561,31 @@ def build_tenant_adapter(
     tenant_url: str | None = None,
     username: str | None = None,
     password: str | None = None,
+    writable_packages: list[str] | None = None,
+    mock_state_dir: str | Path | None = None,
 ) -> SapCiTenantAdapter | MockSapCiTenantAdapter:
     """Factory: return the real adapter when OIW_USE_REAL_TENANT=1, else the mock.
 
     Per WP-08 §10 "What Not To Do": never default OIW_USE_REAL_TENANT=1 in CI.
     CI stays on the mock; the real adapter is for local/tenant work.
+
+    `mock_state_dir` gives the MOCK durable state across processes (the
+    deploy CLI pipeline needs upload→execute to see the same tenant
+    state); it is ignored by the real adapter.
     """
     if use_real is None:
         use_real = os.environ.get("OIW_USE_REAL_TENANT", "").strip() in {"1", "true", "True", "yes"}
     if use_real:
-        return SapCiTenantAdapter(tenant_url=tenant_url, username=username, password=password)
+        return SapCiTenantAdapter(
+            tenant_url=tenant_url,
+            username=username,
+            password=password,
+            writable_packages=writable_packages,
+        )
     # Lazy import to avoid the mock's state-dir defaulting in tests
     from .mock_adapter import MockSapCiTenantAdapter
 
-    return MockSapCiTenantAdapter()
+    return MockSapCiTenantAdapter(state_dir=mock_state_dir)
 
 
 __all__ = [

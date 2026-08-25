@@ -74,9 +74,14 @@ import sys  # noqa: E402
 
 
 def test_deploy_happy_path(deploy_workspace: Path) -> None:
-    """propose → approve → upload → execute → verify → status."""
+    """build → propose → approve → upload → execute → verify → status."""
     pkg = "order-to-s4"
     profile = "dev"
+
+    # Build (PR-9: upload ships real dist/ bytes — the build must exist)
+    r = _run_cli(deploy_workspace, "build", "--target", "sap-cloud-integration-2026-07")
+    assert r.returncode == 0, f"build failed: {r.stderr}"
+    assert (deploy_workspace / "dist").is_dir(), "dist/ missing after build"
 
     # Propose
     r = _run_cli(deploy_workspace, "deploy", "propose", "--profile", profile, "--package", pkg)

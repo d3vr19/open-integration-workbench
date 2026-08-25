@@ -304,15 +304,221 @@ def test_real_adapter_download_artifact_returns_zip_bytes(profile) -> None:
     _run(adapter.disconnect())
 
 
-def test_real_adapter_write_ops_not_implemented(profile) -> None:
-    """upload_package / deploy / poll_deployment remain NotImplementedError (WP-08 §C-004)."""
+def _write_transport(artifact_id="MyFlow", artifact_version="1.0.0", *, empty_package=False):
+    """MockTransport serving the write-path endpoints (WP-08 PR-9).
+
+    Routes:
+      GET  /                                  → service doc (+ CSRF token when fetched)
+      GET  /IntegrationPackages('{pkg}')/...  → artifact list (or empty)
+      PUT  /IntegrationDesigntimeArtifacts(...)/$value → 204
+      POST /IntegrationRuntimeArtifacts       → deployment accepted
+      GET  /IntegrationRuntimeArtifacts('dep-1') → DEPLOYED
+      GET  /MessageProcessingLogs             → two log entries
+    """
+    import httpx
+
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["url"] = str(request.url)
+        seen["csrf_request_header"] = request.headers.get("X-CSRF-Token")
+        auth = request.headers.get("Authorization", "")
+        assert auth.startswith("Basic "), "Basic auth header missing"
+
+        if request.method == "GET" and request.url.path.rstrip("/") in ("/api/v1", ""):
+            if request.headers.get("X-CSRF-Token") == "fetch":
+                return httpx.Response(
+                    200,
+                    json={"d": {"EntitySets": []}},
+                    headers={"x-csrf-token": "test-csrf-token"},
+                )
+            return httpx.Response(200, json={"d": {"EntitySets": ["IntegrationPackages"]}})
+
+        if (
+            request.method == "GET"
+            and "IntegrationDesigntimeArtifacts" in str(request.url)
+            and "$value" not in str(request.url)
+        ):
+            results = (
+                []
+                if empty_package
+                else [
+                    {
+                        "Id": artifact_id,
+                        "Name": artifact_id,
+                        "Version": artifact_version,
+                        "__metadata": {"media_src": "https://example.invalid/api/v1/x/$value"},
+                    }
+                ]
+            )
+            return httpx.Response(200, json={"d": {"results": results}})
+
+        if request.method == "PUT" and "/$value" in str(request.url):
+            seen["upload_body"] = request.content
+            seen["content_type"] = request.headers.get("Content-Type")
+            seen["csrf_sent"] = request.headers.get("x-csrf-token")
+            return httpx.Response(204)
+
+        if request.method == "POST" and request.url.path.endswith("/IntegrationRuntimeArtifacts"):
+            seen["deploy_payload"] = request.content
+            return httpx.Response(200, json={"d": {"Id": "dep-1", "Status": "IN_PROGRESS"}})
+
+        if request.method == "GET" and "IntegrationRuntimeArtifacts('dep-1')" in str(request.url):
+            return httpx.Response(200, json={"d": {"Id": "dep-1", "Status": "DEPLOYED"}})
+
+        if request.method == "GET" and "MessageProcessingLogs" in str(request.url):
+            return httpx.Response(
+                200,
+                json={
+                    "d": {
+                        "results": [
+                            {
+                                "LogStart": "2026-08-25T00:00:00",
+                                "Status": "COMPLETED",
+                                "MessageGuid": "m-1",
+                                "IntegrationArtifactId": artifact_id,
+                            },
+                            {
+                                "LogStart": "2026-08-24T00:00:00",
+                                "Status": "FAILED",
+                                "MessageGuid": "m-2",
+                                "IntegrationArtifactId": artifact_id,
+                            },
+                        ]
+                    }
+                },
+            )
+
+        return httpx.Response(404, json={"error": {"message": {"value": f"unrouted: {request.url}"}}})
+
+    transport = httpx.MockTransport(handler)
+    return transport, seen
+
+
+def _connected_real_adapter(profile, transport, **kwargs):
+    import httpx
+
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid/api/v1",
+        username="sb-user",
+        password="secret",
+        client=httpx.AsyncClient(transport=transport, base_url="https://example.invalid/api/v1"),
+        **kwargs,
+    )
+    _run(adapter.connect(profile))
+    return adapter
+
+
+def test_write_ops_refused_without_allowlist(profile) -> None:
+    """Empty allowlist ⇒ every write fails loudly with remediation text."""
     adapter = _RealAdapter(tenant_url="https://example.invalid", username="u", password="p")
-    with pytest.raises(NotImplementedError, match="WP-08"):
-        _run(adapter.upload_package("pkg", b"data", "sha256:abc"))
-    with pytest.raises(NotImplementedError, match="WP-08"):
-        _run(adapter.deploy("pkg", "1.0.0"))
-    with pytest.raises(NotImplementedError, match="no deploy path"):
-        _run(adapter.poll_deployment("dep-1"))
+    with pytest.raises(SapCiTenantError, match="no writable packages configured"):
+        _run(adapter.upload_package("AdequareGST", b"data", "sha256:abc"))
+    with pytest.raises(SapCiTenantError, match="no writable packages configured"):
+        _run(adapter.deploy("AdequareGST", "1.0.0"))
+
+
+def test_write_ops_refused_outside_allowlist(profile) -> None:
+    """A package not on the allowlist is refused even when others are allowed."""
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid", username="u", password="p", writable_packages=["AdequareGST"]
+    )
+    with pytest.raises(SapCiTenantError, match="not on the writable allowlist"):
+        _run(adapter.upload_package("SomeProductionPackage", b"data", "sha256:abc"))
+
+
+def test_upload_updates_existing_artifact(profile) -> None:
+    """PUT $value carries real bytes + CSRF token into an EXISTING artifact."""
+    transport, seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
+
+    result = _run(adapter.upload_package("AdequareGST", b"PK\x03\x04fakezipbytes", "sha256:deadbeef"))
+    assert result.success is True
+    assert result.version == "1.0.0"
+    assert seen["method"] == "PUT"
+    assert seen["upload_body"] == b"PK\x03\x04fakezipbytes"
+    assert seen["content_type"] == "application/zip"
+    assert seen["csrf_sent"] == "test-csrf-token"
+    _run(adapter.disconnect())
+
+
+def test_upload_rejects_empty_archive_locally(profile) -> None:
+    """Empty/truncated archives never reach the network."""
+    transport, seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
+
+    result = _run(adapter.upload_package("AdequareGST", b"", "sha256:e3b0"))
+    assert result.success is False
+    assert "empty or truncated" in (result.error or "")
+    assert "upload_body" not in seen  # no PUT happened
+    _run(adapter.disconnect())
+
+
+def test_upload_refused_when_package_has_no_artifacts(profile) -> None:
+    """Update-only policy: an EMPTY package cannot receive content."""
+    transport, _seen = _write_transport(empty_package=True)
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
+
+    with pytest.raises(SapCiTenantError, match="update-only"):
+        _run(adapter.upload_package("AdequareGST", b"PK\x03\x04zip", "sha256:aa"))
+    _run(adapter.disconnect())
+
+
+def test_deploy_posts_to_runtime_artifacts(profile) -> None:
+    """deploy() POSTs {ArtifactId, ArtifactVersion} and maps the response."""
+    transport, seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
+
+    result = _run(adapter.deploy("AdequareGST", "1.0.0"))
+    assert result.success is True
+    assert result.deployment_id == "dep-1"
+    assert result.status == "IN_PROGRESS"
+    assert b"MyFlow" in seen["deploy_payload"]
+    _run(adapter.disconnect())
+
+
+def test_poll_deployment_maps_terminal_status(profile) -> None:
+    """poll_deployment() reads Status and maps to the DeploymentStatus state."""
+    transport, _seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport)
+
+    status = _run(adapter.poll_deployment("dep-1"))
+    assert status.state == "DEPLOYED"
+    assert status.deployment_id == "dep-1"
+    _run(adapter.disconnect())
+
+
+def test_get_runtime_logs_parses_message_processing_logs(profile) -> None:
+    """get_runtime_logs() maps MPL entries into LogEntry records."""
+    from datetime import datetime as _dt
+
+    transport, _seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport)
+
+    logs = _run(adapter.get_runtime_logs("AdequareGST", since=_dt(2026, 8, 1)))
+    assert len(logs) == 2
+    assert logs[0].level == "COMPLETED"
+    assert logs[1].level == "FAILED"
+    _run(adapter.disconnect())
+
+
+def test_writable_packages_resolved_from_env(profile, monkeypatch) -> None:
+    """OIW_TENANT_WRITABLE_PACKAGES feeds the allowlist at connect()."""
+    import httpx
+
+    monkeypatch.setenv("OIW_TENANT_WRITABLE_PACKAGES", "ScratchA, ScratchB")
+    transport, _seen = _write_transport()
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid/api/v1",
+        username="u",
+        password="p",
+        client=httpx.AsyncClient(transport=transport, base_url="https://example.invalid/api/v1"),
+    )
+    assert adapter.writable_packages == []
+    _run(adapter.connect(profile))
+    assert adapter.writable_packages == ["ScratchA", "ScratchB"]
+    _run(adapter.disconnect())
 
 
 def test_build_tenant_adapter_returns_mock_by_default() -> None:
