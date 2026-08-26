@@ -310,6 +310,23 @@ same loop from two sides; do them together.
   message-send for non-HTTP entrypoints. LIVE VERDICT: both STARTED;
   GET trigger -> 200 weather JSON; MPL COMPLETED pairs on BOTH artifacts.
   Designer-open confirmed by operator after v6.1 DI generation.
+- 2026-08-26 (session 7) — PHASES 0-2 SHIPPED + SFTP LIVE-PROVEN:
+  * P0 sharpen: shed list applied; collision preflight + designer-open
+    gate in calibrate/CI (ed29537).
+  * P1 harvest: oiw emg harvest crawled 300 artifacts across ~71 packages
+    -> 59 distinct shapes, 50 exporter gaps nominated (pattern book
+    committed). SFTP biggest gap (~70 obs) — operator instinct validated.
+  * P2 SFTP: receiver.sftp grammar from harvested SAP_SFTP template;
+    UserCredentials deploy verb live-proven (POST /UserCredentials,
+    Description required). E2E against REAL etssftp:2232 via Cloud
+    Connector using EXISTING trusted known_hosts + AxisBnk_dev saved
+    credential (operator call: shared tenant, no known_hosts edits).
+  * Live findings banked: (a) internal hosts need proxyType=sapcc +
+    locationId (UnknownHost otherwise); (b) adapter boolean dialect is
+    0/1 — true/false parsed falsy (compiler bug class); (c) directories
+    must pre-exist — autoCreate does NOT mkdir ('No such file').
+  Final verdict: POST /oiw_sftp_test -> 200, MPL COMPLETED, file dropped
+  to ../../INTERFACE/DP_WORLD/ (existing dir, outside polled INBOUND).
 - 2026-08-26 (session 6) — P5b-M1 + P5c-M1 SHIPPED (commit de7eb98):
   * World dynamics: oiw/runtime/world.py — declarative fault scenarios
     (timeout / connection_reset / http_status / malformed / drift)

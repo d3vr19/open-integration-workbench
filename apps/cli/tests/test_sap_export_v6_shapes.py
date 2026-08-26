@@ -284,7 +284,7 @@ def test_receiver_sftp_terminal(tmp_path):
     assert props["host"] == "eu-central-1.sftpcloud.io:22"
     assert props["path"] == "/upload"
     assert props["credential_name"] == "oiw-sftpcloud"
-    assert props["sftpSecEnabled"] == "true"  # secure default
+    assert props["sftpSecEnabled"] == "1"  # adapter dialect is 0/1, not true/false
 
 
 def test_receiver_sftp_requires_credential():
