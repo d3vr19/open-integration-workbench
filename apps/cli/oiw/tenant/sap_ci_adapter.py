@@ -401,17 +401,41 @@ class SapCiTenantAdapter:
             headers["x-csrf-token"] = self._csrf_token
         return headers
 
-    async def _resolve_target_artifact(self, package_id: str) -> TenantArtifactSummary:
+    async def _resolve_target_artifact(
+        self, package_id: str, artifact_id: str | None = None
+    ) -> TenantArtifactSummary:
         """Find the EXISTING designtime artifact to update in a package.
 
         Update-only policy (T0-003): we never create artifacts. If the
         package has none, fail with remediation instead of guessing.
 
-        When the allowlist pins an artifact (`PackageId/ArtifactId`),
-        ONLY that artifact is a valid target — a shared scratch package
-        must never see its other (real) artifacts overwritten.
+        When the allowlist pins artifacts (`PackageId/ArtifactId`), ONLY
+        pinned artifacts are valid targets — a shared scratch package must
+        never see its other (real) artifacts overwritten. With multiple
+        pins, `artifact_id` selects among them; it must itself be pinned.
         """
-        pin = self._pinned_artifact(package_id)
+        pins = [
+            e.split("/", 1)[1]
+            for e in self._writable
+            if e.startswith(f"{package_id}/") and len(e) > len(package_id) + 1
+        ]
+        if artifact_id is not None:
+            if artifact_id not in pins:
+                raise SapCiTenantError(
+                    f"artifact '{artifact_id}' is not in the writable allowlist "
+                    f"for package '{package_id}' — add "
+                    f"'{package_id}/{artifact_id}' to OIW_TENANT_WRITABLE_PACKAGES"
+                )
+            pin = artifact_id
+        elif len(pins) > 1:
+            raise SapCiTenantError(
+                f"package '{package_id}' has multiple allowlisted artifacts "
+                f"({', '.join(sorted(pins))}) — select one explicitly"
+            )
+        elif pins:
+            pin = pins[0]
+        else:
+            pin = None
         artifacts = await self.list_artifacts(package_id, top=100)
         if not artifacts:
             raise SapCiTenantError(
@@ -430,7 +454,9 @@ class SapCiTenantAdapter:
             )
         return artifacts[0]
 
-    async def upload_package(self, package_id: str, archive: bytes, digest: str) -> UploadResult:
+    async def upload_package(
+        self, package_id: str, archive: bytes, digest: str, artifact_id: str | None = None
+    ) -> UploadResult:
         """Update an existing artifact's designtime content with `archive`.
 
         LIVE-PROVEN VERB (2026-08-25, AdaequareGST/open_mateo_test):
@@ -452,7 +478,7 @@ class SapCiTenantAdapter:
             return UploadResult(
                 success=False, version=None, error="empty or truncated archive", uploaded_at=None
             )
-        target = await self._resolve_target_artifact(package_id)
+        target = await self._resolve_target_artifact(package_id, artifact_id)
         await self._ensure_csrf_token()
         payload = {"ArtifactContent": _b64.b64encode(archive).decode()}
         url = f"/IntegrationDesigntimeArtifacts(Id='{target.id}',Version='{target.version}')"
@@ -475,7 +501,7 @@ class SapCiTenantAdapter:
             uploaded_at=None,  # SAP doesn't echo a timestamp here
         )
 
-    async def deploy(self, package_id: str, version: str) -> DeploymentResult:
+    async def deploy(self, package_id: str, version: str, artifact_id: str | None = None) -> DeploymentResult:
         """Deploy (activate): POST /DeployIntegrationDesigntimeArtifact.
 
         LIVE-PROVEN (2026-08-26, from the tenant's own
@@ -487,7 +513,7 @@ class SapCiTenantAdapter:
         """
         self._ensure_writable(package_id)
         self._require_connected()
-        target = await self._resolve_target_artifact(package_id)
+        target = await self._resolve_target_artifact(package_id, artifact_id)
         await self._ensure_csrf_token()
         url = f"/DeployIntegrationDesigntimeArtifact?Id='{target.id}'&Version='{version}'"
         try:

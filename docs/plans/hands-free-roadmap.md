@@ -366,6 +366,12 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   API deploy-path semantics for messageFlow flows, or tenant-side
   material. Awaiting operator UI-deploy dichotomy test (p5-p6-plan.md §6).
   open_mateo_test left bare/STARTED.
+- 2026-08-26 (session 5) — EXPORTER v6 + MULTI-ARTIFACT CHOREOGRAPHY LIVE.
+  Request-Reply, ProcessDirect receiver, and Variables steps mirrored from
+  operator reference exports; end-to-end proof on tenant: GET → 200 with
+  live weather JSON, MPL COMPLETED pairs across open_mateo_test AND oiw_pd
+  (ProcessDirect hop). Endpoint-path collisions identified as a distinct
+  failure class (tenant-global namespace). Both scratch artifacts STARTED.
 - 2026-08-26 (session 4) — **P5a RECEIVER MILESTONE: exporter bundles START.**
   Operator's UI deploy + fresh export unlocked the dichotomy: transplanted
   UI bytes START via our API path (after avoiding an /oiw endpoint

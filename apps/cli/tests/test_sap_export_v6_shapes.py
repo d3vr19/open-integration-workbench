@@ -1,0 +1,186 @@
+"""Exporter v6 shape tests: Request-Reply, ProcessDirect receiver, Variables.
+
+All shapes mirrored from UI-authored reference exports (testing_oiw v3 +
+oiw_pd, 2026-08-26) and validated live on the tenant.
+"""
+
+from __future__ import annotations
+
+import io
+import sys
+import xml.etree.ElementTree as ET
+import zipfile
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
+
+from oiw.compiler.sap_export import build_cpi_bundle, export_flow_to_iflw  # noqa: E402
+
+NS = {
+    "b": "http://www.omg.org/spec/BPMN/20100524/MODEL",
+    "i": "http:///com.sap.ifl.model/Ifl.xsd",
+}
+GROOVY = "def processData(Message m) { return m }\n"
+
+
+def _entry(path="/t"):
+    return {"id": "s", "type": "sender.http", "config": {"path": path, "methods": ["GET"]}}
+
+
+def _parse(xml):
+    return ET.fromstring(xml)
+
+
+def _mfs(root):
+    out = {}
+    for mf in root.findall(f".//{{{NS['b']}}}messageFlow"):
+        ee = mf.find(f"{{{NS['b']}}}extensionElements")
+        props = (
+            {p.findtext("key", ""): p.findtext("value", "") for p in ee.findall(f"{{{NS['i']}}}property")}
+            if ee is not None
+            else {}
+        )
+        out[mf.get("name")] = (mf, props)
+    return out
+
+
+def test_midflow_http_renders_request_reply(tmp_path):
+    flow = {
+        "metadata": {"id": "t", "version": 1},
+        "spec": {
+            "edges": [],
+            "entrypoints": [_entry()],
+            "nodes": [
+                {
+                    "id": "rr",
+                    "type": "receiver.http",
+                    "config": {"url": "https://api.example.com/v1?x=1", "method": "GET"},
+                },
+                {"id": "log-after", "type": "log.message", "config": {"message": "got it"}},
+            ],
+        },
+    }
+    root = _parse(export_flow_to_iflw(flow, project_root=tmp_path))
+    tasks = root.findall(".//b:serviceTask", NS)
+    assert len(tasks) == 1
+    ee = tasks[0].find("b:extensionElements", NS)
+    props = {p.findtext("key", ""): p.findtext("value", "") for p in ee.findall(f"{{{NS['i']}}}property")}
+    assert props["activityType"] == "ExternalCall"
+    # messageFlow wires the ServiceTask to the receiver participant
+    mf, mprops = _mfs(root)["HTTP"]
+    assert mf.get("sourceRef") == tasks[0].get("id")
+    assert mprops["httpAddressWithoutQuery"] == "https://api.example.com/v1"
+    assert mprops["httpAddressQuery"] == "x=1"
+    # the flow CONTINUES after the request-reply (log step follows)
+    procs = root.findall(".//b:callActivity", NS)
+    assert any(c.get("name") == "log-after" for c in procs)
+
+
+def test_processdirect_terminal_receiver(tmp_path):
+    flow = {
+        "metadata": {"id": "t", "version": 1},
+        "spec": {
+            "edges": [],
+            "entrypoints": [_entry()],
+            "nodes": [{"id": "pd-out", "type": "receiver.processdirect", "config": {"address": "/oiw_pd"}}],
+        },
+    }
+    xml = export_flow_to_iflw(flow, project_root=tmp_path)
+    root = _parse(xml)
+    mf, props = _mfs(root)["ProcessDirect"]
+    assert mf.get("sourceRef") == "EndEvent_1"
+    assert props["ComponentType"] == "ProcessDirect"
+    assert props["address"] == "/oiw_pd"
+    assert props["direction"] == "Receiver"
+    assert props["Vendor"] == "SAP"
+
+
+def test_processdirect_midflow_refused():
+    flow = {
+        "metadata": {"id": "t", "version": 1},
+        "spec": {
+            "edges": [],
+            "entrypoints": [_entry()],
+            "nodes": [
+                {"id": "pd", "type": "receiver.processdirect", "config": {"address": "/x"}},
+                {"id": "after", "type": "log.message", "config": {}},
+            ],
+        },
+    }
+    with pytest.raises(ValueError, match="request-reply"):
+        export_flow_to_iflw(flow, project_root=Path("."))
+
+
+def test_variables_write_row_xml():
+    flow = {
+        "metadata": {"id": "t", "version": 1},
+        "spec": {
+            "edges": [],
+            "entrypoints": [_entry()],
+            "nodes": [
+                {
+                    "id": "wv",
+                    "type": "variables.write",
+                    "config": {"name": "oiw_var", "value": "$in.body", "encrypt": True},
+                }
+            ],
+        },
+    }
+    root = _parse(export_flow_to_iflw(flow))
+    ca = root.findall(".//b:callActivity", NS)[-1]
+    ee = ca.find("b:extensionElements", NS)
+    props = {p.findtext("key", ""): p.findtext("value", "") for p in ee.findall(f"{{{NS['i']}}}property")}
+    assert props["activityType"] == "Variables"
+    assert props["variable"] == (
+        "<row><cell>oiw_var</cell><cell></cell><cell>expression</cell>"
+        "<cell>$in.body</cell><cell>global</cell></row>"
+    )
+    assert props["encrypt"] == "true"
+
+
+def test_full_chain_bundle(tmp_path):
+    """The operator's target topology: HTTPS -> RR(open-meteo) -> groovy -> PD."""
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "weather_transform.groovy").write_text(GROOVY)
+    flow = {
+        "metadata": {"id": "chain", "version": 1},
+        "spec": {
+            "edges": [
+                {"from": "s", "to": "rr"},
+                {"from": "rr", "to": "gx"},
+                {"from": "gx", "to": "pd"},
+            ],
+            "entrypoints": [_entry("/oiw_pd_hf")],
+            "nodes": [
+                {
+                    "id": "rr",
+                    "type": "receiver.http",
+                    "config": {
+                        "url": "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m",
+                        "method": "GET",
+                    },
+                },
+                {
+                    "id": "gx",
+                    "type": "script.groovy",
+                    "config": {"resource": "scripts/weather_transform.groovy"},
+                },
+                {"id": "pd", "type": "receiver.processdirect", "config": {"address": "/oiw_pd"}},
+            ],
+        },
+    }
+    archive, _ = build_cpi_bundle(flow, project_root=tmp_path)
+    z = zipfile.ZipFile(io.BytesIO(archive))
+    xml = z.read([n for n in z.namelist() if n.endswith(".iflw")][0]).decode()
+    root = _parse(xml)
+    kinds = [
+        el.tag.split("}")[-1]
+        for el in root.find(f"{{{NS['b']}}}process")
+        if not el.tag.endswith("extensionElements")
+    ]
+    assert "serviceTask" in kinds  # request-reply task present
+    assert "endEvent" in kinds  # terminal PD end event
+    assert "src/main/resources/script/weather_transform.groovy" in z.namelist()

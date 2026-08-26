@@ -34,6 +34,7 @@ _OIW_TO_ACTIVITY = {
     "log.message": "Enricher",  # CPI logs via Content Modifier; Logger unproven
     "script.groovy": "Script",
     "converter.json-to-xml": "JsonToXmlConverter",
+    "variables.write": "Variables",
 }
 
 _COLLAB_PROPS = [
@@ -127,6 +128,30 @@ _RECEIVER_PROPS = [
     ("MessageProtocolVersion", "1.20.2"),
     ("providerRelativeUrl", ""),
     ("httpAddressWithoutQuery", "{url}"),
+]
+
+# ProcessDirect receiver messageFlow — mirrored verbatim from a UI-authored
+# reference (oiw_pd, 2026-08-26). The `address` is the target process name.
+_PROCESSDIRECT_RECEIVER_PROPS = [
+    ("ComponentType", "ProcessDirect"),
+    ("Description", ""),
+    ("address", "{address}"),
+    ("ComponentNS", "sap"),
+    ("Vendor", "SAP"),
+    ("componentVersion", "1.1"),
+    ("Name", "ProcessDirect"),
+    ("TransportProtocolVersion", "1.1.2"),
+    ("ComponentSWCVName", "external"),
+    ("system", "Receiver"),
+    ("TransportProtocol", "Not Applicable"),
+    (
+        "cmdVariantUri",
+        "ctype::AdapterVariant/cname::ProcessDirect/vendor::SAP/tp::Not Applicable/mp::Not Applicable/direction::Receiver/version::1.1.1",
+    ),
+    ("MessageProtocol", "Not Applicable"),
+    ("MessageProtocolVersion", "1.1.2"),
+    ("ComponentSWCVId", "1.1.2"),
+    ("direction", "Receiver"),
 ]
 
 
@@ -233,8 +258,27 @@ def export_flow_to_iflw(
         L.append("        </bpmn2:participant>")
         cfg_r = r.get("config") or {}
         step_idx = nodes.index(r) + 1
-        if step_idx != len(nodes):
-            continue  # non-terminal receivers rejected during node pass
+        is_terminal = step_idx == len(nodes)
+        if not is_terminal and r["type"] != "receiver.http":
+            raise ValueError(
+                f"mid-flow '{r['type']}' has no request-reply rendering — only "
+                "receiver.http continues the flow with a response"
+            )
+        mf_source = "EndEvent_1" if is_terminal else f"ServiceTask_{step_idx}"
+        if r["type"] == "receiver.processdirect":
+            address = str(cfg_r.get("address", "")).strip()
+            if not address:
+                raise ValueError(
+                    f"receiver.processdirect node '{r['id']}' requires config.address "
+                    "(target process name, e.g. /oiw_pd)"
+                )
+            receiver_mfs.append(
+                f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="ProcessDirect" '
+                f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
+                + _props(_fill(_PROCESSDIRECT_RECEIVER_PROPS, address=escape(address)))
+                + "\n        </bpmn2:messageFlow>"
+            )
+            continue
         # CPI runtime-start REQUIRES the receiver address split: the bare
         # URL in httpAddressWithoutQuery and any query string in
         # httpAddressQuery. A literal '?query' folded into WithoutQuery
@@ -247,7 +291,7 @@ def export_flow_to_iflw(
         url_query = parts.query
         receiver_mfs.append(
             f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="HTTP" '
-            f'sourceRef="EndEvent_1" targetRef="Participant_{escape(r["id"])}">\n'
+            f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
             + _props(
                 _fill(
                     _RECEIVER_PROPS,
@@ -311,11 +355,13 @@ def export_flow_to_iflw(
             return f"ExclusiveGateway_{i}"
         return f"CallActivity_{i}"
 
-    # CPI compiled model (from a UI-created reference export): receiver
-    # steps are TERMINAL END EVENTS wired to their participant via
-    # messageFlow — there is NO serviceTask/ExternalCall in the main
-    # process (that shape only appears inside subprocesses). Mid-flow
-    # receivers would need branching semantics → out of MVP scope.
+    # CPI compiled model (from UI-authored reference exports):
+    #  - TERMINAL receivers render as EndEvent + messageFlow(EndEvent ->
+    #    participant) — HTTP and ProcessDirect both proven live.
+    #  - MID-FLOW receiver.http renders as Request-Reply:
+    #    serviceTask(activityType=ExternalCall) whose messageFlow carries
+    #    the HTTP adapter props; the RESPONSE continues in the main flow
+    #    (reference: testing_oiw v3, ServiceTask_6 "Request Reply 1").
     receiver_terminals: set[int] = set()
     for i, node in enumerate(nodes, start=1):
         if node["type"].startswith("receiver.") and i == len(nodes):
@@ -330,10 +376,29 @@ def export_flow_to_iflw(
         if i in receiver_terminals:
             continue  # rendered as EndEvent below
         if ntype.startswith("receiver."):
-            raise ValueError(
-                "mid-flow receiver (not terminal) needs branching semantics — "
-                "unsupported by the MVP exporter"
+            if ntype != "receiver.http":
+                raise ValueError(
+                    f"mid-flow '{ntype}' has no request-reply rendering — only "
+                    "receiver.http continues the flow with a response"
+                )
+            # Request-Reply: response data flows on to the next step.
+            L.append(f'        <bpmn2:serviceTask id="{nid}" name="{escape(str(node["id"]))}">')
+            L.append(
+                _props(
+                    [
+                        ("activityType", "ExternalCall"),
+                        (
+                            "cmdVariantUri",
+                            "ctype::FlowstepVariant/cname::ExternalCall/version::1.0.4",
+                        ),
+                    ],
+                    indent="            ",
+                )
             )
+            L.append(f"            <bpmn2:incoming>{incoming}</bpmn2:incoming>")
+            L.append(f"            <bpmn2:outgoing>{outgoing}</bpmn2:outgoing>")
+            L.append("        </bpmn2:serviceTask>")
+            continue
         else:
             activity = _OIW_TO_ACTIVITY.get(ntype)
             if activity is None:
@@ -376,6 +441,28 @@ def export_flow_to_iflw(
                     ("subActivityType", "GroovyScript"),
                     ("script", escape(resource)),
                 ]
+            elif activity == "Variables":
+                # Mirrored from UI-authored reference (oiw_pd, "Write
+                # Variables 1"): the variable property is a row-XML cell
+                # table: [name, '', type, value, scope].
+                name_v = escape(str(cfg.get("name", "")))
+                if not name_v:
+                    raise ValueError(f"variables.write node '{node['id']}' requires config.name")
+                value = escape(str(cfg.get("value", "$in.body")))
+                vtype = escape(str(cfg.get("valueType", "expression")))
+                scope = escape(str(cfg.get("scope", "global")))
+                row = f"<row><cell>{name_v}</cell><cell></cell><cell>{vtype}</cell><cell>{value}</cell><cell>{scope}</cell></row>"
+                extra = [
+                    ("visibility", str(cfg.get("visibility", "local"))),
+                    ("encrypt", str(cfg.get("encrypt", "false")).lower()),
+                    ("expire", str(cfg.get("expire", "90"))),
+                    ("variable", row),
+                    ("activityType", "Variables"),
+                    (
+                        "cmdVariantUri",
+                        "ctype::FlowstepVariant/cname::Variables/version::1.2.0",
+                    ),
+                ]
             else:
                 raise ValueError(f"unhandled activity {activity}")
             L.append(f'        <bpmn2:callActivity id="{nid}" name="{escape(str(node["id"]))}">')
@@ -403,7 +490,7 @@ def export_flow_to_iflw(
     # EndEvent_1 -> Participant_x in the collaboration).
     ids = (
         ["StartEvent_1"]
-        + [f"CallActivity_{i}" for i, n in enumerate(nodes, start=1) if i not in receiver_terminals]
+        + [_elem_id(n["type"], i) for i, n in enumerate(nodes, start=1) if i not in receiver_terminals]
         + ["EndEvent_1"]
     )
     for i in range(len(ids) - 1):

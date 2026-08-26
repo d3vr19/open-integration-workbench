@@ -1435,6 +1435,12 @@ def tenant() -> None:
 )
 @click.option("--profile", required=True, help="Environment profile (e.g. btp).")
 @click.option("--package", "package_id", required=True, help="Scratch package id.")
+@click.option(
+    "--artifact",
+    "artifact_id",
+    default=None,
+    help="Allowlisted target when the package pins several artifacts.",
+)
 @click.option("--display-name", default=None, help="Override CPI Bundle-Name.")
 @click.option("--timeout", "timeout_s", type=int, default=60, help="Deploy poll timeout seconds.")
 @click.option(
@@ -1444,6 +1450,7 @@ def tenant_calibrate(
     project_path: Path,
     profile: str,
     package_id: str,
+    artifact_id: str | None,
     display_name: str | None,
     timeout_s: int,
     out: Path | None,
@@ -1472,6 +1479,7 @@ def tenant_calibrate(
             prof,
             adapter,
             package_id,
+            artifact_id=artifact_id,
             display_name=display_name,
             timeout_s=timeout_s,
         )

@@ -272,5 +272,36 @@ same loop from two sides; do them together.
     OIW_TENANT_RUNTIME_URL); send verb now honors entrypoint methods.
     FULL ORACLE LOOP GREEN: upload → STARTED → GET /http/open_mateo_test
     → HTTP **200** → MPL row Status=**COMPLETED**
-    (AGqOeXB4VGtDoi1r--B4S_3QMcKz). P5a execution engine has live
+    (AGqOeXB4VGtDoi1r--B4S_3QMcKz).     P5a execution engine has live
     ground truth end-to-end; reward wiring (P5c) can consume MPL verdicts.
+- 2026-08-26 (session 5) — EXPORTER v6: Request-Reply + ProcessDirect +
+  Variables; MULTI-ARTIFACT CHOREOGRAPHY LIVE:
+  - Operator reference exports (testing_oiw v3 zip + oiw_pd zip) supplied
+    the missing shapes; all mirrored verbatim, no guessing:
+    * Request-Reply = serviceTask(activityType=ExternalCall,
+      cmdVariantUri ExternalCall/1.0.4) whose HTTP messageFlow attaches
+      to the SERVICE TASK (not an EndEvent); response continues downstream.
+    * ProcessDirect receiver = EndEvent + messageFlow(name="ProcessDirect",
+      address=/oiw_pd, Vendor=SAP, direction=Receiver, 16 props).
+    * Variables step = callActivity(activityType=Variables) with
+      variable=<row> cells [name,'',type,value,scope] + visibility/
+      encrypt/expire props (operator's Write Variables).
+  - Mid-flow receiver.http no longer raises — it renders Request-Reply;
+    only terminal receivers keep the EndEvent shape.
+  - Adapter: allowlist now supports MULTIPLE pinned artifacts per package;
+    `calibrate --artifact` selects explicitly (still allowlist-gated);
+    deploy/upload re-resolution honors the selection.
+  - END-TO-END PROOF (live tenant): GET /http/oiw_pd_hf → HTTP **200**
+    with live open-meteo JSON; MPL pairs COMPLETED on open_mateo_test AND
+    operator's oiw_pd ~664ms apart ⇒ HTTPS → Request-Reply(open-meteo) →
+    Groovy → ProcessDirect(/oiw_pd) → Write Variables executed across two
+    artifacts built entirely by the OIW compiler and deployed by pure API.
+  - LESSON (second offense): ENDPOINT COLLISIONS. Deploying a second flow
+    claiming /oiw_pd_hf while open_mateo_test's chain already bound it
+    ⇒ runtime ERROR that looks like a content failure. Rule recorded:
+    entrypoint paths are TENANT-GLOBAL; the compiler/oracle must treat
+    404-vs-collision distinctly and check bound paths before deploy.
+  - State at close: open_mateo_test (path /oiw_pd_hf) and oiw_pd_hf
+    (path /oiw_pd_hf2) BOTH STARTED running the identical full chain;
+    oiw_pd consuming via ProcessDirect. Next: variables.write live use,
+    then P5b world dynamics.

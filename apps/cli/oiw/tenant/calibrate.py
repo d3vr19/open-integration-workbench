@@ -142,11 +142,12 @@ async def calibrate_artifact(
     adapter: SapCiTenantAdapter,
     package_id: str,
     *,
+    artifact_id: str | None = None,
     display_name: str | None = None,
     message_body: str = "{}",
     timeout_s: int = 60,
 ) -> CalibrationReport:
-    """Run the full oracle loop for the pinned target of `package_id`."""
+    """Run the full oracle loop for one allowlisted target in `package_id`."""
     rep = CalibrationReport(package_id=package_id, artifact_id="")
     rep.started_at = datetime.now(tz=UTC).isoformat()
 
@@ -159,7 +160,7 @@ async def calibrate_artifact(
     symbolic = iflw_name = bundle_name = None
     await adapter.connect(profile)
     try:
-        target = await adapter._resolve_target_artifact(package_id)
+        target = await adapter._resolve_target_artifact(package_id, artifact_id)
         existing = await adapter.download_artifact(target.id, target.version)
         symbolic, iflw_name, bundle_name = cpi_bundle_identity(existing)
         rep.artifact_id = target.id
@@ -176,13 +177,17 @@ async def calibrate_artifact(
             display_name=display_name or bundle_name or target.id,
             project_root=project_path,
         )
-        result = await adapter.upload_package(package_id, archive, "sha256:calibrate")
+        result = await adapter.upload_package(
+            package_id, archive, "sha256:calibrate", artifact_id=artifact_id
+        )
         rep.uploaded_ok = bool(result.success)
         if not result.success:
             rep.error_detail = result.error
             return rep
 
-        deploy_result = await adapter.deploy(package_id, target.version)
+        deploy_result = await adapter.deploy(
+            package_id, target.version, artifact_id=artifact_id
+        )
         rep.deploy_accepted = bool(deploy_result.success)
 
         status, raw = await _poll_terminal(
