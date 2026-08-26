@@ -269,10 +269,17 @@ def test_receiver_sftp_terminal(tmp_path):
             "edges": [],
             "entrypoints": [_entry("/sftp")],
             "nodes": [
-                {"id": "drop", "type": "receiver.sftp",
-                 "config": {"host": "eu-central-1.sftpcloud.io", "port": 22,
-                            "directory": "/upload", "filename": "oiw-e2e.txt",
-                            "credentialName": "oiw-sftpcloud"}}
+                {
+                    "id": "drop",
+                    "type": "receiver.sftp",
+                    "config": {
+                        "host": "eu-central-1.sftpcloud.io",
+                        "port": 22,
+                        "directory": "/upload",
+                        "filename": "oiw-e2e.txt",
+                        "credentialName": "oiw-sftpcloud",
+                    },
+                }
             ],
         },
     }
@@ -293,9 +300,90 @@ def test_receiver_sftp_requires_credential():
         "spec": {
             "edges": [],
             "entrypoints": [_entry()],
-            "nodes": [{"id": "d", "type": "receiver.sftp",
-                       "config": {"host": "h.example.com"}}],
+            "nodes": [{"id": "d", "type": "receiver.sftp", "config": {"host": "h.example.com"}}],
         },
     }
     with pytest.raises(ValueError, match="credentialName"):
         export_flow_to_iflw(flow, project_root=Path("."))
+
+
+def test_multi_entrypoint_writer_plus_poller(tmp_path):
+    """Complete SFTP lifecycle in ONE artifact: HTTPS writer + SFTP poller.
+
+    Poller mirrors DPWORLD_SFTP_QAS: cron scheduleKey, filename filter,
+    delete-on-fetch (no file.move/doneFileName keys).
+    """
+    flow = {
+        "metadata": {"id": "sftp-lifecycle", "version": 1},
+        "spec": {
+            "edges": [
+                {"from": "http-in", "to": "drop"},
+                {"from": "sftp-poll", "to": "fetched-log"},
+            ],
+            "entrypoints": [
+                {
+                    "id": "http-in",
+                    "type": "sender.http",
+                    "config": {"path": "/oiw_sftp_test", "methods": ["POST"]},
+                },
+                {
+                    "id": "sftp-poll",
+                    "type": "sender.sftp",
+                    "config": {
+                        "host": "etssftp",
+                        "port": 2232,
+                        "directory": "../../INTERFACE/DP_WORLD",
+                        "filenameFilter": "OIW-E2E.*",
+                        "credentialName": "AxisBnk_dev",
+                        "proxyType": "sapcc",
+                        "locationId": "EMCNPCC",
+                    },
+                },
+            ],
+            "nodes": [
+                {
+                    "id": "drop",
+                    "type": "receiver.sftp",
+                    "config": {
+                        "host": "etssftp",
+                        "port": 2232,
+                        "directory": "../../INTERFACE/DP_WORLD",
+                        "filename": "OIW-E2E-${date:now:yyyyMMddHHmmss}.dat",
+                        "credentialName": "AxisBnk_dev",
+                        "proxyType": "sapcc",
+                        "locationId": "EMCNPCC",
+                    },
+                },
+                {"id": "fetched-log", "type": "log.message", "config": {"message": "fetched"}},
+            ],
+        },
+    }
+    xml = export_flow_to_iflw(flow)
+    root = _parse(xml)
+
+    starts = root.findall(".//b:startEvent", NS)
+    assert {s.get("id") for s in starts} == {"StartEvent_1", "StartEvent_2"}
+
+    mfs = _mfs(root)
+    assert "HTTPS" in mfs and "SFTP" in mfs
+    sftp_mf, sftp_props = mfs["SFTP"]
+    # TWO SFTP messageFlows: writer (R1) + poller (S2)
+    all_sftp = [mf for mf in root.findall(".//b:messageFlow", NS) if mf.get("name") == "SFTP"]
+    assert len(all_sftp) == 2
+
+    # poller: cron schedule + delete-on-fetch
+    poller = [mf for mf in all_sftp if mf.get("sourceRef", "").startswith("Participant")][0]
+    pp = {
+        p.findtext("key"): p.findtext("value")
+        for p in poller.find(f"{{{NS['b']}}}extensionElements").findall(f"{{{NS['i']}}}property")
+    }
+    assert "scheduleKey" in pp and "cron" in pp["scheduleKey"]
+    assert pp["fileName"] == "OIW-E2E.*"
+    # fetch + remove from poll dir: reference-proven noop=delete + .archive move
+    assert pp["noop"] == "delete"
+    assert pp["file.move"] == ".archive"
+
+    # plain end event for the poller branch (no messageEventDefinition)
+    end2 = root.find(".//b:endEvent[@id='EndEvent_2']", NS)
+    assert end2 is not None
+    assert end2.find("b:messageEventDefinition", NS) is None

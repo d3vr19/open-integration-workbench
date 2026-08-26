@@ -222,6 +222,97 @@ _SFTP_RECEIVER_PROPS = [
     ("username", ""),
 ]
 
+# SFTP sender (polling fetch) messageFlow — mirrored verbatim from a live
+# UI-authored poller (DPWORLD_SFTP_QAS). Delete-on-fetch semantics: no
+# file.move / doneFileName keys => Camel deletes the file after successful
+# routing. Cron polls every minute.
+_SFTP_POLL_CRON_MINUTE = (
+    "<row><cell>dayValue</cell><cell></cell></row>"
+    "<row><cell>monthValue</cell><cell></cell></row>"
+    "<row><cell>yearValue</cell><cell></cell></row>"
+    "<row><cell>dateType</cell><cell>DAILY</cell></row>"
+    "<row><cell>secondValue</cell><cell>0</cell></row>"
+    "<row><cell>minutesValue</cell><cell></cell></row>"
+    "<row><cell>hourValue</cell><cell></cell></row>"
+    "<row><cell>toInterval</cell><cell>24</cell></row>"
+    "<row><cell>fromInterval</cell><cell>0</cell></row>"
+    "<row><cell>OnEveryMinute</cell><cell>1</cell></row>"
+    "<row><cell>timeType</cell><cell>TIME_INTERVAL</cell></row>"
+    "<row><cell>timeZone</cell><cell>( UTC 5:30 ) India Standard Time(Asia/Kolkata)</cell></row>"
+    "<row><cell>throwExceptionOnExpiry</cell><cell>true</cell></row>"
+    "<row><cell>second</cell><cell>0/10</cell></row>"
+    "<row><cell>minute</cell><cell>*</cell></row>"
+    "<row><cell>hour</cell><cell>0-24</cell></row>"
+    "<row><cell>day_of_month</cell><cell>?</cell></row>"
+    "<row><cell>month</cell><cell>*</cell></row>"
+    "<row><cell>dayOfWeek</cell><cell>*</cell></row>"
+    "<row><cell>year</cell><cell>*</cell></row>"
+    "<row><cell>startAt</cell><cell></cell></row>"
+    "<row><cell>endAt</cell><cell></cell></row>"
+    "<row><cell>attributeBehaviour</cell><cell>isScheduleOnDayRequired,isScheduleRecurRequired,isScheduleAdvancedVisible</cell></row>"
+    "<row><cell>triggerType</cell><cell>cron</cell></row>"
+    "<row><cell>noOfSchedules</cell><cell>1</cell></row>"
+    "<row><cell>schedule1</cell><cell>0+0/1+0-23+?+*+*+*&amp;trigger.timeZone=Asia/Kolkata</cell></row>"
+)
+
+_SFTP_SENDER_PROPS = [
+    ("disconnect", "1"),
+    ("fileName", "{filename}"),
+    ("maximumFileSize", "40"),
+    ("privateKeyAlias", ""),
+    ("emptyFileHandling", "skipFile"),
+    ("location_id", "{locationid}"),
+    ("Name", "SFTP"),
+    ("TransportProtocolVersion", "1.20.1"),
+    ("flatten", "0"),
+    ("proxyPort", "{proxyport}"),
+    ("path", "{directory}"),
+    ("useClusterLock", "0"),
+    ("regex_filter", "0"),
+    ("host", "{hostport}"),
+    ("connectTimeout", "10000"),
+    ("file_sorting_criteria", "sort_by_none"),
+    ("maxMessagesPerPoll", "20"),
+    ("fastExistsCheck", "1"),
+    ("ComponentSWCVId", "1.20.1"),
+    ("credential_name", "{credentialname}"),
+    ("readLock", "none"),
+    ("componentVersion", "1.20"),
+    ("proxyHost", "{proxyhost}"),
+    ("system", "DPWorld"),
+    ("stopOnException", "1"),
+    ("scheduleKey", "{schedule}"),
+    ("allowDeprecatedAlgorithms", "0"),
+    ("TransportProtocol", "SFTP"),
+    (
+        "cmdVariantUri",
+        "ctype::AdapterVariant/cname::sap:SFTP/tp::SFTP/mp::File/direction::Sender/version::1.20.1",
+    ),
+    ("MessageProtocolVersion", "1.20.1"),
+    ("file_lock_timeout", "15"),
+    ("Description", ""),
+    ("readLockCheckInterval", "5000"),
+    ("maximumReconnectAttempts", "3"),
+    ("stepwise", "0"),
+    ("ComponentNS", "sap"),
+    ("recursive", "0"),
+    ("ComponentSWCVName", "external"),
+    ("noop", "delete"),
+    ("doneFileName", "${{file:name}}.done"),
+    ("file.move", ".archive"),
+    ("MessageProtocol", "File"),
+    ("direction", "Sender"),
+    ("authentication", "user_password"),
+    ("file_sorting_direction", "sort_direction_asc"),
+    ("ComponentType", "SFTP"),
+    ("proxyProtocol", "{proxyprotocol}"),
+    ("idempotentRepository", "database"),
+    ("proxyType", "{proxytype}"),
+    ("proxyAlias", ""),
+    ("reconnectDelay", "1000"),
+    ("username", ""),
+]
+
 
 def _elem_id(node_type: str, i: int) -> str:
     """BPMN element id for the i-th node — CPI's runtime compiler keys off
@@ -285,6 +376,53 @@ def collect_flow_scripts(flow: dict, project_root: Path | None) -> dict[str, str
     return out
 
 
+def _branch_chains(spec: dict) -> tuple[list[dict], dict[str, int]]:
+    """Split nodes into one linear branch per entrypoint (BFS via edges).
+
+    Returns (branches, gid) where each branch = {"entry": entrypoint,
+    "nodes": [node dicts]} and gid maps node-id -> global 1-based index
+    used for BPMN element ids.
+    """
+    adjacency: dict[str, list[str]] = {}
+    for e in spec.get("edges", []) or []:
+        adjacency.setdefault(e["from"], []).append(e["to"])
+
+    nodes_by_id = {n["id"]: n for n in spec.get("nodes", [])}
+    branches: list[dict] = []
+    claimed: set[str] = set()
+    for ep in spec.get("entrypoints", []):
+        chain: list[dict] = []
+        cur = ep["id"]
+        while True:
+            node = nodes_by_id.get(cur)
+            if node is not None and cur not in claimed:
+                claimed.add(cur)
+                chain.append(node)
+            nxt = adjacency.get(cur, [])
+            if not nxt or nxt[0] in claimed:
+                break
+            cur = nxt[0]
+        branches.append({"entry": ep, "nodes": chain})
+        # guard against infinite loops on cyclic specs
+        if len(claimed) > len(nodes_by_id) + 1:
+            break
+
+    # Orphan nodes (unreachable via edges) keep legacy linear placement:
+    # append to the first branch in spec order.
+    for n in spec.get("nodes", []):
+        if n["id"] not in claimed:
+            branches[0]["nodes"].append(n)
+            claimed.add(n["id"])
+
+    gid: dict[str, int] = {}
+    g = 0
+    for b in branches:
+        for n in b["nodes"]:
+            g += 1
+            gid[n["id"]] = g
+    return branches, gid
+
+
 def export_flow_to_iflw(
     flow: dict,
     display_name: str | None = None,
@@ -292,18 +430,17 @@ def export_flow_to_iflw(
 ) -> str:
     """Export one OIW IntegrationFlow dict to designer-safe .iflw text.
 
-    `project_root` is required when the flow contains script.groovy nodes:
-    each node's config.resource is resolved against it to determine the
-    bundle-relative script file name.
+    Multi-entrypoint aware: every entrypoint owns one linear branch
+    (HTTPS writer + SFTP poller can coexist in ONE artifact — proven
+    pattern from DPWORLD_SFTP_QAS reference). `project_root` is required
+    when the flow contains script.groovy nodes.
     """
     spec = flow["spec"]
     flow_id = flow.get("metadata", {}).get("id", "flow")
     name = display_name or flow_id
-    entrypoints = spec.get("entrypoints", [])
-    nodes = spec.get("nodes", [])
-    if len(entrypoints) != 1:
-        raise ValueError(f"exporter supports exactly one entrypoint, found {len(entrypoints)}")
-    entry = entrypoints[0]
+    branches, gid = _branch_chains(spec)
+    if not branches:
+        raise ValueError("flow requires at least one entrypoint")
 
     L: list[str] = []
     L.append('<?xml version="1.0" encoding="UTF-8"?>')
@@ -315,35 +452,52 @@ def export_flow_to_iflw(
         'xmlns:ifl="http:///com.sap.ifl.model/Ifl.xsd" '
         'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_1">'
     )
-    # Collaboration
     L.append('    <bpmn2:collaboration id="Collaboration_1" name="Default Collaboration">')
     L.append(_props(_COLLAB_PROPS))
-    L.append('        <bpmn2:participant id="Participant_1" ifl:type="EndpointSender" name="Sender">')
-    L.append(
-        _props(
-            [("enableBasicAuthentication", "false"), ("ifl:type", "EndpointSender")], indent="            "
-        )
-    )
-    L.append("        </bpmn2:participant>")
-    receivers = [n for n in nodes if n["type"].startswith("receiver.")]
-    # Receiver messageFlows live in the COLLABORATION next to the sender's
-    # (fixture convention), referencing the process-scoped ServiceTask ids.
-    receiver_mfs: list[str] = []
-    for r in receivers:
+
+    # --- sender participants (one per entrypoint) ---
+    for bi, b in enumerate(branches, start=1):
+        pid = "Participant_1" if bi == 1 else f"Participant_E{bi}"
         L.append(
-            f'        <bpmn2:participant id="Participant_{escape(r["id"])}" ifl:type="EndpointRecevier" name="{escape(r["id"])}">'
+            f'        <bpmn2:participant id="{pid}" ifl:type="EndpointSender" name="Sender">'
+        )
+        L.append(
+            _props(
+                [("enableBasicAuthentication", "false"), ("ifl:type", "EndpointSender")],
+                indent="            ",
+            )
+        )
+        L.append("        </bpmn2:participant>")
+
+    # --- receiver participants + their messageFlows ---
+    receiver_mfs: list[str] = []
+    seen_receiver_participants: set[str] = set()
+
+    def _receiver_participant(r: dict) -> None:
+        rid = f'Participant_{escape(r["id"])}'
+        if rid in seen_receiver_participants:
+            return
+        seen_receiver_participants.add(rid)
+        L.append(
+            f'        <bpmn2:participant id="{rid}" ifl:type="EndpointRecevier" ' f'name="{escape(r["id"])}">'
         )
         L.append(_props([("ifl:type", "EndpointRecevier")], indent="            "))
         L.append("        </bpmn2:participant>")
+
+    def _receiver_mf(r: dict, bi: int) -> None:
+        """Emit receiver participant + messageFlow for one receiver node."""
+        _receiver_participant(r)
         cfg_r = r.get("config") or {}
-        step_idx = nodes.index(r) + 1
-        is_terminal = step_idx == len(nodes)
+        gid_i = gid[r["id"]]
+        chain = b_nodes[bi]
+        is_terminal = chain and r["id"] == chain[-1]["id"]
         if not is_terminal and r["type"] != "receiver.http":
             raise ValueError(
                 f"mid-flow '{r['type']}' has no request-reply rendering — only "
                 "receiver.http continues the flow with a response"
             )
-        mf_source = "EndEvent_1" if is_terminal else f"ServiceTask_{step_idx}"
+        mf_source = f"EndEvent_{bi}" if is_terminal else f"ServiceTask_{gid_i}"
+        mf_id = f"MessageFlow_R{gid_i}"
         if r["type"] == "receiver.processdirect":
             address = str(cfg_r.get("address", "")).strip()
             if not address:
@@ -352,22 +506,17 @@ def export_flow_to_iflw(
                     "(target process name, e.g. /oiw_pd)"
                 )
             receiver_mfs.append(
-                f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="ProcessDirect" '
+                f'        <bpmn2:messageFlow id="{mf_id}" name="ProcessDirect" '
                 f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
                 + _props(_fill(_PROCESSDIRECT_RECEIVER_PROPS, address=escape(address)))
                 + "\n        </bpmn2:messageFlow>"
             )
-            continue
-        if r["type"] == "receiver.sftp":
-            # Password auth: the SFTP username+password live in tenant
-            # security material referenced by credentialName (Security
-            # Content API). The flow only names the material.
+        elif r["type"] == "receiver.sftp":
             cred = str(cfg_r.get("credentialName", "")).strip()
             if not cred:
                 raise ValueError(
                     f"receiver.sftp node '{r['id']}' requires config.credentialName "
-                    "— deploy User Credentials via the Security Content API and "
-                    "reference them here"
+                    "— deploy User Credentials via the Security Content API"
                 )
             host = str(cfg_r.get("host", "")).strip()
             if not host:
@@ -375,7 +524,7 @@ def export_flow_to_iflw(
             port = int(cfg_r.get("port", 22))
             directory = str(cfg_r.get("directory", "/"))
             receiver_mfs.append(
-                f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="SFTP" '
+                f'        <bpmn2:messageFlow id="{mf_id}" name="SFTP" '
                 f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
                 + _props(
                     _fill(
@@ -395,54 +544,97 @@ def export_flow_to_iflw(
                 )
                 + "\n        </bpmn2:messageFlow>"
             )
-            continue
-        # CPI runtime-start REQUIRES the receiver address split: the bare
-        # URL in httpAddressWithoutQuery and any query string in
-        # httpAddressQuery. A literal '?query' folded into WithoutQuery
-        # fails runtime start (live-bisected 2026-08-26,
-        # p5-p6-plan.md §6). Externalized {{params}} are NOT required.
-        from urllib.parse import urlsplit
+        else:
+            # HTTP — runtime-start REQUIRES the URL split (live-bisected);
+            # externalized {{params}} NOT required.
+            from urllib.parse import urlsplit
 
-        parts = urlsplit(str(cfg_r.get("url", "")))
-        url_base = f"{parts.scheme}://{parts.netloc}{parts.path}" if parts.scheme else parts.geturl()
-        url_query = parts.query
-        receiver_mfs.append(
-            f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="HTTP" '
-            f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
-            + _props(
-                _fill(
-                    _RECEIVER_PROPS,
-                    method=str(cfg_r.get("method", "GET")),
-                    timeout=str(int(cfg_r.get("timeoutSeconds", 30) * 1000)),
-                    system=escape(r["id"]),
-                    url=url_base,
-                    query=url_query,
+            parts = urlsplit(str(cfg_r.get("url", "")))
+            url_base = f"{parts.scheme}://{parts.netloc}{parts.path}" if parts.scheme else parts.geturl()
+            receiver_mfs.append(
+                f'        <bpmn2:messageFlow id="{mf_id}" name="HTTP" '
+                f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
+                + _props(
+                    _fill(
+                        _RECEIVER_PROPS,
+                        method=str(cfg_r.get("method", "GET")),
+                        timeout=str(int(cfg_r.get("timeoutSeconds", 30) * 1000)),
+                        system=escape(r["id"]),
+                        url=url_base,
+                        query=parts.query,
+                    )
+                )
+                + "\n        </bpmn2:messageFlow>"
+            )
+
+    b_nodes: dict[int, list[dict]] = {bi: b["nodes"] for bi, b in enumerate(branches, start=1)}
+    for bi, b in enumerate(branches, start=1):
+        for n in b["nodes"]:
+            if n["type"].startswith("receiver."):
+                _receiver_mf(n, bi)
+
+    # --- sender messageFlows (one per entrypoint) ---
+    for bi, b in enumerate(branches, start=1):
+        ep = b["entry"]
+        pid = "Participant_1" if bi == 1 else f"Participant_E{bi}"
+        target = f"StartEvent_{bi}"
+        etype = ep.get("type", "sender.http")
+        cfg_e = ep.get("config") or {}
+        mf_id = "MessageFlow_1" if bi == 1 else f"MessageFlow_S{bi}"
+        if etype == "sender.processdirect":
+            address = str(cfg_e.get("address", "")).strip()
+            if not address:
+                raise ValueError(
+                    "sender.processdirect entrypoint requires config.address "
+                    "(the process name this flow listens on)"
+                )
+            L.append(
+                f'        <bpmn2:messageFlow id="{mf_id}" name="ProcessDirect" '
+                f'sourceRef="{pid}" targetRef="{target}">'
+            )
+            L.append(_props(_fill(_PROCESSDIRECT_SENDER_PROPS, address=escape(address))))
+            L.append("        </bpmn2:messageFlow>")
+        elif etype == "sender.sftp":
+            cred = str(cfg_e.get("credentialName", "")).strip()
+            host = str(cfg_e.get("host", "")).strip()
+            if not cred or not host:
+                raise ValueError(
+                    "sender.sftp entrypoint requires config.host and "
+                    "config.credentialName (polling fetch + delete-on-success)"
+                )
+            port = int(cfg_e.get("port", 22))
+            L.append(
+                f'        <bpmn2:messageFlow id="{mf_id}" name="SFTP" '
+                f'sourceRef="{pid}" targetRef="{target}">'
+            )
+            L.append(
+                _props(
+                    _fill(
+                        _SFTP_SENDER_PROPS,
+                        filename=escape(str(cfg_e.get("filenameFilter", ".*"))),
+                        directory=escape(str(cfg_e.get("directory", "/"))),
+                        hostport=escape(f"{host}:{port}"),
+                        credentialname=escape(cred),
+                        schedule=_SFTP_POLL_CRON_MINUTE,
+                        proxytype=str(cfg_e.get("proxyType", "none")),
+                        proxyport=str(cfg_e.get("proxyPort", "")),
+                        proxyprotocol=str(cfg_e.get("proxyProtocol", "")),
+                        proxyhost=str(cfg_e.get("proxyHost", "")),
+                        locationid=str(cfg_e.get("locationId", "")),
+                        system="Sender",
+                    )
                 )
             )
-            + "\n        </bpmn2:messageFlow>"
-        )
-    if entry.get("type") == "sender.processdirect":
-        address = str((entry.get("config") or {}).get("address", "")).strip()
-        if not address:
-            raise ValueError(
-                "sender.processdirect entrypoint requires config.address "
-                "(the process name this flow listens on, e.g. /oiw_pd_hf)"
+            L.append("        </bpmn2:messageFlow>")
+        else:
+            path = str(cfg_e.get("path", "/"))
+            L.append(
+                f'        <bpmn2:messageFlow id="{mf_id}" name="HTTPS" '
+                f'sourceRef="{pid}" targetRef="{target}">'
             )
-        L.append(
-            '        <bpmn2:messageFlow id="MessageFlow_1" name="ProcessDirect" '
-            'sourceRef="Participant_1" targetRef="StartEvent_1">'
-        )
-        L.append(_props(_fill(_PROCESSDIRECT_SENDER_PROPS, address=escape(address))))
-        L.append("        </bpmn2:messageFlow>")
-    else:
-        path = str((entry.get("config") or {}).get("path", "/"))
-        L.append(
-            '        <bpmn2:messageFlow id="MessageFlow_1" name="HTTPS" sourceRef="Participant_1" targetRef="StartEvent_1">'
-        )
-        L.append(_props(_fill(_SENDER_PROPS, path=path, system=escape(name))))
-        L.append("        </bpmn2:messageFlow>")
-    # Every real export declares the process as an IntegrationProcess
-    # participant with processRef (runtime binds endpoint routing to it).
+            L.append(_props(_fill(_SENDER_PROPS, path=path, system=escape(name))))
+            L.append("        </bpmn2:messageFlow>")
+
     L.append(
         '<bpmn2:participant id="Participant_Process_1" ifl:type="IntegrationProcess" '
         'name="Integration Process" processRef="Process_1">'
@@ -451,6 +643,8 @@ def export_flow_to_iflw(
     for mf in receiver_mfs:
         L.append(mf)
     L.append("    </bpmn2:collaboration>")
+
+    # ---------------- process: one branch per entrypoint -----------------
     L.append('    <bpmn2:process id="Process_1" name="Integration Process">')
     L.append(
         _props(
@@ -462,65 +656,64 @@ def export_flow_to_iflw(
             ]
         )
     )
-    L.append('        <bpmn2:startEvent id="StartEvent_1" name="Start">')
-    L.append(
-        _props(
-            [
-                ("componentVersion", "1.0"),
-                ("cmdVariantUri", "ctype::FlowstepVariant/cname::MessageStartEvent/version::1.0"),
-            ],
-            indent="            ",
-        )
-    )
-    L.append("            <bpmn2:outgoing>SequenceFlow_0</bpmn2:outgoing>")
-    L.append("            <bpmn2:messageEventDefinition/>")
-    L.append("        </bpmn2:startEvent>")
 
-    # CPI compiled model (from UI-authored reference exports):
-    #  - TERMINAL receivers render as EndEvent + messageFlow(EndEvent ->
-    #    participant) — HTTP and ProcessDirect both proven live.
-    #  - MID-FLOW receiver.http renders as Request-Reply:
-    #    serviceTask(activityType=ExternalCall) whose messageFlow carries
-    #    the HTTP adapter props; the RESPONSE continues in the main flow
-    #    (reference: testing_oiw v3, ServiceTask_6 "Request Reply 1").
-    receiver_terminals: set[int] = set()
-    for i, node in enumerate(nodes, start=1):
-        if node["type"].startswith("receiver.") and i == len(nodes):
-            receiver_terminals.add(i)
-
-    for i, node in enumerate(nodes, start=1):
-        nid = _elem_id(node["type"], i)
-        ntype = node["type"]
-        cfg = node.get("config") or {}
-        incoming = f"SequenceFlow_{i - 1}"
-        outgoing = f"SequenceFlow_{i}"
-        if i in receiver_terminals:
-            continue  # rendered as EndEvent below
-        if ntype.startswith("receiver."):
-            if ntype != "receiver.http":
-                raise ValueError(
-                    f"mid-flow '{ntype}' has no request-reply rendering — only "
-                    "receiver.http continues the flow with a response"
-                )
-            # Request-Reply: response data flows on to the next step.
-            L.append(f'        <bpmn2:serviceTask id="{nid}" name="{escape(str(node["id"]))}">')
-            L.append(
-                _props(
-                    [
-                        ("activityType", "ExternalCall"),
-                        (
-                            "cmdVariantUri",
-                            "ctype::FlowstepVariant/cname::ExternalCall/version::1.0.4",
-                        ),
-                    ],
-                    indent="            ",
-                )
+    seq_counter = 0
+    for bi, b in enumerate(branches, start=1):
+        chain = b["nodes"]
+        start_id = f"StartEvent_{bi}"
+        L.append(f'        <bpmn2:startEvent id="{start_id}" name="Start">')
+        L.append(
+            _props(
+                [
+                    ("componentVersion", "1.0"),
+                    ("cmdVariantUri", "ctype::FlowstepVariant/cname::MessageStartEvent/version::1.0"),
+                ],
+                indent="            ",
             )
-            L.append(f"            <bpmn2:incoming>{incoming}</bpmn2:incoming>")
-            L.append(f"            <bpmn2:outgoing>{outgoing}</bpmn2:outgoing>")
-            L.append("        </bpmn2:serviceTask>")
-            continue
-        else:
+        )
+        L.append(f"            <bpmn2:outgoing>SequenceFlow_{seq_counter}</bpmn2:outgoing>")
+        L.append("            <bpmn2:messageEventDefinition/>")
+        L.append("        </bpmn2:startEvent>")
+
+        for li, node in enumerate(chain):
+            gid_i = gid[node["id"]]
+            nid = _elem_id(node["type"], gid_i)
+            ntype = node["type"]
+            cfg = node.get("config") or {}
+            is_last = li == len(chain) - 1
+            terminal_receiver = is_last and ntype.startswith("receiver.")
+
+            if terminal_receiver:
+                break  # rendered as EndEvent below
+
+            incoming = f"SequenceFlow_{seq_counter}"
+            outgoing = f"SequenceFlow_{seq_counter + 1}"
+            seq_counter += 1
+
+            if ntype.startswith("receiver."):
+                if ntype != "receiver.http":
+                    raise ValueError(
+                        f"mid-flow '{ntype}' has no request-reply rendering — only "
+                        "receiver.http continues the flow with a response"
+                    )
+                L.append(f'        <bpmn2:serviceTask id="{nid}" name="{escape(str(node["id"]))}">')
+                L.append(
+                    _props(
+                        [
+                            ("activityType", "ExternalCall"),
+                            (
+                                "cmdVariantUri",
+                                "ctype::FlowstepVariant/cname::ExternalCall/version::1.0.4",
+                            ),
+                        ],
+                        indent="            ",
+                    )
+                )
+                L.append(f"            <bpmn2:incoming>{incoming}</bpmn2:incoming>")
+                L.append(f"            <bpmn2:outgoing>{outgoing}</bpmn2:outgoing>")
+                L.append("        </bpmn2:serviceTask>")
+                continue
+
             activity = _OIW_TO_ACTIVITY.get(ntype)
             if activity is None:
                 raise ValueError(
@@ -563,14 +756,9 @@ def export_flow_to_iflw(
                     ("script", escape(resource)),
                 ]
             elif activity == "Variables":
-                # Mirrored from UI-authored reference (oiw_pd, "Write
-                # Variables 1"): the variable property is a row-XML cell
-                # table: [name, '', type, value, scope].
                 name_v = escape(str(cfg.get("name", "")))
                 if not name_v:
                     raise ValueError(f"variables.write node '{node['id']}' requires config.name")
-                # Operator-corrected expression (2026-08-26): ${body},
-                # not the $in.body seen in the first reference export.
                 value = escape(str(cfg.get("value", "${body}")))
                 vtype = escape(str(cfg.get("valueType", "expression")))
                 scope = escape(str(cfg.get("scope", "global")))
@@ -581,113 +769,130 @@ def export_flow_to_iflw(
                     ("expire", str(cfg.get("expire", "90"))),
                     ("variable", row),
                     ("activityType", "Variables"),
-                    (
-                        "cmdVariantUri",
-                        "ctype::FlowstepVariant/cname::Variables/version::1.2.0",
-                    ),
+                    ("cmdVariantUri", "ctype::FlowstepVariant/cname::Variables/version::1.2.0"),
                 ]
             else:
                 raise ValueError(f"unhandled activity {activity}")
-            L.append(f'        <bpmn2:callActivity id="{nid}" name="{escape(str(node["id"]))}">')
+
+            tag = "serviceTask" if activity in ("ExternalCall",) else "callActivity"
+            L.append(f'        <bpmn2:{tag} id="{nid}" name="{escape(str(node["id"]))}">')
             L.append(_props(extra, indent="            "))
             L.append(f"            <bpmn2:incoming>{incoming}</bpmn2:incoming>")
             L.append(f"            <bpmn2:outgoing>{outgoing}</bpmn2:outgoing>")
-            L.append("        </bpmn2:callActivity>")
+            L.append(f"        </bpmn2:{tag}>")
 
-    L.append('        <bpmn2:endEvent id="EndEvent_1" name="End">')
-    L.append(
-        _props(
-            [
-                ("componentVersion", "1.1"),
-                ("cmdVariantUri", "ctype::FlowstepVariant/cname::MessageEndEvent/version::1.1.0"),
-            ],
-            indent="            ",
-        )
-    )
-    L.append(f"            <bpmn2:incoming>SequenceFlow_{len(nodes)}</bpmn2:incoming>")
-    L.append("            <bpmn2:messageEventDefinition/>")
-    L.append("        </bpmn2:endEvent>")
+        # Branch end event: message-typed when the branch terminates in a
+        # receiver adapter (its messageFlow hangs off this end); otherwise
+        # a plain end event (no messageEventDefinition).
+        end_id = f"EndEvent_{bi}"
+        last = chain[-1] if chain else None
+        msg_typed = bool(last and last["type"].startswith("receiver."))
+        incoming = f"SequenceFlow_{seq_counter}"
+        seq_counter += 1
+        L.append(f'        <bpmn2:endEvent id="{end_id}" name="End">')
+        # Plain vs message-typed ends differ in variant URI (CodeJam
+        # fixture: cname::EndEvent for plain, MessageEndEvent/1.1.0 for
+        # message-typed with <messageEventDefinition/>).
+        end_props: list[tuple[str, str]] = [("componentVersion", "1.1")]
+        if msg_typed:
+            end_props.append(
+                ("cmdVariantUri", "ctype::FlowstepVariant/cname::MessageEndEvent/version::1.1.0")
+            )
+            L.append(_props(end_props, indent="            "))
+            L.append(f"            <bpmn2:incoming>{incoming}</bpmn2:incoming>")
+            L.append("            <bpmn2:messageEventDefinition/>")
+        else:
+            end_props.append(("cmdVariantUri", "ctype::FlowstepVariant/cname::EndEvent"))
+            L.append(_props(end_props, indent="            "))
+            L.append(f"            <bpmn2:incoming>{incoming}</bpmn2:incoming>")
+        L.append("        </bpmn2:endEvent>")
 
-    # All sequenceFlows declared at process end, mirroring real exports.
-    # Terminal receivers collapse into EndEvent_1 (their messageFlow wires
-    # EndEvent_1 -> Participant_x in the collaboration).
-    ids = (
-        ["StartEvent_1"]
-        + [_elem_id(n["type"], i) for i, n in enumerate(nodes, start=1) if i not in receiver_terminals]
-        + ["EndEvent_1"]
-    )
-    for i in range(len(ids) - 1):
-        L.append(
-            f'        <bpmn2:sequenceFlow id="SequenceFlow_{i}" sourceRef="{ids[i]}" targetRef="{ids[i + 1]}"/>'
-        )
+        # sequenceFlows for this branch (declared at process end, fixture convention)
+        elem_ids = [start_id]
+        for node in chain:
+            if node is last and last is not None and last["type"].startswith("receiver."):
+                continue
+            elem_ids.append(_elem_id(node["type"], gid[node["id"]]))
+        elem_ids.append(end_id)
+        for i in range(len(elem_ids) - 1):
+            L.append(
+                f'        <bpmn2:sequenceFlow id="SequenceFlow_{seq_counter - len(elem_ids) + 1 + i}" '
+                f'sourceRef="{elem_ids[i]}" targetRef="{elem_ids[i + 1]}"/>'
+            )
+
     L.append("    </bpmn2:process>")
-    L.append(_diagram_section(flow, nodes, receiver_terminals, name))
+    L.append(_diagram_section(flow, branches, gid, name))
     L.append("</bpmn2:definitions>")
     return "\n".join(L)
 
 
-def _diagram_section(flow: dict, nodes: list[dict], receiver_terminals: set[int], flow_name: str) -> str:
+def _diagram_section(flow: dict, branches: list[dict], gid: dict[str, int], flow_name: str) -> str:
     """bpmndi section — REQUIRED for the web designer to open the artifact.
 
     Bundles without BPMNDiagram deploy and run but render unopenable in
-    the UI (live finding, 2026-08-26). Layout mirrors the coordinate
-    scheme of real UI exports: sender left, process lane center with
-    steps left-to-right, HTTP receivers above their Request-Reply tasks,
-    terminal receivers right of the end event.
+    the UI (live finding, 2026-08-26). Layout mirrors real UI exports;
+    branches are laid out side by side (430px pitch).
     """
-    entry_id = "StartEvent_1"
-    shapes: list[tuple[str, int, int, int, int]] = []  # id,x,y,w,h
+    shapes: list[tuple[str, int, int, int, int]] = []
+    edges: list[tuple[str, str, str]] = []
 
-    # Process-lane geometry
-    step_x0, step_y, task_w, task_h = 412, 132, 100, 60
-    rendered = [i for i in range(1, len(nodes) + 1) if i not in receiver_terminals]
-    last_right = step_x0 - 150 + 150 * len(rendered) + task_w if rendered else 292 + 32
-    end_x = last_right + 41 if rendered else 365
+    for bi, b in enumerate(branches, start=1):
+        off = 430 * (bi - 1)
+        chain = b["nodes"]
+        step_x0, step_y, task_w, task_h = 412 + off, 132, 100, 60
+        rendered = [
+            n for n in chain if not (chain.index(n) == len(chain) - 1 and n["type"].startswith("receiver."))
+        ]
+        last_right = step_x0 - 150 + 150 * len(rendered) + task_w if rendered else (292 + off) + 32
+        end_x = last_right + 41 if rendered else (292 + off) + 73
 
-    shapes.append((entry_id, 292, 142, 32, 32))
-    k = 0
-    for i, node in enumerate(nodes, start=1):
-        if i in receiver_terminals:
-            continue
-        x = step_x0 + 150 * k
-        shapes.append((_elem_id(node["type"], i), x, step_y, task_w, task_h))
-        k += 1
-    shapes.append(("EndEvent_1", end_x, 142, 32, 32))
-    shapes.append(("Participant_1", 40, 100, 100, 140))  # sender
-    shapes.append(("Participant_Process_1", 250, 60, end_x + 87 - 250, 220))
+        start_id = f"StartEvent_{bi}"
+        end_id = f"EndEvent_{bi}"
+        sender_pid = "Participant_1" if bi == 1 else f"Participant_E{bi}"
 
-    # Receiver participants: mid-flow (Request-Reply) above their task;
-    # terminal receivers right of the end event.
-    k = 0
-    for i, node in enumerate(nodes, start=1):
-        if not node["type"].startswith("receiver."):
-            continue
-        pid = f"Participant_{node['id']}"
-        if i in receiver_terminals:
-            shapes.append((pid, end_x + 175, 69, 100, 140))
-        else:
-            shapes.append((pid, step_x0 + 150 * k + 8, -182, 100, 140))
+        shapes.append((start_id, 292 + off, 142, 32, 32))
+        k = 0
+        for n in rendered:
+            x = step_x0 + 150 * k
+            shapes.append((_elem_id(n["type"], gid[n["id"]]), x, step_y, task_w, task_h))
             k += 1
+        shapes.append((end_id, end_x, 142, 32, 32))
+        shapes.append((sender_pid, 40 + off, 100, 100, 140))
+        shapes.append(("Participant_Process_1", 250 + off, 60, end_x + 87 - (250 + off), 220))
 
-    def center(shape_id: str) -> tuple[int, int]:
-        _, x, y, w, h = next(s for s in shapes if s[0] == shape_id)
-        return x + w // 2, y + h // 2
+        # receiver participants
+        for n in chain:
+            if not n["type"].startswith("receiver."):
+                continue
+            pid = f'Participant_{n["id"]}'
+            gi = gid[n["id"]]
+            is_terminal = n is chain[-1]
+            if is_terminal:
+                shapes.append((pid, end_x + 175, 69, 100, 140))
+            else:
+                shapes.append((pid, step_x0 + 150 * k + 8, -182, 100, 140))
+                k += 1
 
-    edges: list[tuple[str, str, str]] = []  # bpmnId, sourceShapeId, targetShapeId
-    seq_ids = (
-        ["StartEvent_1"]
-        + [_elem_id(n["type"], i) for i, n in enumerate(nodes, start=1) if i not in receiver_terminals]
-        + ["EndEvent_1"]
-    )
-    for i in range(len(seq_ids) - 1):
-        edges.append((f"SequenceFlow_{i}", seq_ids[i], seq_ids[i + 1]))
-    edges.append(("MessageFlow_1", "Participant_1", "StartEvent_1"))
-    for r in nodes:
-        if not r["type"].startswith("receiver."):
-            continue
-        idx = nodes.index(r) + 1
-        src = "EndEvent_1" if idx == len(nodes) else f"ServiceTask_{idx}"
-        edges.append((f"MessageFlow_R{idx}", src, f"Participant_{r['id']}"))
+        def center(shape_id: str) -> tuple[int, int]:
+            _, x, y, w, h = next(s for s in shapes if s[0] == shape_id)
+            return x + w // 2, y + h // 2
+
+        # sequenceFlow edges
+        elem_ids = [start_id]
+        for n in rendered:
+            elem_ids.append(_elem_id(n["type"], gid[n["id"]]))
+        elem_ids.append(end_id)
+        base = seq_base(flow, bi)
+        for i in range(len(elem_ids) - 1):
+            edges.append((f"SequenceFlow_{base + i}", elem_ids[i], elem_ids[i + 1]))
+
+        edges.append(("MessageFlow_1" if bi == 1 else f"MessageFlow_S{bi}", sender_pid, start_id))
+        for n in chain:
+            if not n["type"].startswith("receiver."):
+                continue
+            gi = gid[n["id"]]
+            src = end_id if n is chain[-1] else f"ServiceTask_{gi}"
+            edges.append((f"MessageFlow_R{gi}", src, f'Participant_{n["id"]}'))
 
     out = ['    <bpmndi:BPMNDiagram id="BPMNDiagram_1" name="Default Collaboration Diagram">']
     out.append('        <bpmndi:BPMNPlane bpmnElement="Collaboration_1" id="BPMNPlane_1">')
@@ -697,12 +902,12 @@ def _diagram_section(flow: dict, nodes: list[dict], receiver_terminals: set[int]
             f'                <dc:Bounds height="{float(h)}" width="{float(w)}" x="{float(x)}" y="{float(y)}"/>'
         )
         out.append("            </bpmndi:BPMNShape>")
-    for eid, src, tgt in edges:
-        sx, sy = center(src)
-        tx, ty = center(tgt)
+    for eid, s, t in edges:
+        sx, sy = center(s)
+        tx, ty = center(t)
         out.append(
             f'            <bpmndi:BPMNEdge bpmnElement="{escape(eid)}" id="BPMNEdge_{escape(eid)}" '
-            f'sourceElement="BPMNShape_{escape(src)}" targetElement="BPMNShape_{escape(tgt)}">'
+            f'sourceElement="BPMNShape_{escape(s)}" targetElement="BPMNShape_{escape(t)}">'
         )
         out.append(f'                <di:waypoint x="{float(sx)}" xsi:type="dc:Point" y="{float(sy)}"/>')
         out.append(f'                <di:waypoint x="{float(tx)}" xsi:type="dc:Point" y="{float(ty)}"/>')
@@ -710,6 +915,17 @@ def _diagram_section(flow: dict, nodes: list[dict], receiver_terminals: set[int]
     out.append("        </bpmndi:BPMNPlane>")
     out.append("    </bpmndi:BPMNDiagram>")
     return "\n".join(out)
+
+
+def seq_base(flow: dict, bi: int) -> int:
+    """Starting SequenceFlow index for branch bi (mirrors emitter counting)."""
+    total = 0
+    branches, _ = _branch_chains(flow)
+    for i, b in enumerate(branches, start=1):
+        if i == bi:
+            return total
+        total += len(b["nodes"]) + 1
+    return total
 
 
 def _fold_manifest_line(line: str, limit: int = 70) -> str:
