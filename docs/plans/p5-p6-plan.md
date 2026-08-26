@@ -310,6 +310,10 @@ same loop from two sides; do them together.
   message-send for non-HTTP entrypoints. LIVE VERDICT: both STARTED;
   GET trigger -> 200 weather JSON; MPL COMPLETED pairs on BOTH artifacts.
   Designer-open confirmed by operator after v6.1 DI generation.
+  - PERSISTENCE PROVEN (operator-verified): oiw_var global variable holds
+    the exact open-meteo response body (Warsaw 16.4C @ 2026-08-26T07:00)
+    — ${body} capture via ProcessDirect hop is byte-faithful. First
+    durable side effect produced by an OIW-built multi-artifact chain.
   - State at close: open_mateo_test (path /oiw_pd_hf) and oiw_pd_hf
     (path /oiw_pd_hf2) BOTH STARTED running the identical full chain;
     oiw_pd consuming via ProcessDirect. Next: variables.write live use,
