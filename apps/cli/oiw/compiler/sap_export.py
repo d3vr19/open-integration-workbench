@@ -259,7 +259,6 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
     for i, node in enumerate(nodes, start=1):
         if node["type"].startswith("receiver.") and i == len(nodes):
             receiver_terminals.add(i)
-    non_receiver_nodes = [n for n in nodes if not n["type"].startswith("receiver.")]
 
     for i, node in enumerate(nodes, start=1):
         nid = _elem_id(node["type"], i)
