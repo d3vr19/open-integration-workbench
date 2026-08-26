@@ -135,3 +135,23 @@ same loop from two sides; do them together.
       wrapContent path.
   H3: metainfo.prop carried required config we can't see (original lost);
       probe by exporting a UI-created trivial iFlow's bytes as reference.
+- 2026-08-26 (cont.) — BISECTION MATRIX (all via calibrate loop, live):
+  | Variant | Result |
+  |---|---|
+  | Bare Start→End (scaffold only) | **STARTED ✅** |
+  | + Enricher (log.message→Content-Modifier shape) | **STARTED ✅** |
+  | + Receiver (ExternalCall serviceTask + messageFlow) | ERROR |
+  Eliminated as causes: Enricher encoding; OSGi manifest headers; dashed
+  node ids; process-scoped vs collaboration-scoped messageFlow placement
+  (moved to collab per fixture; still ERROR); receiver URL DNS validity.
+  Property-level diff of our receiver MF vs fixture MessageFlow_80:
+  NO missing keys; only semantic value diffs (proxyType internet≠sapcc,
+  httpAddressQuery empty) — unlikely culprits.
+  ⇒ The receiver path needs a REFERENCE EXPORT: create a trivial iFlow
+    WITH an HTTP receiver in the tenant UI, download its bundle bytes
+    (tenant pull), and byte-diff the .iflw against ours. That will point
+    at whatever attribute/element CPI's runtime compiler demands that we
+    cannot guess from the CodeJam fixture (whose receivers all live in
+    subprocesses — possible structural requirement).
+  NOTE: operator can also just deploy once via UI and share the downloaded
+  artifact zip — no devtools needed for THIS step.

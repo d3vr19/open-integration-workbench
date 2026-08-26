@@ -154,21 +154,40 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
     )
     L.append("        </bpmn2:participant>")
     receivers = [n for n in nodes if n["type"].startswith("receiver.")]
+    # Receiver messageFlows live in the COLLABORATION next to the sender's
+    # (fixture convention), referencing the process-scoped ServiceTask ids.
+    receiver_mfs: list[str] = []
     for r in receivers:
         L.append(
             f'        <bpmn2:participant id="Participant_{escape(r["id"])}" ifl:type="EndpointRecevier" name="{escape(r["id"])}">'
         )
         L.append(_props([("ifl:type", "EndpointRecevier")], indent="            "))
         L.append("        </bpmn2:participant>")
+        cfg_r = r.get("config") or {}
+        step_idx = nodes.index(r) + 1
+        receiver_mfs.append(
+            f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="HTTP" '
+            f'sourceRef="ServiceTask_{step_idx}" targetRef="Participant_{escape(r["id"])}">\n'
+            + _props(
+                _fill(
+                    _RECEIVER_PROPS,
+                    method=str(cfg_r.get("method", "GET")),
+                    timeout=str(int(cfg_r.get("timeoutSeconds", 30) * 1000)),
+                    system=escape(r["id"]),
+                    url=str(cfg_r.get("url", "")),
+                )
+            )
+            + "\n        </bpmn2:messageFlow>"
+        )
     path = str((entry.get("config") or {}).get("path", "/"))
     L.append(
         '        <bpmn2:messageFlow id="MessageFlow_1" name="HTTPS" sourceRef="Participant_1" targetRef="StartEvent_1">'
     )
     L.append(_props(_fill(_SENDER_PROPS, path=path, system=escape(name))))
     L.append("        </bpmn2:messageFlow>")
+    for mf in receiver_mfs:
+        L.append(mf)
     L.append("    </bpmn2:collaboration>")
-
-    # Main process
     L.append('    <bpmn2:process id="Process_1" name="Integration Process">')
     L.append(
         _props(
@@ -194,8 +213,18 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
     L.append("            <bpmn2:messageEventDefinition/>")
     L.append("        </bpmn2:startEvent>")
 
+    # CPI's runtime compiler keys off BPMN element-id prefixes (every real
+    # export uses StartEvent_/CallActivity_/ServiceTask_/EndEvent_); generic
+    # ids import fine but fail runtime-start (H1, p5-p6-plan.md §6).
+    def _elem_id(node_type: str, i: int) -> str:
+        if node_type.startswith("receiver."):
+            return f"ServiceTask_{i}"
+        if node_type == "router.content-based":
+            return f"ExclusiveGateway_{i}"
+        return f"CallActivity_{i}"
+
     for i, node in enumerate(nodes, start=1):
-        nid = f"Step_{i}"
+        nid = _elem_id(node["type"], i)
         ntype = node["type"]
         cfg = node.get("config") or {}
         incoming = f"SequenceFlow_{i - 1}"
@@ -215,19 +244,6 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
             L.append(f"            <bpmn2:incoming>{incoming}</bpmn2:incoming>")
             L.append(f"            <bpmn2:outgoing>{outgoing}</bpmn2:outgoing>")
             L.append("        </bpmn2:serviceTask>")
-            mf_id = f"MessageFlow_R{i}"
-            url = str(cfg.get("url", ""))
-            method = str(cfg.get("method", "GET"))
-            timeout = str(int(cfg.get("timeoutSeconds", 30) * 1000))
-            L.append(
-                f'        <bpmn2:messageFlow id="{mf_id}" name="HTTP" sourceRef="{nid}" targetRef="Participant_{escape(node["id"])}">'
-            )
-            L.append(
-                _props(
-                    _fill(_RECEIVER_PROPS, method=method, timeout=timeout, system=escape(node["id"]), url=url)
-                )
-            )
-            L.append("        </bpmn2:messageFlow>")
         else:
             activity = _OIW_TO_ACTIVITY.get(ntype)
             if activity is None:
@@ -292,7 +308,14 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
     L.append("        </bpmn2:endEvent>")
 
     # All sequenceFlows declared at process end, mirroring real exports.
-    ids = ["StartEvent_1"] + [f"Step_{i}" for i in range(1, len(nodes) + 1)] + ["EndEvent_1"]
+    ids = (
+        ["StartEvent_1"]
+        + [
+            ("ServiceTask_" if n["type"].startswith("receiver.") else "CallActivity_") + str(i)
+            for i, n in enumerate(nodes, start=1)
+        ]
+        + ["EndEvent_1"]
+    )
     for i in range(len(ids) - 1):
         L.append(
             f'        <bpmn2:sequenceFlow id="SequenceFlow_{i}" sourceRef="{ids[i]}" targetRef="{ids[i + 1]}"/>'
@@ -398,11 +421,7 @@ def build_cpi_bundle(
                         symbolic=escape(symbolic), name=escape(name)
                     ).splitlines()
                 ]
-                + [
-                    _fold_manifest_line(line)
-                    for line in (import_headers or "").splitlines()
-                    if line.strip()
-                ]
+                + [_fold_manifest_line(line) for line in (import_headers or "").splitlines() if line.strip()]
             )
             + "\n",
             "metainfo.prop": "",
