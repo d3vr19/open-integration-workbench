@@ -1,0 +1,56 @@
+props:
+  cleanupHeaders: '1'
+  WsdlUserNameTokenCredentialName: ''
+  privateKeyAlias: ''
+  location_id: EMCNPCC
+  Name: SOAP
+  TransportProtocolVersion: 1.12.2
+  UserNameTokenOption: None
+  proxyPort: ''
+  WSSecurity_SignatureAlgorithm: SHA1
+  recipientX509TokenAssertion: WssX509V3Token10
+  ComponentSWCVId: 1.12.2
+  X509TokenAssertion: WssX509V3Token10
+  allowChunking: '1'
+  soapWsdlPortName: p1:ZWS_PR_RFQ_LCNC
+  componentVersion: '1.12'
+  proxyHost: ''
+  SenderBasicSecurityProfileCompliant: '1'
+  UserNameTokenCredentialName: ''
+  AlgorithmSuiteAssertion: Basic128Rsa15
+  TransportProtocol: HTTP
+  MessageProtocolVersion: 1.12.2
+  WSSecurityType_outbound: SignMessage
+  InitiatorTokenIncludeStrategy_outbound: AlwaysToRecipient
+  SetTimeStamp: '0'
+  ComponentNS: sap
+  ComponentSWCVName: external
+  PublicKeyAliasEncryption_wsdl: ''
+  soapWsdlURL: /wsdl/req.wsdl
+  CompressMessage: '0'
+  sendHttpResponseCode: '0'
+  soapServiceName: p1:ZWS_PR_RFQ_LCNC
+  MessageProtocol: SOAP 1.x
+  requestTimeout: '60000'
+  direction: Receiver
+  authentication: Basic
+  PrivateKeyAliasSigning: ''
+  ComponentType: SOAP
+  SenderBasicSecurityProfileCompliant_wsdl: '1'
+  proxyType: sapcc
+  operationName: p1:ZmmPrRfqLcnc
+  PrivateKeyAliasSigning_wsdl: ''
+  PublicKeyAliasEncryption: ''
+  WSSecurity_outbound: None
+  RecipientTokenIncludeStrategy: Never
+  credentialName: soa_manager_lcnc
+  KeepConnectionAlive: '1'
+  Layout_outbound: Strict
+shape: SOAP-Receiver-SOAP
+componentType: SOAP
+direction: Receiver
+name: SOAP
+observedIn: 1
+exporterCovered: false
+examples:
+- Testpackage01/Query_PurchaseRequisitionWithSOAPRcvAdp

@@ -1,0 +1,53 @@
+props:
+  disconnect: '{{MessageFlow_1_disconnect}}'
+  fileName: '{{MessageFlow_1_fileName}}'
+  maximumReconnectAttempts: '{{MessageFlow_1_maximumReconnectAttempts}}'
+  stepwise: '{{MessageFlow_1_stepwise}}'
+  ComponentNS: sap
+  privateKeyAlias: '{{MessageFlow_1_privateKeyAlias}}'
+  location_id: '{{MessageFlow_1_location_id}}'
+  recursive: '{{MessageFlow_1_recursive}}'
+  Name: SFTP_EDI846_Sender
+  TransportProtocolVersion: 1.13.1
+  flatten: '{{MessageFlow_1_flatten}}'
+  ComponentSWCVName: external
+  path: '{{MessageFlow_1_path}}'
+  proxyPort: '{{MessageFlow_1_proxyPort}}'
+  noop: '{{MessageFlow_1_noop}}'
+  doneFileName: '{{MessageFlow_1_doneFileName}}'
+  file.move: '{{MessageFlow_1_file.move}}'
+  host: '{{MessageFlow_1_host}}'
+  connectTimeout: '{{MessageFlow_1_connectTimeout}}'
+  file_sorting_criteria: '{{MessageFlow_1_file_sorting_criteria}}'
+  maxMessagesPerPoll: '{{MessageFlow_1_maxMessagesPerPoll}}'
+  fastExistsCheck: '{{MessageFlow_1_fastExistsCheck}}'
+  MessageProtocol: File
+  ComponentSWCVId: 1.13.1
+  direction: Sender
+  authentication: '{{MessageFlow_1_authentication}}'
+  file_sorting_direction: '{{MessageFlow_1_file_sorting_direction}}'
+  ComponentType: SFTP
+  credential_name: '{{MessageFlow_1_credential_name}}'
+  proxyProtocol: '{{MessageFlow_1_proxyProtocol}}'
+  readLock: '{{MessageFlow_1_readLock}}'
+  idempotentRepository: '{{MessageFlow_1_idempotentRepository}}'
+  proxyType: '{{MessageFlow_1_proxyType}}'
+  proxyAlias: '{{MessageFlow_1_proxyAlias}}'
+  componentVersion: '1.13'
+  reconnectDelay: '{{MessageFlow_1_reconnectDelay}}'
+  proxyHost: '{{MessageFlow_1_proxyHost}}'
+  scheduleKey: '{{MessageFlow_1_scheduleKey}}'
+  allowDeprecatedAlgorithms: '{{MessageFlow_1_allowDeprecatedAlgorithms}}'
+  TransportProtocol: SFTP
+  MessageProtocolVersion: 1.13.1
+  file_lock_timeout: '{{MessageFlow_1_file_lock_timeout}}'
+  username: '{{MessageFlow_1_username}}'
+shape: SFTP-Sender-SFTP_EDI846_Sender
+componentType: SFTP
+direction: Sender
+name: SFTP_EDI846_Sender
+observedIn: 2
+exporterCovered: false
+examples:
+- POtoCIMigration/BC_INTERTRADE_SI_EDI846_To_PROACT01_OUTBOUND_ASYNC_Emcure_S4
+- QAS4ETSInterfaces/BC_INTERTRADE_SI_EDI846_To_PROACT01_OUTBOUND_ASYNC_Emcure_S4_EPQ

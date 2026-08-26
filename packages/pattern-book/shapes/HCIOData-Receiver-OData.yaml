@@ -1,0 +1,50 @@
+props:
+  pagination: '0'
+  odataCertAuthPrivateKeyAlias: ''
+  ComponentNS: sap
+  resourcePath: SOHeaderSet
+  customQueryOptions: ''
+  metadataAllowedURIParams: '*'
+  Name: OData
+  TransportProtocolVersion: 1.24.0
+  ComponentSWCVName: external
+  proxyPort: ''
+  enableMPLAttachments: 'true'
+  receiveTimeOut: '1'
+  alias: EPQ_BASIC
+  contentType: application/atom+xml
+  MessageProtocol: OData V2
+  ComponentSWCVId: 1.24.0
+  direction: Receiver
+  scc_location_id: EMCNPCC
+  metadataAllowedHeaders: '*'
+  ComponentType: HCIOData
+  queryOptions: ''
+  proxyType: sapcc
+  isCSRFEnabled: 'false'
+  componentVersion: '1.24'
+  proxyHost: ''
+  edmxFilePath: edmx/epq_emcure_com_5000_sap_opu_odata_sap_ZSD_UNICOM_SALES_SRV.edmx
+  enableTLSSessionReuse: 'false'
+  odatapagesize: ''
+  authenticationMethod: Basic
+  whitelistResponseHeaders: '*'
+  enableBatchProcessing: '0'
+  TransportProtocol: HTTP
+  fields: SalesOrderCode,HeaderToItemNav/SalesOrderItemCode,HeaderToItemNav/ItemSKU,HeaderToItemNav/MRP,HeaderToItemNav/TotalPrice,HeaderToItemNav/SellingPrice,HeaderToItemNav/CostPrice,HeaderToItemNav/CGST,HeaderToItemNav/SGST,HeaderToItemNav/IGST,HeaderToItemNav/CGSTRate,HeaderToItemNav/IGSTRate,HeaderToItemNav/SGSTRate,COD,Channel,ShippingAddrState,Facility,ShippingAddrName,CreatedOn
+  characterEncoding: utf8
+  whitelistRequestHeaders: '*'
+  operation: Create(POST)
+  MessageProtocolVersion: 1.24.0
+shape: HCIOData-Receiver-OData
+componentType: HCIOData
+direction: Receiver
+name: OData
+observedIn: 36
+exporterCovered: false
+examples:
+- EMCKomalTEST/Plan_visage_Price
+- EMCKomalTEST/Planvisage_inventory1_copy
+- HemangiTest/Planvisage_inventory1_copy_copy
+- HemangiTest/test1
+- HemangiTest/vendor_invoice

@@ -1,0 +1,43 @@
+props:
+  methodSourceExpression: ''
+  ComponentNS: sap
+  privateKeyAlias: ''
+  httpMethod: POST
+  allowedResponseHeaders: '*'
+  Name: HTTP
+  TransportProtocolVersion: 1.15.0
+  ComponentSWCVName: external
+  proxyPort: ''
+  enableMPLAttachments: 'true'
+  httpRequestTimeout: '60000'
+  MessageProtocol: None
+  ComponentSWCVId: 1.15.0
+  allowedRequestHeaders: '*'
+  direction: Receiver
+  ComponentType: HTTP
+  httpShouldSendBody: 'false'
+  throwExceptionOnFailure: 'true'
+  proxyType: default
+  componentVersion: '1.15'
+  retryIteration: '1'
+  proxyHost: ''
+  retryOnConnectionFailure: 'false'
+  authenticationMethod: None
+  locationID: ''
+  retryInterval: '5'
+  TransportProtocol: HTTP
+  credentialName: ''
+  httpErrorResponseCodes: ''
+  MessageProtocolVersion: 1.15.0
+shape: HTTP-Receiver-HTTP
+componentType: HTTP
+direction: Receiver
+name: HTTP
+observedIn: 87
+exporterCovered: true
+examples:
+- ALLOGA/Alloga_Integration
+- AdaequareGST/Authentication
+- AdaequareGST/GSTR2A
+- AdaequareGST/GSTR2B
+- AdaequareGST/open_mateo_test

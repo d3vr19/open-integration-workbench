@@ -1,0 +1,47 @@
+props:
+  disconnect: '0'
+  fileName: ''
+  maximumReconnectAttempts: '3'
+  stepwise: '0'
+  fileExist: Override
+  ComponentNS: sap
+  autoCreate: '1'
+  privateKeyAlias: ''
+  location_id: ''
+  Name: EMCURE_SFTP
+  TransportProtocolVersion: 1.14.0
+  flatten: '0'
+  sftpSecEnabled: '1'
+  useTempFile: '0'
+  ComponentSWCVName: external
+  path: /Inbound
+  proxyPort: '8080'
+  host: emsftp.emcure.com:4422
+  connectTimeout: '10000'
+  fastExistsCheck: '1'
+  MessageProtocol: File
+  ComponentSWCVId: 1.14.0
+  direction: Receiver
+  authentication: user_password
+  ComponentType: SFTP
+  fileAppendTimeStamp: '1'
+  credential_name: EmcureSFTPForMantra
+  proxyProtocol: socks5
+  proxyType: none
+  proxyAlias: ''
+  componentVersion: '1.13'
+  reconnectDelay: '1000'
+  proxyHost: ''
+  tempFileName: ${file:name}.tmp
+  allowDeprecatedAlgorithms: '0'
+  TransportProtocol: SFTP
+  MessageProtocolVersion: 1.14.0
+  username: ''
+shape: SFTP-Receiver-EMCURE_SFTP
+componentType: SFTP
+direction: Receiver
+name: EMCURE_SFTP
+observedIn: 1
+exporterCovered: false
+examples:
+- MantraETS/Mantra_Idoc_CPI

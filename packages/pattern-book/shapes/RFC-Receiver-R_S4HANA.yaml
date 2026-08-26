@@ -1,0 +1,23 @@
+props:
+  ComponentType: RFC
+  ComponentNS: sap
+  destination: '{{RFCDestination}}'
+  componentVersion: '1.2'
+  Name: R_S4HANA
+  TransportProtocolVersion: 1.2.1
+  ComponentSWCVName: external
+  transactioncommit: '0'
+  newConnection: '0'
+  TransportProtocol: RFC
+  MessageProtocol: Synchronous RFC
+  MessageProtocolVersion: 1.2.1
+  ComponentSWCVId: 1.2.1
+  direction: Receiver
+shape: RFC-Receiver-R_S4HANA
+componentType: RFC
+direction: Receiver
+name: R_S4HANA
+observedIn: 1
+exporterCovered: false
+examples:
+- LCNCS4HANAQAS/Get_ItemCategoriesInPurchaseDocument_QAS

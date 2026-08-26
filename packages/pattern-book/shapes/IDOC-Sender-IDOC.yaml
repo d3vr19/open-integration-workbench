@@ -1,0 +1,26 @@
+props:
+  ComponentType: IDOC
+  maximumBodySize: '40'
+  ComponentNS: sap
+  maximumAttachmentSize: '100'
+  componentVersion: '1.4'
+  Name: IDOC
+  xmlCharacterHandling: throwException
+  TransportProtocolVersion: 1.6.0
+  ComponentSWCVName: external
+  TransportProtocol: HTTP
+  userRole: ESBMessaging.send
+  senderAuthType: RoleBased
+  MessageProtocol: IDoc SOAP
+  MessageProtocolVersion: 1.6.0
+  ComponentSWCVId: 1.6.0
+  direction: Sender
+shape: IDOC-Sender-IDOC
+componentType: IDOC
+direction: Sender
+name: IDOC
+observedIn: 2
+exporterCovered: false
+examples:
+- MantraETS/Mantra_Idoc_CPI
+- POtoCIMigration/GenericIDocSender

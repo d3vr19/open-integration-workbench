@@ -1,0 +1,23 @@
+props:
+  ComponentType: RFC
+  ComponentNS: sap
+  destination: ETS_RFC
+  componentVersion: '1.2'
+  Name: DEV_ETS
+  TransportProtocolVersion: 1.2.1
+  ComponentSWCVName: external
+  transactioncommit: '0'
+  newConnection: '0'
+  TransportProtocol: RFC
+  MessageProtocol: Synchronous RFC
+  MessageProtocolVersion: 1.2.1
+  ComponentSWCVId: 1.2.1
+  direction: Receiver
+shape: RFC-Receiver-DEV_ETS
+componentType: RFC
+direction: Receiver
+name: DEV_ETS
+observedIn: 1
+exporterCovered: false
+examples:
+- DEVS4BRMInterface/BRM_TO_SAP_Quality_and_BatchRelease

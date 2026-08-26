@@ -1,0 +1,51 @@
+props:
+  disconnect: '0'
+  fileName: ${property.FileName}
+  maximumReconnectAttempts: '3'
+  stepwise: '0'
+  fileExist: Override
+  ComponentNS: sap
+  autoCreate: '0'
+  privateKeyAlias: epq_sftp
+  location_id: EMCNPCC
+  Name: SFTP
+  TransportProtocolVersion: 1.18.0
+  flatten: '0'
+  sftpSecEnabled: '0'
+  useTempFile: '0'
+  ComponentSWCVName: external
+  path: ../../INTERFACE/CITI/INBOUND
+  proxyPort: '8080'
+  host: epqsftp:22
+  connectTimeout: '10000'
+  fastExistsCheck: '0'
+  MessageProtocol: File
+  ComponentSWCVId: 1.18.0
+  direction: Receiver
+  authentication: public_key
+  ComponentType: SFTP
+  fileAppendTimeStamp: '0'
+  credential_name: ''
+  proxyProtocol: socks5
+  proxyType: sapcc
+  proxyAlias: ''
+  componentVersion: '1.13'
+  reconnectDelay: '1000'
+  proxyHost: ''
+  tempFileName: ${file:name}.tmp
+  allowDeprecatedAlgorithms: '0'
+  TransportProtocol: SFTP
+  MessageProtocolVersion: 1.18.0
+  username: CIBCQA
+shape: SFTP-Receiver-SFTP
+componentType: SFTP
+direction: Receiver
+name: SFTP
+observedIn: 22
+exporterCovered: false
+examples:
+- DPWORLD/DPWORLD_SFTP
+- DPWORLDEPQ/DPWORLD_SFTP_QAS
+- EDICOM/Edicom_SFTP_Dev
+- EmcKalpNoTransport/PS_sftp
+- EmcPayCitiDEV/Pull_PayAckFile_DEV

@@ -1,0 +1,45 @@
+props:
+  methodSourceExpression: '{{MessageFlow_3_methodSourceExpression}}'
+  apiArtifactType: ''
+  providerAuth: ''
+  ComponentNS: sap
+  privateKeyAlias: '{{MessageFlow_3_privateKeyAlias}}'
+  httpMethod: '{{MessageFlow_3_httpMethod}}'
+  allowedResponseHeaders: '{{MessageFlow_3_allowedResponseHeaders}}'
+  Name: CC_COMMONAPI_RECEIVER
+  internetProxyType: ''
+  TransportProtocolVersion: 1.16.1
+  ComponentSWCVName: external
+  proxyPort: '{{MessageFlow_3_proxyPort}}'
+  enableMPLAttachments: '{{MessageFlow_3_enableMPLAttachments}}'
+  httpRequestTimeout: '{{MessageFlow_3_httpRequestTimeout}}'
+  MessageProtocol: None
+  ComponentSWCVId: 1.16.1
+  providerName: ''
+  allowedRequestHeaders: '{{MessageFlow_3_allowedRequestHeaders}}'
+  direction: Receiver
+  ComponentType: HTTP
+  httpShouldSendBody: '{{MessageFlow_3_httpShouldSendBody}}'
+  throwExceptionOnFailure: '{{MessageFlow_3_throwExceptionOnFailure}}'
+  proxyType: '{{MessageFlow_3_proxyType}}'
+  componentVersion: '1.16'
+  retryIteration: '{{MessageFlow_3_retryIteration}}'
+  proxyHost: '{{MessageFlow_3_proxyHost}}'
+  providerUrl: ''
+  retryOnConnectionFailure: '{{MessageFlow_3_retryOnConnectionFailure}}'
+  authenticationMethod: '{{MessageFlow_3_authenticationMethod}}'
+  locationID: '{{MessageFlow_3_locationID}}'
+  retryInterval: '{{MessageFlow_3_retryInterval}}'
+  TransportProtocol: HTTP
+  credentialName: '{{MessageFlow_3_credentialName}}'
+  httpErrorResponseCodes: '{{MessageFlow_3_httpErrorResponseCodes}}'
+  MessageProtocolVersion: 1.16.1
+  providerRelativeUrl: '{{MessageFlow_3_providerRelativeUrl}}'
+shape: HTTP-Receiver-CC_COMMONAPI_RECEIVER
+componentType: HTTP
+direction: Receiver
+name: CC_COMMONAPI_RECEIVER
+observedIn: 1
+exporterCovered: true
+examples:
+- AdaequareGST/SI_out_gsp_commonapi

@@ -1,0 +1,27 @@
+props:
+  ComponentType: RFC
+  ComponentNS: sap
+  destination: '{{RFC_Destination}}'
+  componentVersion: '1.2'
+  Name: RFC
+  TransportProtocolVersion: 1.2.1
+  ComponentSWCVName: external
+  transactioncommit: '0'
+  newConnection: '0'
+  TransportProtocol: RFC
+  MessageProtocol: Synchronous RFC
+  MessageProtocolVersion: 1.2.1
+  ComponentSWCVId: 1.2.1
+  direction: Receiver
+shape: RFC-Receiver-RFC
+componentType: RFC
+direction: Receiver
+name: RFC
+observedIn: 101
+exporterCovered: false
+examples:
+- ALLOGA/POST_Alloga_DEV
+- ALLOGA/POST_Del_Alloga_QAS
+- BRMInterfaceS4QAS/QAS_BRM_TO_SAP_Quality_and_BatchRelease_
+- DPWORLD/ASN_Outbond
+- DPWORLD/GRN_Inbound

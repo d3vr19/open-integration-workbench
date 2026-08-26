@@ -1,0 +1,49 @@
+props:
+  WSSecurityType: VerifyMessage
+  PublicKeyAliasResponseEncryption: ''
+  ComponentNS: sap
+  maximumAttachmentSize: '100'
+  Name: SOAP
+  TransportProtocolVersion: 1.12.2
+  ComponentSWCVName: external
+  useWSAddressing: '0'
+  soapWsdlURL: ''
+  soapOptions: cxfRobust
+  CheckTimeStamp: '0'
+  soapServiceName: ''
+  WSSecurity_SignatureAlgorithm_Inbound: SHA1
+  SigningOrder: SignBeforeEncryption
+  MessageProtocol: SOAP 1.x
+  ComponentSWCVId: 1.12.2
+  direction: Sender
+  clientCertificates: ''
+  X509TokenAssertion: WssX509V3Token10
+  ComponentType: SOAP
+  maximumBodySize: '40'
+  soapWsdlPortName: ''
+  componentVersion: '1.9'
+  messageExchangePattern: RequestReply
+  WSSecurity: None
+  PrivateKeyAliasResponseSigning: ''
+  SaveIncomingSignedMessage: '0'
+  SenderBasicSecurityProfileCompliant: '1'
+  RecipientTokenIncludeStrategy: Never
+  AlgorithmSuiteAssertion: Basic128Rsa15
+  serviceDefinition: Manual
+  TransportProtocol: HTTP
+  userRole: ESBMessaging.send
+  InitiatorTokenIncludeStrategy: AlwaysToRecipient
+  senderAuthType: RoleBased
+  MessageProtocolVersion: 1.12.2
+shape: SOAP-Sender-SOAP
+componentType: SOAP
+direction: Sender
+name: SOAP
+observedIn: 9
+exporterCovered: false
+examples:
+- Cenabast/getDistribucion
+- Cenabast/getDistribucionDetalle
+- Cenabast/postAuthenticate
+- Cenabast/postDistribucion
+- Cenabast/postDistribucionMovimiento

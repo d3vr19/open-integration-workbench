@@ -1,0 +1,29 @@
+props:
+  ComponentType: HTTPS
+  maximumBodySize: '40'
+  ComponentNS: sap
+  componentVersion: '1.5'
+  Name: HTTPS
+  TransportProtocolVersion: 1.5.2
+  ComponentSWCVName: external
+  xsrfProtection: '0'
+  TransportProtocol: HTTPS
+  userRole: ESBMessaging.send
+  senderAuthType: RoleBased
+  MessageProtocol: None
+  MessageProtocolVersion: 1.5.2
+  ComponentSWCVId: 1.5.2
+  direction: Sender
+  clientCertificates: ''
+shape: HTTPS-Sender-HTTPS
+componentType: HTTPS
+direction: Sender
+name: HTTPS
+observedIn: 193
+exporterCovered: true
+examples:
+- ALLOGA/Alloga_Integration
+- ALLOGA/POST_Alloga_DEV
+- ALLOGA/POST_Del_Alloga_QAS
+- AdaequareGST/Authentication
+- AdaequareGST/GSTR2A

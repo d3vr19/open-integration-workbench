@@ -1052,6 +1052,68 @@ def emg() -> None:
     """EMG knowledge base management (WP-07)."""
 
 
+@emg.command("harvest")
+@click.option("--profile", default=None, help="Environment profile (e.g. btp). Omit = offline mode.")
+@click.option("--package", "package_id", default=None, help="Limit harvest to one package id.")
+@click.option(
+    "--out",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("packages/pattern-book"),
+    help="Pattern book output directory.",
+    show_default=True,
+)
+@click.option("--max-artifacts", type=int, default=300, show_default=True)
+def emg_harvest(profile: str | None, package_id: str | None, out: Path, max_artifacts: int) -> None:
+    """Crawl tenant packages and distill the CPI shape pattern book.
+
+    Read-only GETs. Shapes are NOMINATIONS — exporter coverage requires
+    live oracle validation per the standing methodology.
+    """
+    import asyncio
+
+    from .learn.harvest import EXPORTER_COVERED_TYPES, harvest, write_pattern_book
+    from .tenant.sap_ci_adapter import build_tenant_adapter
+
+    async def _run():
+        from .environments import load_profile
+
+        if profile:
+            # Any project carrying a btp profile works; the adapter reads
+            # credentials from env regardless.
+            project_hint = Path(__file__).resolve().parents[3] / "examples" / "held-out-order-async"
+            prof = load_profile(project_hint, profile)
+            adapter = build_tenant_adapter(writable_packages=["__none__"])
+            await adapter.connect(prof)
+        else:
+            click.echo("error: --profile is required (harvest reads a live tenant)", err=True)
+            raise click.Abort()
+
+        try:
+            shapes, activities, scanned = await harvest(
+                adapter,
+                max_artifacts=max_artifacts,
+                progress=lambda n, pkg, art: print(f"  [{n}] {pkg}/{art}", flush=True),
+            )
+        finally:
+            await adapter.disconnect()
+        path = write_pattern_book(out, shapes, activities, scanned, EXPORTER_COVERED_TYPES)
+        gaps = [s for s in census_shapes(out) if not s.get("exporterCovered")]
+        click.echo(f"pattern book: {path}")
+        click.echo(f"  artifacts scanned: {scanned}")
+        click.echo(f"  distinct shapes:   {len(shapes)}")
+        click.echo(f"  exporter gaps:     {len(gaps)}")
+
+    def census_shapes(out_dir: Path) -> list[dict]:
+        census = out / "census.yaml"
+        if not census.exists():
+            return []
+        import yaml as _yaml
+
+        return _yaml.safe_load(census.read_text(encoding="utf-8")).get("shapes", [])
+
+    asyncio.run(_run())
+
+
 @emg.command("report")
 @click.option(
     "--output",

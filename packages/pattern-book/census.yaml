@@ -1,0 +1,565 @@
+harvestedAt: '2026-08-26T14:08:18.939765'
+artifactsScanned: 300
+distinctShapes: 59
+activityCounts:
+  Enricher: 534
+  ExternalCall: 298
+  Script: 233
+  Mapping: 191
+  XmlToJsonConverter: 83
+  JsonToXmlConverter: 70
+  Filter: 63
+  EndEvent: 23
+  StartEvent: 19
+  Splitter: 17
+  XmlModifier: 9
+  ProcessCallElement: 7
+  Variables: 4
+  TerminateEvent: 3
+  CsvToXmlConverter: 2
+  PgpEncrypt: 2
+  Gather: 2
+  Decoder: 1
+  Encoder: 1
+  PgpDecrypt: 1
+shapes:
+- shape: HTTPS-Sender-HTTPS
+  componentType: HTTPS
+  direction: Sender
+  name: HTTPS
+  observedIn: 193
+  exporterCovered: true
+  examples:
+  - ALLOGA/Alloga_Integration
+  - ALLOGA/POST_Alloga_DEV
+  - ALLOGA/POST_Del_Alloga_QAS
+  - AdaequareGST/Authentication
+  - AdaequareGST/GSTR2A
+- shape: HTTP-Receiver-HTTP
+  componentType: HTTP
+  direction: Receiver
+  name: HTTP
+  observedIn: 87
+  exporterCovered: true
+  examples:
+  - ALLOGA/Alloga_Integration
+  - AdaequareGST/Authentication
+  - AdaequareGST/GSTR2A
+  - AdaequareGST/GSTR2B
+  - AdaequareGST/open_mateo_test
+- shape: RFC-Receiver-RFC
+  componentType: RFC
+  direction: Receiver
+  name: RFC
+  observedIn: 101
+  exporterCovered: false
+  examples:
+  - ALLOGA/POST_Alloga_DEV
+  - ALLOGA/POST_Del_Alloga_QAS
+  - BRMInterfaceS4QAS/QAS_BRM_TO_SAP_Quality_and_BatchRelease_
+  - DPWORLD/ASN_Outbond
+  - DPWORLD/GRN_Inbound
+- shape: HCIOData-Receiver-OData
+  componentType: HCIOData
+  direction: Receiver
+  name: OData
+  observedIn: 36
+  exporterCovered: false
+  examples:
+  - EMCKomalTEST/Plan_visage_Price
+  - EMCKomalTEST/Planvisage_inventory1_copy
+  - HemangiTest/Planvisage_inventory1_copy_copy
+  - HemangiTest/test1
+  - HemangiTest/vendor_invoice
+- shape: SuccessFactors-Receiver-SuccessFactors
+  componentType: SuccessFactors
+  direction: Receiver
+  name: SuccessFactors
+  observedIn: 7
+  exporterCovered: false
+  examples:
+  - DarwintoSFECTesting/Confirmation_Darwin_SFEC
+  - DarwintoSFECTesting/Disciplinary_action_Darwin_SFEC
+  - DarwintoSFECTesting/Hiring_Darwin_to_SFEC
+  - DarwintoSFECTesting/Hiring_Darwin_to_SFEC_SFTP
+  - DarwintoSFECTesting/Probation_Darwin_SFEC_
+- shape: SFTP-Receiver-SFTP
+  componentType: SFTP
+  direction: Receiver
+  name: SFTP
+  observedIn: 22
+  exporterCovered: false
+  examples:
+  - DPWORLD/DPWORLD_SFTP
+  - DPWORLDEPQ/DPWORLD_SFTP_QAS
+  - EDICOM/Edicom_SFTP_Dev
+  - EmcKalpNoTransport/PS_sftp
+  - EmcPayCitiDEV/Pull_PayAckFile_DEV
+- shape: SFTP-Sender-SFTP
+  componentType: SFTP
+  direction: Sender
+  name: SFTP
+  observedIn: 21
+  exporterCovered: false
+  examples:
+  - DPWORLD/DPWORLD_SFTP
+  - DPWORLDEPQ/DPWORLD_SFTP_QAS
+  - EDICOM/Edicom_SFTP_Dev
+  - EmcKalpNoTransport/PS_sftp
+  - EmcPayCitiDEV/Pull_PayAckFile_DEV
+- shape: IDOC-Receiver-IDOC
+  componentType: IDOC
+  direction: Receiver
+  name: IDOC
+  observedIn: 12
+  exporterCovered: false
+  examples:
+  - GFLSAPReturnOrder/SI_GFL_Return_Order_OB
+  - GFLSAPReturnOrderEPQ/SI_GFL_Return_Order_OB_PRD
+  - GFLSAPReturnOrderEPQ/SI_GFL_Return_Order_OB_QAS
+  - GFLSAPReturnOrderEPQ/SI_GFL_Return_Order_OB_QAS_ManualTest
+  - ONTARIOIDOCETSINTERFACES/BC_ONTARIO_SI_EDI850_To_ORDERS05_INBOUND_ASYNC_MARCAN_S4_EPQ
+- shape: ProcessDirect-Sender-ProcessDirect
+  componentType: ProcessDirect
+  direction: Sender
+  name: ProcessDirect
+  observedIn: 9
+  exporterCovered: true
+  examples:
+  - AdaequareGST/oiw_pd
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Events_to_ANS
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Explicit_Exceptions-Notifications-Events_to_ANS
+  - ONTARIOIDOCETSINTERFACES/MARCAN_S4_EPQ_INVOIC.INVOIC02.ZZINVOIC02_BC_ONTARIO_SI
+  - ONTARIOIDOCETSINTERFACES/Ontario_S4_EPQ_ORDRSP.ORDERS05_BC
+- shape: SOAP-Sender-SOAP
+  componentType: SOAP
+  direction: Sender
+  name: SOAP
+  observedIn: 9
+  exporterCovered: false
+  examples:
+  - Cenabast/getDistribucion
+  - Cenabast/getDistribucionDetalle
+  - Cenabast/postAuthenticate
+  - Cenabast/postDistribucion
+  - Cenabast/postDistribucionMovimiento
+- shape: SFTP-Receiver-SAP_SFTP
+  componentType: SFTP
+  direction: Receiver
+  name: SAP_SFTP
+  observedIn: 7
+  exporterCovered: false
+  examples:
+  - MantraEPQ/EMCURE_SFTP_TO_SAP_SFTP_QAS
+  - MantraEPQ/PretraEMCURE_SFTP_TO_DEBLECXSAPEPQ_SFTP
+  - MantraETS/EMCURE_SFTP_TO_SAP_SFTP
+  - TilomedIntegration/Tillomed_Cust_DTL_QAS
+  - TilomedIntegration/Tillomed_Cust_PRice_QAS
+- shape: SFTP-Sender-MANTRA_SFTP
+  componentType: SFTP
+  direction: Sender
+  name: MANTRA_SFTP
+  observedIn: 6
+  exporterCovered: false
+  examples:
+  - MantraEPQ/EMCURE_SFTP_TO_SAP_SFTP_QAS
+  - MantraEPQ/PretraEMCURE_SFTP_TO_DEBLECXSAPEPQ_SFTP
+  - MantraETS/EMCURE_SFTP_TO_SAP_SFTP
+  - TilomedIntegration/Tillomed_Cust_DTL_QAS
+  - TilomedIntegration/Tillomed_Customer
+- shape: ProcessDirect-Receiver-ProcessDirect
+  componentType: ProcessDirect
+  direction: Receiver
+  name: ProcessDirect
+  observedIn: 5
+  exporterCovered: true
+  examples:
+  - AdaequareGST/open_mateo_test
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Error_Messages_to_ANS
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Explicit_Exceptions-Notifications-Events_to_ANS
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_JMS_Resources_Overload_Info_to_ANS
+  - POtoCIMigration/GenericIDocSender
+- shape: SFTP-Sender-SAP_SFTP
+  componentType: SFTP
+  direction: Sender
+  name: SAP_SFTP
+  observedIn: 4
+  exporterCovered: false
+  examples:
+  - MantraEPQ/DEBLECXSAPEPQ_SFTP_TO_PretraEMCURE_SFTP
+  - MantraEPQ/SAP_SFTP_TO_EMCURE_SFTP_QAS
+  - MantraETS/DEBLECXSAP_SFTP_TO_PretraEMCURE_SFTP
+  - MantraETS/SAP_SFTP_TO_EMCURE_SFTP
+- shape: SOAP-Sender-SOAP_Sender_ConsultaEstadoDte
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_ConsultaEstadoDte
+  observedIn: 3
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/ConsultaEstadoDte
+  - DIGIFLOWFELPE/ConsultaEstadoDte_PE_ACTUA
+  - DIGIFLOWFELPE/ConsultaEstadoDte_PE_GUIA
+- shape: SOAP-Receiver-SOAP_Receiver_ConsultaEstadoDte
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_ConsultaEstadoDte
+  observedIn: 3
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/ConsultaEstadoDte
+  - DIGIFLOWFELPE/ConsultaEstadoDte_PE_ACTUA
+  - DIGIFLOWFELPE/ConsultaEstadoDte_PE_GUIA
+- shape: Mail-Receiver-Mail
+  componentType: Mail
+  direction: Receiver
+  name: Mail
+  observedIn: 3
+  exporterCovered: false
+  examples:
+  - DPWORLD/POST_ASN
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Error_iflows_to_ANS
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Expiring_Certificates_to_ANS
+- shape: SFTP-Receiver-SFTP_EDI855_Receiver
+  componentType: SFTP
+  direction: Receiver
+  name: SFTP_EDI855_Receiver
+  observedIn: 2
+  exporterCovered: false
+  examples:
+  - ONTARIOIDOCETSINTERFACES/Ontario_S4_EPQ_ORDRSP.ORDERS05_BC
+  - QAS4ETSInterfaces/Emcure_S4_EPQ_ORDRSP.ORDERS05_BC_INTERTRADE
+- shape: SFTP-Sender-SFTP_EDI846_Sender
+  componentType: SFTP
+  direction: Sender
+  name: SFTP_EDI846_Sender
+  observedIn: 2
+  exporterCovered: false
+  examples:
+  - POtoCIMigration/BC_INTERTRADE_SI_EDI846_To_PROACT01_OUTBOUND_ASYNC_Emcure_S4
+  - QAS4ETSInterfaces/BC_INTERTRADE_SI_EDI846_To_PROACT01_OUTBOUND_ASYNC_Emcure_S4_EPQ
+- shape: RFC-Receiver-S4HANA
+  componentType: RFC
+  direction: Receiver
+  name: S4HANA
+  observedIn: 2
+  exporterCovered: false
+  examples:
+  - LCNCS4HANAQAS/Get_MaterialMasterDelta_QAS
+  - LCNCS4HANAQAS/Get_MaterialUOMDelta_QAS
+- shape: SFTP-Receiver-SFTP_EDI940_Receiver
+  componentType: SFTP
+  direction: Receiver
+  name: SFTP_EDI940_Receiver
+  observedIn: 2
+  exporterCovered: false
+  examples:
+  - POtoCIMigration/Emcure_S4_DESADV.DELVRY07.ZZDELVRY07_INTERTRADE
+  - QAS4ETSInterfaces/Emcure_S4_EPQ_DESADV.DELVRY07.ZZDELVRY07_BC_INTERTRADE
+- shape: SFTP-Receiver-SFTP_EDI810_Receiver
+  componentType: SFTP
+  direction: Receiver
+  name: SFTP_EDI810_Receiver
+  observedIn: 2
+  exporterCovered: false
+  examples:
+  - ONTARIOIDOCETSINTERFACES/MARCAN_S4_EPQ_INVOIC.INVOIC02.ZZINVOIC02_BC_ONTARIO_SI
+  - POtoCIMigration/Emcure_S4_INVOIC.INVOIC02.ZZINVOIC02_INTERTRADE
+- shape: HCIOData-Receiver-ODataAllErrors
+  componentType: HCIOData
+  direction: Receiver
+  name: ODataAllErrors
+  observedIn: 2
+  exporterCovered: false
+  examples:
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Error_Messages_to_ANS
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Error_iflows_to_ANS
+- shape: IDOC-Sender-IDOC
+  componentType: IDOC
+  direction: Sender
+  name: IDOC
+  observedIn: 2
+  exporterCovered: false
+  examples:
+  - MantraETS/Mantra_Idoc_CPI
+  - POtoCIMigration/GenericIDocSender
+- shape: SOAP-Receiver-SOAP_Receiver_GetListadoDocumentos
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_GetListadoDocumentos
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/GetListadoDocumentos
+- shape: SOAP-Sender-SOAP_Sender_GetListadoDocumentos
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_GetListadoDocumentos
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/GetListadoDocumentos
+- shape: RFC-Receiver-DEV_ETS
+  componentType: RFC
+  direction: Receiver
+  name: DEV_ETS
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DEVS4BRMInterface/BRM_TO_SAP_Quality_and_BatchRelease
+- shape: SOAP-Receiver-SOAP_Receiver_UpdateEstadoDTE
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_UpdateEstadoDTE
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/UpdateEstadoDTE
+- shape: SOAP-Sender-SOAP_Sender_UpdateEstadoDTE
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_UpdateEstadoDTE
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/UpdateEstadoDTE
+- shape: SOAP-Receiver-SOAP_Receiver_XMLDte
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_XMLDte
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/ConsultaComprobante_PE_XML
+- shape: SOAP-Sender-SOAP_Sender_XMLDte
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_XMLDte
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/ConsultaComprobante_PE_XML
+- shape: RFC-Receiver-R_S4HANA
+  componentType: RFC
+  direction: Receiver
+  name: R_S4HANA
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - LCNCS4HANAQAS/Get_ItemCategoriesInPurchaseDocument_QAS
+- shape: SOAP-Receiver-SOAP_Receiver_GetPdf
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_GetPdf
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/GetPdf
+- shape: SOAP-Sender-SOAP_Sender_GetPdf
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_GetPdf
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/GetPdf
+- shape: SOAP-Receiver-SOAP_Receiver_XMLDte_PE
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_XMLDte_PE
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/XMLDte_PE
+- shape: SOAP-Sender-SOAP_Sender_XMLDte_PE
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_XMLDte_PE
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/XMLDte_PE
+- shape: SFTP-Sender-SFTP_SND_GFL_ReturnSalesOrder
+  componentType: SFTP
+  direction: Sender
+  name: SFTP_SND_GFL_ReturnSalesOrder
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - GFLSAPReturnOrderEPQ/SI_GFL_Return_Order_OB_PRD
+- shape: SFTP-Sender-EMCURE_SAP
+  componentType: SFTP
+  direction: Sender
+  name: EMCURE_SAP
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - PratikETSTEST/EMCURE_SFTP_TO_SAP_SFTP_TEST
+- shape: SFTP-Receiver-Other_SFTP
+  componentType: SFTP
+  direction: Receiver
+  name: Other_SFTP
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - PratikETSTEST/EMCURE_SFTP_TO_SAP_SFTP_TEST
+- shape: HTTPS-Sender-CC_AP_DMSDATA_SENDER_REST
+  componentType: HTTPS
+  direction: Sender
+  name: CC_AP_DMSDATA_SENDER_REST
+  observedIn: 1
+  exporterCovered: true
+  examples:
+  - POtoCIMigration/BC_AMPLELOGIC_SI_AL_DMSDATA_OS_4RES_ECC
+- shape: RFC-Receiver-CC_AP_DMSDATA_RECEIVER
+  componentType: RFC
+  direction: Receiver
+  name: CC_AP_DMSDATA_RECEIVER
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - POtoCIMigration/BC_AMPLELOGIC_SI_AL_DMSDATA_OS_4RES_ECC
+- shape: HCIOData-Receiver-extractKeystore
+  componentType: HCIOData
+  direction: Receiver
+  name: extractKeystore
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Expiring_Certificates_to_ANS
+- shape: SFTP-Receiver-EMCURE_SFTP
+  componentType: SFTP
+  direction: Receiver
+  name: EMCURE_SFTP
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - MantraETS/Mantra_Idoc_CPI
+- shape: HTTPS-Sender-CC_COMMONAPI_SENDER
+  componentType: HTTPS
+  direction: Sender
+  name: CC_COMMONAPI_SENDER
+  observedIn: 1
+  exporterCovered: true
+  examples:
+  - AdaequareGST/SI_out_gsp_commonapi
+- shape: HTTP-Receiver-CC_COMMONAPI_RECEIVER
+  componentType: HTTP
+  direction: Receiver
+  name: CC_COMMONAPI_RECEIVER
+  observedIn: 1
+  exporterCovered: true
+  examples:
+  - AdaequareGST/SI_out_gsp_commonapi
+- shape: SOAP-Receiver-SOAP_Receiver_SetRejection
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_SetRejection
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/SetRejection
+- shape: SOAP-Sender-SOAP_Sender_SetRejection
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_SetRejection
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/SetRejection
+- shape: SOAP-Receiver-SOAP_Receiver_CargaBajasDTE
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_CargaBajasDTE
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/CargaBajas_PE
+- shape: SOAP-Sender-SOAP_Sender_CargaBajasDTE
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_CargaBajasDTE
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/CargaBajas_PE
+- shape: HTTPS-Sender-CC_GSTR1_GET_SENDER
+  componentType: HTTPS
+  direction: Sender
+  name: CC_GSTR1_GET_SENDER
+  observedIn: 1
+  exporterCovered: true
+  examples:
+  - AdaequareGST/SI_outbound_gstr1_get
+- shape: HTTP-Receiver-CC_GSTR1_GET_RECEIVER
+  componentType: HTTP
+  direction: Receiver
+  name: CC_GSTR1_GET_RECEIVER
+  observedIn: 1
+  exporterCovered: true
+  examples:
+  - AdaequareGST/SI_outbound_gstr1_get
+- shape: SOAP-Receiver-SOAP_Receiver_GetPdfRecep
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_GetPdfRecep
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/GetPdf_Recep
+- shape: SOAP-Sender-SOAP_Sender_GetPdfRecep
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_GetPdfRecep
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DBNetFELCL/GetPdf_Recep
+- shape: SOAP-Receiver-SOAP_Receiver_PDFDte
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_PDFDte
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/ConsultaComprobante_PE_PDF
+- shape: SOAP-Sender-SOAP_Sender_PDFDte
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_PDFDte
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/ConsultaComprobante_PE_PDF
+- shape: SOAP-Receiver-SOAP
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - Testpackage01/Query_PurchaseRequisitionWithSOAPRcvAdp
+- shape: SFTP-Receiver-CC_SFTP_EDICOM_INV_REC
+  componentType: SFTP
+  direction: Receiver
+  name: CC_SFTP_EDICOM_INV_REC
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - POtoCIMigration/Emcure_S4_INVOIC.INVOIC02.ZZINVOIC02_INTERTRADE
+- shape: SOAP-Receiver-SOAP_Receiver_ConsultaEstadoDte_PE
+  componentType: SOAP
+  direction: Receiver
+  name: SOAP_Receiver_ConsultaEstadoDte_PE
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/ConsultaEstadoDte_PE
+- shape: SOAP-Sender-SOAP_Sender_ConsultaEstadoDte_PE
+  componentType: SOAP
+  direction: Sender
+  name: SOAP_Sender_ConsultaEstadoDte_PE
+  observedIn: 1
+  exporterCovered: false
+  examples:
+  - DIGIFLOWFELPE/ConsultaEstadoDte_PE

@@ -1,0 +1,47 @@
+props:
+  disconnect: '0'
+  fileName: ${header.FileName}
+  maximumReconnectAttempts: '3'
+  stepwise: '1'
+  fileExist: Override
+  ComponentNS: sap
+  autoCreate: '1'
+  privateKeyAlias: ''
+  location_id: EMCNPCC
+  Name: Other_SFTP
+  TransportProtocolVersion: 1.14.0
+  flatten: '0'
+  sftpSecEnabled: '1'
+  useTempFile: '0'
+  ComponentSWCVName: external
+  path: \\EMPDDEVSRV01\Planvisage_Test
+  proxyPort: '8080'
+  host: EMPDDEVSRV01
+  connectTimeout: '10000'
+  fastExistsCheck: '1'
+  MessageProtocol: File
+  ComponentSWCVId: 1.14.0
+  direction: Receiver
+  authentication: user_password
+  ComponentType: SFTP
+  fileAppendTimeStamp: '0'
+  credential_name: SAP_SFTP
+  proxyProtocol: socks5
+  proxyType: sapcc
+  proxyAlias: ''
+  componentVersion: '1.13'
+  reconnectDelay: '1000'
+  proxyHost: ''
+  tempFileName: ${file:name}.tmp
+  allowDeprecatedAlgorithms: '0'
+  TransportProtocol: SFTP
+  MessageProtocolVersion: 1.14.0
+  username: ''
+shape: SFTP-Receiver-Other_SFTP
+componentType: SFTP
+direction: Receiver
+name: Other_SFTP
+observedIn: 1
+exporterCovered: false
+examples:
+- PratikETSTEST/EMCURE_SFTP_TO_SAP_SFTP_TEST

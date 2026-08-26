@@ -1,0 +1,25 @@
+props:
+  ComponentType: ProcessDirect
+  ComponentNS: sap
+  Vendor: SAP
+  componentVersion: '1.1'
+  Name: ProcessDirect
+  TransportProtocolVersion: 1.1.2
+  ComponentSWCVName: external
+  TransportProtocol: Not Applicable
+  MessageProtocol: Not Applicable
+  MessageProtocolVersion: 1.1.2
+  ComponentSWCVId: 1.1.2
+  direction: Receiver
+shape: ProcessDirect-Receiver-ProcessDirect
+componentType: ProcessDirect
+direction: Receiver
+name: ProcessDirect
+observedIn: 5
+exporterCovered: true
+examples:
+- AdaequareGST/open_mateo_test
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Error_Messages_to_ANS
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Explicit_Exceptions-Notifications-Events_to_ANS
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_JMS_Resources_Overload_Info_to_ANS
+- POtoCIMigration/GenericIDocSender
