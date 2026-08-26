@@ -310,6 +310,28 @@ same loop from two sides; do them together.
   message-send for non-HTTP entrypoints. LIVE VERDICT: both STARTED;
   GET trigger -> 200 weather JSON; MPL COMPLETED pairs on BOTH artifacts.
   Designer-open confirmed by operator after v6.1 DI generation.
+- 2026-08-26 (session 8) — SFTP LIFECYCLE: write PROVEN, poll-fetch grammar
+  SHIPPED, cadence OPEN:
+  * Complete-lifecycle attempt on ONE artifact failed -> ARCHITECTURE
+    LAW discovered: CPI iFlows carry ONE exchange pattern; multiple
+    sender entrypoints per main process reject at runtime start (3
+    fixture starts notwithstanding — unproven elsewhere).
+  * oiw_pd_hf now runs the FETCH side standalone: sender.sftp poller
+    (52-prop template mirrored verbatim from live DPWORLD_SFTP_QAS,
+    cron scheduleKey, noop=delete, file.move=.archive) -> log ->
+    ProcessDirect /oiw_pd forward. STARTED.
+  * open_mateo_test runs the DROP side: HTTPS POST /open_mateo_test ->
+    receiver.sftp OIW-E2E-*.dat. STARTED, message 200, reward 1.0.
+  * Live findings banked: (a) sender Participant name must be static —
+    path-derived names reject runtime start (regression caught by
+    cross-artifact bisect); (b) plain vs message EndEvents differ in
+    variant URI (cname::EndEvent vs MessageEndEvent/1.1.0); (c) adapter
+    boolean dialect 0/1.
+  * OPEN: poll pickup cadence — reference cron mirrors deploy+START but
+    no pickup observed within minutes of a dropped file; suspects:
+    schedule interval semantics (TIME_INTERVAL rows) or silent
+    poll-connect failures. Next session: connectivity-test API probe +
+    adjusted cron + longer observation window.
 - 2026-08-26 (session 7) — PHASES 0-2 SHIPPED + SFTP LIVE-PROVEN:
   * P0 sharpen: shed list applied; collision preflight + designer-open
     gate in calibrate/CI (ed29537).

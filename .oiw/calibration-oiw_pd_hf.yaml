@@ -6,44 +6,19 @@ calibration:
   trackingUuid: null
   finalStatus: STARTED
   errorDetail: null
-  messageSent: true
-  httpResponseStatus: 200
-  mplRows:
-  - MessageGuid: AGqOs4G6jhTlWy-udHHzhPiiJeBQ
-    Status: COMPLETED
-    CustomStatus: COMPLETED
-    IntegrationFlowName: oiw_pd_hf
-    LogStart: /Date(1787736961885)/
-  - MessageGuid: AGqOsuWyl2DgRnmdoB7lbERpEtno
-    Status: FAILED
-    CustomStatus: FAILED
-    IntegrationFlowName: oiw_pd_hf
-    LogStart: /Date(1787736805513)/
-  - MessageGuid: AGqOse3fptaEpj_77x-fCg0Z1uLE
-    Status: FAILED
-    CustomStatus: FAILED
-    IntegrationFlowName: oiw_pd_hf
-    LogStart: /Date(1787736557949)/
-  - MessageGuid: AGqOsXHnNpe0-U43rruqIjJZgLQI
-    Status: FAILED
-    CustomStatus: FAILED
-    IntegrationFlowName: oiw_pd_hf
-    LogStart: /Date(1787736433299)/
-  - MessageGuid: AGqOrqkpQ2vGkjDWtSbNdOx9g4Hp
-    Status: FAILED
-    CustomStatus: FAILED
-    IntegrationFlowName: oiw_pd_hf
-    LogStart: /Date(1787735721434)/
-  startedAt: '2026-08-26T09:35:43.092311+00:00'
+  messageSent: false
+  httpResponseStatus: null
+  mplRows: []
+  startedAt: '2026-08-26T11:26:57.627314+00:00'
   finishedAt: ''
 reward:
-  overall: 0.65
+  overall: 0.85
   dimensions:
     structural_validity: 1.0
-    unit_tests: 0.2
+    unit_tests: 1.0
     security_policy: 1.0
     completion: 0.0
     corrections_needed: 1.0
     deployment_success: 1.0
-    runtime_stability: 0.2
+    runtime_stability: 1.0
   all_hard_gates_passed: true

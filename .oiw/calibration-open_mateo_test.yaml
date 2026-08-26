@@ -9,30 +9,41 @@ calibration:
   messageSent: true
   httpResponseStatus: 200
   mplRows:
+  - MessageGuid: AGqOzV95sx70i2znWiY6_6vpcTXZ
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787743583131)/
+  - MessageGuid: AGqOzFKU0yg4XLgIcfp63mzRSR2N
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787743314414)/
+  - MessageGuid: AGqOy6eKoQVD2QqslSSvsGC3m9tP
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787743143041)/
+  - MessageGuid: AGqOkFyhrTnTOD5-wmE7DF-2zpu0
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787727964901)/
   - MessageGuid: AGqOkEHnuz1fMfbPORirCBWsa-md
     Status: COMPLETED
     CustomStatus: COMPLETED
     IntegrationFlowName: open_mateo_test
     LogStart: /Date(1787727937667)/
-  - MessageGuid: AGqOjUX66cUQpfhxMQow0Uc9zfSP
-    Status: COMPLETED
-    CustomStatus: COMPLETED
-    IntegrationFlowName: open_mateo_test
-    LogStart: /Date(1787727173733)/
-  - MessageGuid: AGqOh0zdksAIcsnTg-nwpFqgyPDY
-    Status: COMPLETED
-    CustomStatus: COMPLETED
-    IntegrationFlowName: open_mateo_test
-    LogStart: /Date(1787725644314)/
-  - MessageGuid: AGqOgtnddMlRm4FD2JIGjKnIssA8
-    Status: COMPLETED
-    CustomStatus: COMPLETED
-    IntegrationFlowName: open_mateo_test
-    LogStart: /Date(1787724505935)/
-  - MessageGuid: AGqOfEqDcnDIGjDkXj9SwaH8tj6F
-    Status: COMPLETED
-    CustomStatus: COMPLETED
-    IntegrationFlowName: open_mateo_test
-    LogStart: /Date(1787722826864)/
-  startedAt: '2026-08-26T07:05:24.096581+00:00'
+  startedAt: '2026-08-26T11:26:01.892895+00:00'
   finishedAt: ''
+reward:
+  overall: 1.0
+  dimensions:
+    structural_validity: 1.0
+    unit_tests: 1.0
+    security_policy: 1.0
+    completion: 1.0
+    corrections_needed: 1.0
+    deployment_success: 1.0
+    runtime_stability: 1.0
+  all_hard_gates_passed: true
