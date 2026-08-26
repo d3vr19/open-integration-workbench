@@ -304,3 +304,15 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   name verified back to 'open_mateo_test'. New guards: pre-upload backup
   to .oiw/tenant-cache/, --display-name override breaks circular
   identity inheritance, exporter refuses designer-unproven node types.
+- 2026-08-26 — ACTIVATION SOLVED (operator supplied IntegrationContent.edmx) —
+  function import `DeployIntegrationDesigntimeArtifact` (POST, Id/Version as
+  OData query params) returns 202 + tracking UUID; runtime status polls via
+  /IntegrationRuntimeArtifacts?$filter=Name eq '<id>' (Id = artifact id;
+  STARTED→DEPLOYED mapping). Adapter deploy/poll rewritten to proven verbs;
+  CLI execute GREEN live (202); verify honestly reports tenant state.
+- CURRENT HONEST STATE: end-to-end pipeline is fully mechanical
+  propose→approve→upload→execute→verify against the live tenant with zero UI;
+  verify correctly surfaces Status=ERROR from SAP runtime-start on our
+  generated flow (no MPL entries ⇒ fails before first message; suspected
+  Enricher propertyTable/wrapContent detail). Next: iterate bundle fidelity
+  using the new seconds-fast upload→deploy→poll loop until STARTED.

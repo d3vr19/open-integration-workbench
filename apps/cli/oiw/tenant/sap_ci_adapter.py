@@ -476,74 +476,69 @@ class SapCiTenantAdapter:
         )
 
     async def deploy(self, package_id: str, version: str) -> DeploymentResult:
-        """Deploy (activate) the artifact: POST /IntegrationRuntimeArtifacts.
+        """Deploy (activate): POST /DeployIntegrationDesigntimeArtifact.
 
-        Response shape varies across CPI releases; we read defensively
-        (Id/id, Status/status) and treat 2xx without a body as accepted.
+        LIVE-PROVEN (2026-08-26, from the tenant's own
+        IntegrationContent.edmx function imports): OData v1 function
+        import taking Id/Version as QUERY parameters; returns HTTP 202
+        with an opaque tracking UUID. Activation progress polls via
+        GET /IntegrationRuntimeArtifacts?$filter=Name eq '<id>' (the
+        collection Id IS the artifact id).
         """
         self._ensure_writable(package_id)
         self._require_connected()
         target = await self._resolve_target_artifact(package_id)
         await self._ensure_csrf_token()
-        payload = {"ArtifactId": target.id, "ArtifactVersion": version}
+        url = f"/DeployIntegrationDesigntimeArtifact?Id='{target.id}'&Version='{version}'"
         try:
-            resp = await self._client.post(
-                "/IntegrationRuntimeArtifacts",
-                json=payload,
-                headers=self._write_headers({"Accept": "application/json"}),
-            )
+            resp = await self._client.post(url, headers=self._write_headers({"Accept": "application/json"}))
         except httpx.HTTPError as exc:
-            raise SapCiTenantError(f"deploy unreachable: {exc}") from exc
+            raise SapCiTenantError(f"deploy unreachable at {url}: {exc}") from exc
         if resp.status_code >= 400:
             self._raise_for_status(resp, "deploy")
-        data: dict = {}
-        try:
-            body = resp.json()
-            data = (
-                body.get("d", {})
-                if isinstance(body, dict) and "d" in body
-                else (body if isinstance(body, dict) else {})
-            )
-        except Exception:
-            data = {}
-        deployment_id = data.get("Id") or data.get("id") or ""
-        status_raw = str(data.get("Status") or data.get("status") or "IN_PROGRESS").upper()
-        state = (
-            "DEPLOYED"
-            if status_raw in ("DEPLOYED", "STARTED", "SUCCESS")
-            else ("FAILED" if status_raw in ("FAILED", "ERROR") else "IN_PROGRESS")
-        )
+        # 202 + opaque tracking UUID; poll key is the artifact id.
         return DeploymentResult(
-            success=state != "FAILED",
-            deployment_id=str(deployment_id),
-            status=state,  # type: ignore[arg-type]
-            error=None if state != "FAILED" else str(data.get("Message") or "deploy failed"),
+            success=True,
+            deployment_id=target.id,
+            status="IN_PROGRESS",
+            error=None,
         )
 
-    async def poll_deployment(self, deployment_id: str) -> DeploymentStatus:
-        """GET /IntegrationRuntimeArtifacts('{deployment_id}') for status."""
-        self._require_connected()
+    async def _runtime_status(self, artifact_id: str) -> tuple[str, str | None]:
+        """Read the runtime view for one artifact → (state, raw_status)."""
         resp = await self._client.get(
-            f"/IntegrationRuntimeArtifacts('{deployment_id}')",
+            "/IntegrationRuntimeArtifacts",
+            params={
+                "$filter": f"Name eq '{artifact_id}'",
+                "$orderby": "DeployedOn desc",
+                "$top": 1,
+                "$format": "json",
+            },
             headers={**self._basic_auth_header(), "Accept": "application/json"},
         )
         self._raise_for_status(resp, "poll_deployment")
-        try:
-            body = resp.json()
-            data = (
-                body.get("d", {})
-                if isinstance(body, dict) and "d" in body
-                else (body if isinstance(body, dict) else {})
-            )
-        except Exception:
-            data = {}
-        status_raw = str(data.get("Status") or data.get("status") or "IN_PROGRESS").upper()
+        results = (
+            resp.json().get("d", {}).get("results", [])
+            if "json" in resp.headers.get("content-type", "")
+            else []
+        )
+        if not results:
+            return "NOT_DEPLOYED", None
+        raw = str(results[0].get("Status") or "").upper()
         state = (
             "DEPLOYED"
-            if status_raw in ("DEPLOYED", "STARTED", "SUCCESS")
-            else ("FAILED" if status_raw in ("FAILED", "ERROR") else "IN_PROGRESS")
+            if raw in ("STARTED", "DEPLOYED", "SUCCESS")
+            else "FAILED"
+            if raw == "ERROR"
+            else "IN_PROGRESS"
         )
-        return DeploymentStatus(state=state, deployment_id=deployment_id, message=None, logs=[])
+        return state, raw
+
+    async def poll_deployment(self, deployment_id: str) -> DeploymentStatus:
+        """Poll runtime status for an artifact id (see deploy())."""
+        self._require_connected()
+        state, raw = await self._runtime_status(deployment_id)
+        return DeploymentStatus(state=state, deployment_id=deployment_id, message=raw, logs=[])
 
     async def get_runtime_logs(self, package_id: str, since: object) -> list[LogEntry]:
         """Read MessageProcessingLogs (best-effort mapping into LogEntry).

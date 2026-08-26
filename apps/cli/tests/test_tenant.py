@@ -365,8 +365,22 @@ def _write_transport(artifact_id="MyFlow", artifact_version="1.0.0", *, empty_pa
             seen["deploy_payload"] = request.content
             return httpx.Response(200, json={"d": {"Id": "dep-1", "Status": "IN_PROGRESS"}})
 
-        if request.method == "GET" and "IntegrationRuntimeArtifacts('dep-1')" in str(request.url):
-            return httpx.Response(200, json={"d": {"Id": "dep-1", "Status": "DEPLOYED"}})
+        if request.method == "POST" and "DeployIntegrationDesigntimeArtifact" in str(request.url):
+            assert request.url.params.get("Id") == f"'{artifact_id}'"  # OData v1 quotes params
+            return httpx.Response(202, text="fd04ed7d-149b-45ab-4497-b1b5b983bbeb")
+
+        if request.method == "GET" and request.url.path.endswith("/IntegrationRuntimeArtifacts"):
+            return httpx.Response(
+                200,
+                json={
+                    "d": {
+                        "results": [
+                            {"Id": artifact_id, "Name": artifact_id, "Version": "1.0.0", "Status": "STARTED"}
+                        ]
+                    }
+                },
+                headers={"content-type": "application/json"},
+            )
 
         if request.method == "GET" and "MessageProcessingLogs" in str(request.url):
             return httpx.Response(
@@ -469,27 +483,20 @@ def test_upload_refused_when_package_has_no_artifacts(profile) -> None:
     _run(adapter.disconnect())
 
 
-def test_deploy_posts_to_runtime_artifacts(profile) -> None:
-    """deploy() POSTs {ArtifactId, ArtifactVersion} and maps the response."""
+def test_deploy_triggers_function_import_and_poll_maps_status(profile) -> None:
+    """deploy() hits the function import with query params; poll reads the runtime view."""
     transport, seen = _write_transport()
     adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
 
     result = _run(adapter.deploy("AdequareGST", "1.0.0"))
     assert result.success is True
-    assert result.deployment_id == "dep-1"
     assert result.status == "IN_PROGRESS"
-    assert b"MyFlow" in seen["deploy_payload"]
-    _run(adapter.disconnect())
+    assert "DeployIntegrationDesigntimeArtifact" in seen["url"]
+    assert seen["url"].split("?")[1].startswith("Id='MyFlow'&Version=")
 
-
-def test_poll_deployment_maps_terminal_status(profile) -> None:
-    """poll_deployment() reads Status and maps to the DeploymentStatus state."""
-    transport, _seen = _write_transport()
-    adapter = _connected_real_adapter(profile, transport)
-
-    status = _run(adapter.poll_deployment("dep-1"))
-    assert status.state == "DEPLOYED"
-    assert status.deployment_id == "dep-1"
+    status = _run(adapter.poll_deployment(result.deployment_id))
+    assert status.state == "DEPLOYED"  # STARTED mapped to DEPLOYED
+    assert status.message == "STARTED"
     _run(adapter.disconnect())
 
 
