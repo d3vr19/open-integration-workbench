@@ -234,3 +234,35 @@ same loop from two sides; do them together.
     ref uses xsrfProtection=1); adapter CSRF token does not survive rapid
     reconnects — space calibrate runs ≥60s or refetch per connect;
     open_mateo_test restored to bare/STARTED at session close.
+- 2026-08-26 (session 4) — RECEIVER BLOCKER SOLVED: **our bundles START**.
+  Operator deployed testing_oiw via UI (sender path /oiw, GET, ext-query)
+  ⇒ STARTED, and supplied a fresh export. Then:
+  - Transplant v1 (UI bytes onto open_mateo_test via API) ERROR — confound:
+    /oiw endpoint collision with running testing_oiw.
+  - Transplant v2 (same bytes, unique /oiw-hc1) → **STARTED** ⇒ API
+    PUT-update + DeployIntegrationDesigntimeArtifact path fully capable of
+    starting EndEvent-model receivers. Deploy-path-wedge theory dead.
+  - Single-variable regression ladder from green (one deploy per factor):
+    | Factor (ours vs reference) | Verdict |
+    |---|---|
+    | authenticationMethod None (vs Client Certificate) | STARTED — exonerated |
+    | literal URL folded INTO httpAddressWithoutQuery | **ERROR — FATAL #1** |
+    | split form: address→WithoutQuery, query→httpAddressQuery (both literal) | STARTED |
+    | locationID MBP / system <id> / allowedHeaders / MPLAttachments / timeout | STARTED — exonerated |
+    | retry trio (idleTimeout '' / interval '10000' / iteration '3') | **ERROR** |
+    | retryInterval '10000' ALONE | **ERROR — FATAL #2** |
+  - Production corroboration: every STARTED HTTP receiver on the tenant
+    (Hiring_Darwin_to_SFEC etc.) carries idleTimeout=300000,
+    retryInterval=5, retryIteration=1. Our '10000' was fixture-inherited
+    (CodeJam receivers never ran).
+  - Exporter v4 fixes (apps/cli/oiw/compiler/sap_export.py):
+    1. urlsplit receiver config.url → httpAddressWithoutQuery gets
+       scheme://host/path, httpAddressQuery gets the query string.
+    2. Retry values aligned to proven set (300000 / 5 / 1).
+  - FINAL ORACLE VERDICT: exporter v4 bundle on open_mateo_test via plain
+    `oiw tenant calibrate` → **STARTED ✅✅** — collab prop count, DI
+    section, sender versions/xsrf, auth method, and externalization all
+    EXONERATED by construction (exporter output lacks them and starts).
+  - OPEN (next): message exercise returns HTTP 403 at /http/<path> +
+    zero MPL rows — runtime-endpoint auth (xsrfProtection?) is the next
+    seam before reward-function wiring can consume live executions.

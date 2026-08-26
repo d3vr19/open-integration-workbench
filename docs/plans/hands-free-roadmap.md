@@ -363,6 +363,15 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   byte-parity variants of the UI-authored reference (full prop parity,
   bpmndi DI section, combined) ERROR on a healthy tenant while bare sails
   through ⇒ receiver runtime-start failure is NOT bundle bytes. Suspects:
-  API deploy-path semantics for messageFlow-bearing flows, or tenant-side
+  API deploy-path semantics for messageFlow flows, or tenant-side
   material. Awaiting operator UI-deploy dichotomy test (p5-p6-plan.md §6).
   open_mateo_test left bare/STARTED.
+- 2026-08-26 (session 4) — **P5a RECEIVER MILESTONE: exporter bundles START.**
+  Operator's UI deploy + fresh export unlocked the dichotomy: transplanted
+  UI bytes START via our API path (after avoiding an /oiw endpoint
+  collision). Regression ladder isolated two fatal deltas, both fixed in
+  exporter v4: (1) receiver URL must be SPLIT across
+  httpAddressWithoutQuery / httpAddressQuery; (2) retryInterval must be
+  '5', not the fixture-inherited '10000'. Final `oiw tenant calibrate` with
+  pure exporter output → STARTED on live tenant. Open seam: message-send
+  403 (runtime endpoint auth) before reward wiring.

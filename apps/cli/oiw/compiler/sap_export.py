@@ -91,8 +91,12 @@ _RECEIVER_PROPS = [
     ("ComponentSWCVName", "external"),
     ("streaming", "false"),
     ("enableMPLAttachments", "false"),
-    ("pooledConnectionIdleTimeout", ""),
-    ("httpAddressQuery", ""),
+    # Retry/idle values below are the PROVEN-GOOD set observed on every
+    # STARTED HTTP receiver flow on the live tenant (2026-08-26 bisection):
+    # retryInterval='10000' alone fails CPI runtime-start (fixture-inherited
+    # value); '5' is what UI-authored + production flows deploy with.
+    ("pooledConnectionIdleTimeout", "300000"),
+    ("httpAddressQuery", "{query}"),
     ("httpRequestTimeout", "{timeout}"),
     ("ComponentSWCVId", "1.20.2"),
     ("providerName", ""),
@@ -104,14 +108,14 @@ _RECEIVER_PROPS = [
     ("throwExceptionOnFailure", "true"),
     ("proxyType", "default"),
     ("componentVersion", "1.20"),
-    ("retryIteration", "3"),
+    ("retryIteration", "1"),
     ("proxyHost", ""),
     ("providerUrl", ""),
     ("retryOnConnectionFailure", "false"),
     ("system", "{system}"),
     ("authenticationMethod", "None"),
     ("locationID", "MBP"),
-    ("retryInterval", "10000"),
+    ("retryInterval", "5"),
     ("TransportProtocol", "HTTP"),
     (
         "cmdVariantUri",
@@ -185,6 +189,16 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
         step_idx = nodes.index(r) + 1
         if step_idx != len(nodes):
             continue  # non-terminal receivers rejected during node pass
+        # CPI runtime-start REQUIRES the receiver address split: the bare
+        # URL in httpAddressWithoutQuery and any query string in
+        # httpAddressQuery. A literal '?query' folded into WithoutQuery
+        # fails runtime start (live-bisected 2026-08-26,
+        # p5-p6-plan.md §6). Externalized {{params}} are NOT required.
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(str(cfg_r.get("url", "")))
+        url_base = f"{parts.scheme}://{parts.netloc}{parts.path}" if parts.scheme else parts.geturl()
+        url_query = parts.query
         receiver_mfs.append(
             f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="HTTP" '
             f'sourceRef="EndEvent_1" targetRef="Participant_{escape(r["id"])}">\n'
@@ -194,7 +208,8 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
                     method=str(cfg_r.get("method", "GET")),
                     timeout=str(int(cfg_r.get("timeoutSeconds", 30) * 1000)),
                     system=escape(r["id"]),
-                    url=str(cfg_r.get("url", "")),
+                    url=url_base,
+                    query=url_query,
                 )
             )
             + "\n        </bpmn2:messageFlow>"
