@@ -316,3 +316,7 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   generated flow (no MPL entries ⇒ fails before first message; suspected
   Enricher propertyTable/wrapContent detail). Next: iterate bundle fidelity
   using the new seconds-fast upload→deploy→poll loop until STARTED.
+- 2026-08-26 — P5/P6 detailed plan ratified: docs/plans/p5-p6-plan.md
+  (oracle harness first; parity suite as the honesty gate ≥90%; turbo loop
+  with code-level tenant guard). Operator offered tenant API specs — MPL +
+  Log Files requested NOW, Message Stores at 5c, Security Content deferred.
