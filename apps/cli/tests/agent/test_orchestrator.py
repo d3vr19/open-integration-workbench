@@ -195,7 +195,7 @@ def _git_head(project_dir: Path) -> str:
 
 @pytest.mark.asyncio
 async def test_orchestrator_reward_computed(temp_project: Path) -> None:
-    """Successful execution — outcome.reward populated with structural_correctness."""
+    """Successful execution — outcome.reward is the canonical 9-dim vector."""
     gateway = AsyncMock(spec=ModelGatewayClient)
     gateway.health.return_value = False  # fallback
     gateway.aclose = AsyncMock()
@@ -211,7 +211,8 @@ async def test_orchestrator_reward_computed(temp_project: Path) -> None:
     traj_files = list((temp_project / "traj").glob("traj-*.yaml"))
     loaded = yaml.safe_load(traj_files[0].read_text(encoding="utf-8"))
     reward = loaded["spec"]["outcome"]["reward"]
-    assert "structural_correctness" in reward
+    assert "structuralValidity" in reward
     assert "completion" in reward
-    assert "corrections_needed" in reward
-    assert "conflict_count" in reward
+    assert "correctionsNeeded" in reward
+    assert "deploymentSuccess" in reward
+    assert "runtimeStability" in reward

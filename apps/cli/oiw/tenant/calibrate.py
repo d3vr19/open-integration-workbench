@@ -164,6 +164,24 @@ async def calibrate_artifact(
         existing = await adapter.download_artifact(target.id, target.version)
         symbolic, iflw_name, bundle_name = cpi_bundle_identity(existing)
         rep.artifact_id = target.id
+
+        # Endpoint-collision preflight: paths are tenant-global; deploying a
+        # path bound by ANOTHER flow yields a runtime ERROR that looks
+        # exactly like a content failure (2x live lesson, p5-p6-plan.md §6).
+        entry0 = flow["spec"]["entrypoints"][0]
+        if entry0.get("type") == "sender.http":
+            from .collisions import collect_package_path_claims, find_collisions
+
+            desired = str((entry0.get("config") or {}).get("path", "/"))
+            claims = await collect_package_path_claims(adapter, package_id)
+            hits = find_collisions(claims, desired, exclude_artifact_id=target.id)
+            if hits:
+                raise SapCiTenantError(
+                    f"endpoint collision: path {desired!r} is already claimed by "
+                    + ", ".join(f"{h.artifact_id} ({h.version})" for h in hits)
+                    + " — pick a different entrypoint path"
+                )
+
         # Pre-upload backup (reversibility)
         bdir = project_path / ".oiw" / "tenant-cache"
         bdir.mkdir(parents=True, exist_ok=True)

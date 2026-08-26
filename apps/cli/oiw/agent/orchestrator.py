@@ -255,31 +255,25 @@ async def run_agent(
 
 
 def _compute_reward(execution: ExecutionResult) -> dict[str, Any]:
-    """Compute the reward vector for a completed execution.
+    """Outcome reward via the canonical 9-dim vector (spec §15.6).
 
-    Spec §15.6: reward is a vector of scalar signals, not a single
-    scalar. We compute:
-      - structural_correctness: fraction of steps that applied cleanly
-      - completion: 1.0 if status COMPLETED, 0.0 otherwise
-      - corrections_needed: total correction attempts across all steps
-      - conflict_count: number of CONFLICT-status steps
+    Single source of truth is emg.reward.compute_reward; the agent
+    execution contributes structural + correction signals at this stage
+    (unit_tests/runtime_stability fill in later from FlowTests/oracle).
     """
-    if not execution.completed_steps:
-        return {
-            "structural_correctness": 0.0,
-            "completion": 1.0 if execution.status == "COMPLETED" else 0.0,
-            "corrections_needed": 0,
-            "conflict_count": 0,
-        }
-    applied = sum(1 for s in execution.completed_steps if s.status == "applied")
-    corrections = sum(s.correction_attempts for s in execution.completed_steps)
-    conflicts = sum(1 for s in execution.completed_steps if s.status == "conflict")
-    return {
-        "structural_correctness": applied / len(execution.completed_steps),
-        "completion": 1.0 if execution.status == "COMPLETED" else 0.0,
-        "corrections_needed": corrections,
-        "conflict_count": conflicts,
-    }
+    from ..emg.reward import compute_reward
+
+    completed = execution.completed_steps or []
+    applied = sum(1 for s in completed if s.status == "applied")
+    corrections = sum(s.correction_attempts for s in completed)
+    structural = applied / len(completed) if completed else 0.0
+    return compute_reward(
+        completion=execution.status == "COMPLETED",
+        test_pass_rate=structural,  # proxy until FlowTests run in-loop
+        has_security_errors=False,
+        corrections=corrections,
+        total_steps=len(completed) or 1,
+    ).to_dict()
 
 
 __all__ = ["run_agent", "AgentResult", "ApprovalCallback"]
