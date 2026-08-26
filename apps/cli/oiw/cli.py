@@ -1500,6 +1500,9 @@ def tenant_calibrate(
         click.echo(f"  error detail:  {c['errorDetail']}")
     if c["messageSent"]:
         click.echo(f"  message HTTP:  {c['httpResponseStatus']} | MPL rows: {len(c['mplRows'])}")
+    reward = report_payload.get("reward") if (report_payload := _load_reward(path)) else None
+    if reward:
+        click.echo(f"  reward:        {reward['overall']} | gates: {reward['all_hard_gates_passed']}")
 
 
 @tenant.command("ping")
@@ -1996,3 +1999,12 @@ def _build_ir_from_report(report: Any, package_id: str, artifact_id: str) -> dic
 
 if __name__ == "__main__":
     main()
+
+
+def _load_reward(path: Path) -> dict | None:
+    import yaml
+
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None

@@ -61,6 +61,17 @@ class HttpReceiver(StepPlugin):
 
         # Use the mock response if provided
         mock = mocks.get(node.id)
+        fail = (mock or {}).get("fail") or {}
+        if fail.get("kind") == "timeout":
+            # P5b world dynamics: simulate a hung endpoint. Raises so error
+            # propagation / subprocesses engage exactly like a real timeout.
+            timeout_s = node.config.get("timeoutSeconds", 30)
+            ctx.add_trace(node.id, "error", f"injected fault: timeout after {timeout_s}s")
+            raise TimeoutError(f"receiver '{node.id}' timed out after {timeout_s}s")
+        if fail.get("kind") == "connection_reset":
+            ctx.add_trace(node.id, "error", "injected fault: connection reset by peer")
+            raise ConnectionError(f"receiver '{node.id}': connection reset by peer")
+
         if mock is not None:
             respond = mock.get("respond", {})
             status = respond.get("status", 200)
@@ -75,7 +86,12 @@ class HttpReceiver(StepPlugin):
                 )
             ctx.headers["HTTP_Status"] = str(status)
             ctx.body = body.encode("utf-8")
-            ctx.add_trace(node.id, "exit", f"mocked response status={status}")
+            note = ""
+            if fail.get("kind") in ("malformed", "drift"):
+                # Body was mutated by the world scenario; downstream parsers
+                # must now fail naturally — no synthetic error raised here.
+                note = f" (injected {fail['kind']})"
+            ctx.add_trace(node.id, "exit", f"mocked response status={status}{note}")
         else:
             # No mock — simulate a 200 OK with empty body
             ctx.headers["HTTP_Status"] = "200"

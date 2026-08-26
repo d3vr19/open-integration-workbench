@@ -248,9 +248,13 @@ async def calibrate_artifact(
 
 
 def write_report(report: CalibrationReport, out: Path | None = None) -> Path:
+    from .oracle_feedback import reward_from_calibration, reward_section
+
     path = out or Path(".oiw") / f"calibration-{report.artifact_id or 'unknown'}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(report.to_dict(), sort_keys=False), encoding="utf-8")
+    payload = report.to_dict()
+    payload.update(reward_section(reward_from_calibration(report)))
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     return path
 
 
