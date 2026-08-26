@@ -247,6 +247,41 @@ class SapCiTenantAdapter:
             )
         self._connected = True
 
+    async def deploy_user_credential(
+        self, name: str, user: str, password: str, kind: str = "default"
+    ) -> bool:
+        """Create/update User Credentials security material (Security Content API).
+
+        LIVE VERB (documented Security Content OData API):
+        POST /UserCredentials {Name, Kind, User, Password}. Required for
+        SFTP receivers with user_password auth — the flow references the
+        material by credentialName; the secret never touches the bundle.
+        Idempotent in practice: re-POST with the same Name updates it.
+        """
+        self._require_connected()
+        await self._ensure_csrf_token()
+        payload = {
+            "Name": name,
+            "Kind": kind,
+            "Description": f"OIW-managed credential ({name})",
+            "User": user,
+            "Password": password,
+        }
+        try:
+            resp = await self._client.post(
+                "/UserCredentials",
+                json=payload,
+                headers=self._write_headers(
+                    {"Content-Type": "application/json", "Accept": "application/json"}
+                ),
+            )
+        except httpx.HTTPError as exc:
+            raise SapCiTenantError(f"user credential unreachable: {exc}") from exc
+        if resp.status_code >= 400:
+            # 409-ish updates may need PUT; surface clearly either way.
+            self._raise_for_status(resp, "deploy_user_credential")
+        return True
+
     async def disconnect(self) -> None:
         if self._client is not None and self._owns_client:
             await self._client.aclose()

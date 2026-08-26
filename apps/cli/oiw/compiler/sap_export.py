@@ -178,6 +178,50 @@ _PROCESSDIRECT_SENDER_PROPS = [
     ("direction", "Sender"),
 ]
 
+# SFTP receiver messageFlow — mirrored from harvested UI-authored shapes
+# (pattern-book/shapes/SFTP-Receiver-SAP_SFTP.yaml, user_password variant;
+# 22+7 live flows use this family). Volatile fields parameterized.
+_SFTP_RECEIVER_PROPS = [
+    ("disconnect", "0"),
+    ("fileName", "{filename}"),
+    ("maximumReconnectAttempts", "3"),
+    ("stepwise", "1"),
+    ("fileExist", "Override"),
+    ("ComponentNS", "sap"),
+    ("autoCreate", "{autocreate}"),
+    ("privateKeyAlias", ""),
+    ("location_id", ""),
+    ("Name", "SFTP"),
+    ("TransportProtocolVersion", "1.14.0"),
+    ("flatten", "0"),
+    ("sftpSecEnabled", "{sftpsec}"),
+    ("useTempFile", "0"),
+    ("ComponentSWCVName", "external"),
+    ("path", "{directory}"),
+    ("proxyPort", "8080"),
+    ("host", "{hostport}"),
+    ("connectTimeout", "10000"),
+    ("fastExistsCheck", "1"),
+    ("MessageProtocol", "File"),
+    ("ComponentSWCVId", "1.14.0"),
+    ("direction", "Receiver"),
+    ("authentication", "user_password"),
+    ("ComponentType", "SFTP"),
+    ("fileAppendTimeStamp", "0"),
+    ("credential_name", "{credentialname}"),
+    ("proxyProtocol", "socks5"),
+    ("proxyType", "none"),
+    ("proxyAlias", ""),
+    ("componentVersion", "1.13"),
+    ("reconnectDelay", "1000"),
+    ("proxyHost", ""),
+    ("tempFileName", "${{file:name}}.tmp"),
+    ("allowDeprecatedAlgorithms", "0"),
+    ("TransportProtocol", "SFTP"),
+    ("MessageProtocolVersion", "1.14.0"),
+    ("username", ""),
+]
+
 
 def _elem_id(node_type: str, i: int) -> str:
     """BPMN element id for the i-th node — CPI's runtime compiler keys off
@@ -311,6 +355,39 @@ def export_flow_to_iflw(
                 f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="ProcessDirect" '
                 f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
                 + _props(_fill(_PROCESSDIRECT_RECEIVER_PROPS, address=escape(address)))
+                + "\n        </bpmn2:messageFlow>"
+            )
+            continue
+        if r["type"] == "receiver.sftp":
+            # Password auth: the SFTP username+password live in tenant
+            # security material referenced by credentialName (Security
+            # Content API). The flow only names the material.
+            cred = str(cfg_r.get("credentialName", "")).strip()
+            if not cred:
+                raise ValueError(
+                    f"receiver.sftp node '{r['id']}' requires config.credentialName "
+                    "— deploy User Credentials via the Security Content API and "
+                    "reference them here"
+                )
+            host = str(cfg_r.get("host", "")).strip()
+            if not host:
+                raise ValueError(f"receiver.sftp node '{r['id']}' requires config.host")
+            port = int(cfg_r.get("port", 22))
+            directory = str(cfg_r.get("directory", "/"))
+            receiver_mfs.append(
+                f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="SFTP" '
+                f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
+                + _props(
+                    _fill(
+                        _SFTP_RECEIVER_PROPS,
+                        filename=escape(str(cfg_r.get("filename", "${date:now:yyyyMMddHHmmss}.dat"))),
+                        autocreate=str(cfg_r.get("autoCreate", True)).lower(),
+                        directory=escape(directory),
+                        hostport=escape(f"{host}:{port}"),
+                        credentialname=escape(cred),
+                        sftpsec=str(cfg_r.get("verifyHostKey", True)).lower(),
+                    )
+                )
                 + "\n        </bpmn2:messageFlow>"
             )
             continue

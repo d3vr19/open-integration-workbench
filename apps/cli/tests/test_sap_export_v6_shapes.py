@@ -260,3 +260,42 @@ def test_processdirect_sender_entrypoint():
     assert props["address"] == "/oiw_pd_hf"
     assert props["direction"] == "Sender"
     assert "<key>urlPath</key>" not in xml  # no HTTPS adapter residue
+
+
+def test_receiver_sftp_terminal(tmp_path):
+    flow = {
+        "metadata": {"id": "t", "version": 1},
+        "spec": {
+            "edges": [],
+            "entrypoints": [_entry("/sftp")],
+            "nodes": [
+                {"id": "drop", "type": "receiver.sftp",
+                 "config": {"host": "eu-central-1.sftpcloud.io", "port": 22,
+                            "directory": "/upload", "filename": "oiw-e2e.txt",
+                            "credentialName": "oiw-sftpcloud"}}
+            ],
+        },
+    }
+    root = _parse(export_flow_to_iflw(flow, project_root=tmp_path))
+    mf, props = _mfs(root)["SFTP"]
+    assert mf.get("sourceRef") == "EndEvent_1"
+    assert props["ComponentType"] == "SFTP"
+    assert props["authentication"] == "user_password"
+    assert props["host"] == "eu-central-1.sftpcloud.io:22"
+    assert props["path"] == "/upload"
+    assert props["credential_name"] == "oiw-sftpcloud"
+    assert props["sftpSecEnabled"] == "true"  # secure default
+
+
+def test_receiver_sftp_requires_credential():
+    flow = {
+        "metadata": {"id": "t", "version": 1},
+        "spec": {
+            "edges": [],
+            "entrypoints": [_entry()],
+            "nodes": [{"id": "d", "type": "receiver.sftp",
+                       "config": {"host": "h.example.com"}}],
+        },
+    }
+    with pytest.raises(ValueError, match="credentialName"):
+        export_flow_to_iflw(flow, project_root=Path("."))
