@@ -310,6 +310,18 @@ same loop from two sides; do them together.
   message-send for non-HTTP entrypoints. LIVE VERDICT: both STARTED;
   GET trigger -> 200 weather JSON; MPL COMPLETED pairs on BOTH artifacts.
   Designer-open confirmed by operator after v6.1 DI generation.
+- 2026-08-26 (session 6) — P5b-M1 + P5c-M1 SHIPPED (commit de7eb98):
+  * World dynamics: oiw/runtime/world.py — declarative fault scenarios
+    (timeout / connection_reset / http_status / malformed / drift)
+    compile to the engine mocks seam; HttpReceiver honors injected fails
+    with realistic exception types; error propagation exercised e2e.
+  * Reward wiring: oiw/tenant/oracle_feedback.py — calibration reports
+    map onto the 9-dim reward vector (MPL pass rate = stability;
+    STARTED+exercised+all-COMPLETED = completion); failures auto-capture
+    as learning sessions; every calibrate report now carries reward:.
+  Remaining for P5b: fake SFTP endpoint, schema-drift corpus, scenario
+  library per archetype. Remaining for P5c: promotion-workflow hookup
+  (record_oracle_outcome into EMG store on PROJECT_APPROVED).
   - PERSISTENCE PROVEN (operator-verified): oiw_var global variable holds
     the exact open-meteo response body (Warsaw 16.4C @ 2026-08-26T07:00)
     — ${body} capture via ProcessDirect hop is byte-faithful. First
