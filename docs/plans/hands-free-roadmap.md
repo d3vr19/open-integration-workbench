@@ -1,5 +1,31 @@
 # Hands-Free Roadmap: Real EMG → Autonomous Artifact → Tenant Upload
 
+> ## ⭐ NORTH STAR — read this first, every session
+>
+> **END GOAL:** a natural-language requirement goes in; an agent autonomously
+> authors an iFlow inside a fast **local simulated world** where the reward is
+> a *functional iFlow*; one human approves; OIW uploads, deploys, and verifies
+> it on the live BTP tenant; the outcome feeds the EMG learning loop so the
+> next requirement starts smarter. No BTP UI for iteration — Git is the source
+> of truth, the tenant is only ever a library we push finished work into.
+>
+> **RESOURCES TO UTILIZE (all proven, all in-repo):**
+> - **Oracle loop** — `oiw tenant calibrate` (upload→deploy→poll→MPL report);
+>   scratch target `AdaequareGST/open_mateo_test`, update-only, allowlist-pinned.
+>   Mind deploy-rate wedging: cool-down between campaigns.
+> - **Operator-provided API specs** (repo root): `IntegrationContent.edmx`
+>   (PUT-entity update, `DeployIntegrationDesigntimeArtifact`, `Configurations`),
+>   `MessageProcessingLogs.edmx`, `LogFiles.edmx`. When an endpoint is needed,
+>   check these FIRST — they already answered PUT-vs-POST and activation.
+> - **Reference export** — `iflows/testing_oiw*.zip`: receiver-as-EndEvent
+>   compiled shape, full property sets, externalized-param pattern.
+> - **Existing machinery** — exporter v3, JVM Groovy sandbox bridge, EMG with
+>   real Gemma-300m embeddings (`OIW_EMBEDDING_STRICT=1`), 9-dim reward,
+>   deployment state machine, trajectory recorder.
+> - **Hard rules** — CI never touches tenant or real models; credentials
+>   env-only; every write reversible (pre-upload backups); honesty over
+>   convenience (loud failures, fidelity labels never overclaimed).
+>
 > **Status:** ACTIVE — governing plan for the d3vr19 fork.
 > **Origin:** Approved 2026-08-25. This document is the anti-drift anchor: every
 > PR must state which phase (and sub-phase) it advances, and deviations must be
