@@ -354,9 +354,10 @@ def _write_transport(artifact_id="MyFlow", artifact_version="1.0.0", *, empty_pa
             )
             return httpx.Response(200, json={"d": {"results": results}})
 
-        if request.method == "PUT" and "/$value" in str(request.url):
-            seen["upload_body"] = request.content
-            seen["content_type"] = request.headers.get("Content-Type")
+        if request.method == "PUT" and "IntegrationDesigntimeArtifacts(Id=" in str(request.url):
+            import json as _json
+
+            seen["upload_payload"] = _json.loads(request.content)
             seen["csrf_sent"] = request.headers.get("x-csrf-token")
             return httpx.Response(204)
 
@@ -433,12 +434,15 @@ def test_upload_updates_existing_artifact(profile) -> None:
     transport, seen = _write_transport()
     adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
 
-    result = _run(adapter.upload_package("AdequareGST", b"PK\x03\x04fakezipbytes", "sha256:deadbeef"))
+    import base64 as _b64
+
+    raw = b"PK\x03\x04fakezipbytes"
+    result = _run(adapter.upload_package("AdequareGST", raw, "sha256:deadbeef"))
     assert result.success is True
-    assert result.version == "1.0.0"
-    assert seen["method"] == "PUT"
-    assert seen["upload_body"] == b"PK\x03\x04fakezipbytes"
-    assert seen["content_type"] == "application/zip"
+    payload = seen["upload_payload"]
+    assert "Id='MyFlow'" in seen["url"]
+    assert "ArtifactContent" in payload
+    assert _b64.b64decode(payload["ArtifactContent"]) == raw
     assert seen["csrf_sent"] == "test-csrf-token"
     _run(adapter.disconnect())
 
@@ -567,3 +571,36 @@ def test_runtime_logs_empty(mock_adapter, profile) -> None:
     _run(mock_adapter.connect(profile))
     logs = _run(mock_adapter.get_runtime_logs("pkg", datetime.now(tz=UTC)))
     assert logs == []
+
+
+def test_artifact_pin_targets_only_the_pinned_artifact(profile) -> None:
+    """PackageId/ArtifactId allowlist pins the update target (PR-9 safety)."""
+    transport, seen = _write_transport(artifact_id="open_mateo_test")
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdaequareGST/open_mateo_test"])
+    assert adapter._pinned_artifact("AdaequareGST") == "open_mateo_test"
+
+    result = _run(adapter.upload_package("AdaequareGST", b"PK\x03\x04zip", "sha256:bb"))
+    assert result.success is True
+    # The POST targeted the PINNED artifact, not the first in the package
+    assert "Id='open_mateo_test'" in seen["url"]
+    _run(adapter.disconnect())
+
+
+def test_artifact_pin_refuses_when_pinned_artifact_missing(profile) -> None:
+    """A missing pinned artifact is an error — never fall back to a sibling."""
+    transport, _seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdaequareGST/does-not-exist"])
+    with pytest.raises(SapCiTenantError, match="pinned artifact 'does-not-exist' not found"):
+        _run(adapter.upload_package("AdaequareGST", b"PK\x03\x04zip", "sha256:cc"))
+    _run(adapter.disconnect())
+
+
+def test_unpinned_writable_package_still_refuses_nothing_new(profile) -> None:
+    """A bare PackageId entry allows the first artifact (documented default)."""
+    transport, seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdaequareGST"])
+    assert adapter._pinned_artifact("AdaequareGST") is None
+    result = _run(adapter.upload_package("AdaequareGST", b"PK\x03\x04zip", "sha256:dd"))
+    assert result.success is True
+    assert "Id='MyFlow'" in seen["url"]  # top-of-list artifact
+    _run(adapter.disconnect())

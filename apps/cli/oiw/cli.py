@@ -718,13 +718,34 @@ def deploy_approve(project_path: Path, profile: str, package_id: str, approver: 
     default=None,
     help="Explicit archive to upload. Default: zip the dist/ build output.",
 )
-def deploy_upload(project_path: Path, profile: str, package_id: str, archive_path: Path | None) -> None:
+@click.option(
+    "--overwrite-drift",
+    is_flag=True,
+    default=False,
+    help="Allow upload when the tenant artifact differs from the local build. Digests recorded in evidence.",
+)
+@click.option(
+    "--format",
+    "cpi_format",
+    type=click.Choice(["oiw", "cpi"]),
+    default="oiw",
+    help="oiw = zip the dist/ IR bundle; cpi = build a CPI designtime bundle (Phase 4 exporter).",
+)
+def deploy_upload(
+    project_path: Path,
+    profile: str,
+    package_id: str,
+    archive_path: Path | None,
+    overwrite_drift: bool,
+    cpi_format: bool,
+) -> None:
     """Upload the build artifact to the tenant (transition to UPLOADED).
 
     WP-08 PR-9 seam fixes over the WP-05 prototype:
       - uses build_tenant_adapter() (was: hardcoded mock),
       - uploads REAL archive bytes + sha256 (was: b"mock-build-artifact"),
-      - runs the drift check first and blocks on DRIFT_DETECTED,
+      - runs the drift check first and blocks on DRIFT_DETECTED unless
+        --overwrite-drift is passed explicitly (digests recorded as evidence),
       - enforces the approval TTL from deploymentPolicy.
     """
     import asyncio
@@ -764,6 +785,44 @@ def deploy_upload(project_path: Path, profile: str, package_id: str, archive_pat
         if archive_path:
             archive = archive_path.read_bytes()
             digest = "sha256:" + _hashlib.sha256(archive).hexdigest()
+        elif cpi_format == "cpi":
+            # Phase 4: real CPI designtime bundle (manifest-bearing iFlow
+            # project) generated from flow.yaml — what the tenant API
+            # actually requires (live-proven 2026-08-25).
+            import yaml as _yaml
+
+            from .compiler.sap_export import build_cpi_bundle, cpi_bundle_identity
+            from .tenant import SapCiTenantError
+
+            flows = sorted((project_path / "flows").rglob("flow.yaml"))
+            if len(flows) != 1:
+                click.echo(f"error: --format cpi needs exactly one flow, found {len(flows)}", err=True)
+                raise click.Abort()
+            flow = _yaml.safe_load(flows[0].read_text(encoding="utf-8"))
+            # Inherit the existing artifact's Bundle-SymbolicName + iflw
+            # filename — tenant updates are rejected otherwise (live-proven).
+            symbolic = iflw_name = None
+            try:
+                adapter_probe = build_tenant_adapter(mock_state_dir=project_path / ".oiw" / "mock-tenant")
+                _prof = load_profile(project_path, profile)
+
+                async def _identity():
+                    await adapter_probe.connect(_prof)
+                    try:
+                        target = await adapter_probe._resolve_target_artifact(package_id)
+                        return await adapter_probe.download_artifact(target.id, target.version)
+                    finally:
+                        await adapter_probe.disconnect()
+
+                existing = asyncio.run(_identity())
+                symbolic, iflw_name = cpi_bundle_identity(existing)
+            except (SapCiTenantError, ValueError, FileNotFoundError) as exc:
+                click.echo(f"note: no existing bundle identity to inherit ({exc}); using defaults")
+            try:
+                archive, digest = build_cpi_bundle(flow, symbolic_name=symbolic, iflw_name=iflw_name)
+            except ValueError as exc:
+                click.echo(f"error: CPI export failed: {exc}", err=True)
+                raise click.Abort() from exc
         else:
             build_dir = find_build_dir(project_path)
             archive, digest = zip_build_dir(build_dir)
@@ -776,10 +835,11 @@ def deploy_upload(project_path: Path, profile: str, package_id: str, archive_pat
     async def _upload():
         await adapter.connect(prof)
         try:
-            # Drift gate: block when tenant content differs and wasn't built by us
+            # Drift gate: block when tenant content differs unless the operator
+            # passed --overwrite-drift (first push into a scratch artifact).
             report = await DriftDetector().detect_drift(digest, adapter, package_id)
-            if report.status == "DRIFT_DETECTED" and not report.safe_to_upload:
-                return ("drift-blocked", None, None)
+            if report.status == "DRIFT_DETECTED" and not report.safe_to_upload and not overwrite_drift:
+                return ("drift-blocked", None, report)
             result = await adapter.upload_package(package_id, archive, digest)
             return (None, result, report)
         finally:
@@ -796,13 +856,12 @@ def deploy_upload(project_path: Path, profile: str, package_id: str, archive_pat
     if upload is None or not upload.success:
         click.echo(f"Upload failed: {upload.error if upload else 'unknown'}", err=True)
         raise click.Abort()
-    sm.transition(
-        DeploymentEvent(
-            target=DeploymentState.UPLOADED,
-            actor="cli",
-            evidence={"version": upload.version, "digest": digest, "bytes": len(archive)},
-        )
-    )
+    evidence = {"version": upload.version, "digest": digest, "bytes": len(archive)}
+    if overwrite_drift:
+        evidence["overwriteDrift"] = True
+        if _report is not None:
+            evidence["tenantDigestBefore"] = _report.tenant_digest
+    sm.transition(DeploymentEvent(target=DeploymentState.UPLOADED, actor="cli", evidence=evidence))
     click.echo(f"Uploaded {len(archive)} bytes ({digest[:19]}…) as version {upload.version}.")
     click.echo(f"Current state: {sm.current_state.value}")
 

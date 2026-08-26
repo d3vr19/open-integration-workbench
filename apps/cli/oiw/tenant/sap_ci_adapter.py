@@ -182,8 +182,11 @@ class SapCiTenantAdapter:
     def _resolve_writable_packages_from_env(self) -> None:
         """Merge the explicit allowlist with OIW_TENANT_WRITABLE_PACKAGES.
 
-        Comma-separated package ids. Explicit constructor entries win
-        (deduped, order-preserving). An empty result means read-only.
+        Entries are either `PackageId` (any artifact in the package may be
+        updated) or `PackageId/ArtifactId` (ONLY that artifact may be
+        updated — the safe default for shared scratch packages). Explicit
+        constructor entries win (deduped, order-preserving). An empty
+        result means read-only.
         """
         env_raw = os.environ.get("OIW_TENANT_WRITABLE_PACKAGES", "")
         env_pkgs = [p.strip() for p in env_raw.split(",") if p.strip()]
@@ -192,6 +195,18 @@ class SapCiTenantAdapter:
             if p and p not in merged:
                 merged.append(p)
         self._writable = merged
+
+    def _package_is_writable(self, package_id: str) -> bool:
+        return any(e == package_id or e.startswith(f"{package_id}/") for e in self._writable)
+
+    def _pinned_artifact(self, package_id: str) -> str | None:
+        """The single artifact id this package's writes are pinned to, if any."""
+        pins = [
+            e.split("/", 1)[1]
+            for e in self._writable
+            if e.startswith(f"{package_id}/") and len(e) > len(package_id) + 1
+        ]
+        return pins[0] if pins else None
 
     async def connect(self, profile: EnvironmentProfile) -> None:
         """Validate credentials by hitting the OData service root."""
@@ -308,16 +323,29 @@ class SapCiTenantAdapter:
     # ------------------------------------------------------------------
 
     async def get_artifact_version(self, package_id: str) -> ArtifactVersion | None:
-        """Return the latest artifact version in a package, or None if empty."""
-        artifacts = await self.list_artifacts(package_id, top=1)
+        """Return the latest artifact version in a package, or None if empty.
+
+        Honors an artifact pin (`PackageId/ArtifactId` allowlist entry) so
+        drift detection compares against the SAME artifact the write path
+        targets — never a different sibling in a shared package.
+        """
+        artifacts = await self.list_artifacts(package_id, top=100)
         if not artifacts:
             return None
+        pin = self._pinned_artifact(package_id)
+        if pin:
+            artifacts = [a for a in artifacts if a.id == pin]
+            if not artifacts:
+                return None
         a = artifacts[0]
         return ArtifactVersion(version=a.version, deployed_at=None, deployed_by=None, digest=None)
 
     async def get_artifact_digest(self, package_id: str) -> str | None:
-        """Compute sha256 of the latest artifact ZIP for drift detection."""
-        artifacts = await self.list_artifacts(package_id, top=1)
+        """Compute sha256 of the target artifact ZIP for drift detection."""
+        artifacts = await self.list_artifacts(package_id, top=100)
+        pin = self._pinned_artifact(package_id)
+        if pin:
+            artifacts = [a for a in artifacts if a.id == pin]
         if not artifacts:
             return None
         a = artifacts[0]
@@ -334,11 +362,12 @@ class SapCiTenantAdapter:
             raise SapCiTenantError(
                 "write refused: no writable packages configured. Set "
                 "OIW_TENANT_WRITABLE_PACKAGES (or writable_packages=) to the "
-                "human-created scratch package id(s). Per WP-08 §D-004 the "
+                "human-created scratch package id(s) — optionally pinned to a "
+                "single artifact as PackageId/ArtifactId. Per WP-08 §D-004 the "
                 "tenant is a library, not a scratchpad — OIW only ever "
                 "updates artifacts inside packages you explicitly allow."
             )
-        if package_id not in self._writable:
+        if not self._package_is_writable(package_id):
             raise SapCiTenantError(
                 f"write refused: package '{package_id}' is not on the writable "
                 f"allowlist {self._writable}. Only pre-created scratch "
@@ -377,25 +406,46 @@ class SapCiTenantAdapter:
 
         Update-only policy (T0-003): we never create artifacts. If the
         package has none, fail with remediation instead of guessing.
+
+        When the allowlist pins an artifact (`PackageId/ArtifactId`),
+        ONLY that artifact is a valid target — a shared scratch package
+        must never see its other (real) artifacts overwritten.
         """
-        artifacts = await self.list_artifacts(package_id, top=1)
+        pin = self._pinned_artifact(package_id)
+        artifacts = await self.list_artifacts(package_id, top=100)
         if not artifacts:
             raise SapCiTenantError(
                 f"package '{package_id}' has no designtime artifacts to update. "
                 f"Per T0-003 this adapter is update-only: create the artifact "
                 f"once in the tenant UI (any placeholder iFlow), then re-run."
             )
+        if pin:
+            for a in artifacts:
+                if a.id == pin:
+                    return a
+            raise SapCiTenantError(
+                f"pinned artifact '{pin}' not found in package '{package_id}'. "
+                f"Refusing to fall back to another artifact — the allowlist "
+                f"entry '{package_id}/{pin}' names exactly one update target."
+            )
         return artifacts[0]
 
     async def upload_package(self, package_id: str, archive: bytes, digest: str) -> UploadResult:
         """Update an existing artifact's designtime content with `archive`.
 
-        PUT /IntegrationDesigntimeArtifacts(Id='{id}',Version='{version}')/$value
-        The archive must be a CPI designtime bundle. Empty archives are
-        rejected locally before anything touches the tenant.
+        LIVE-PROVEN VERB (2026-08-25, AdaequareGST/open_mateo_test):
+        UPDATE = PUT /IntegrationDesigntimeArtifacts(Id='{id}',Version='{v}')
+        with JSON {ArtifactContent: <base64 zip>}. POST is CREATE-only
+        (rejects existing ids with a misleading 500); PUT on $value is
+        501; multipart is 501. The bundle's Bundle-SymbolicName must match
+        the existing artifact — callers inherit identity via
+        sap_export.cpi_bundle_identity.
+
+        Policy refusals come FIRST — an out-of-allowlist write must fail
+        even if the adapter isn't connected.
         """
-        # Policy refusals come FIRST — an out-of-allowlist write must fail
-        # even if the adapter isn't connected (no network needed to say no).
+        import base64 as _b64
+
         self._ensure_writable(package_id)
         self._require_connected()
         if not archive or len(archive) < 4:
@@ -404,13 +454,14 @@ class SapCiTenantAdapter:
             )
         target = await self._resolve_target_artifact(package_id)
         await self._ensure_csrf_token()
-        url = f"/IntegrationDesigntimeArtifacts(Id='{target.id}',Version='{target.version}')/$value"
+        payload = {"ArtifactContent": _b64.b64encode(archive).decode()}
+        url = f"/IntegrationDesigntimeArtifacts(Id='{target.id}',Version='{target.version}')"
         try:
             resp = await self._client.put(
                 url,
-                content=archive,
+                json=payload,
                 headers=self._write_headers(
-                    {"Content-Type": "application/zip", "Accept": "application/json"}
+                    {"Content-Type": "application/json", "Accept": "application/json"}
                 ),
             )
         except httpx.HTTPError as exc:

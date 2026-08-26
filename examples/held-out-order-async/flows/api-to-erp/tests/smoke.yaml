@@ -2,6 +2,7 @@ apiVersion: oiw.dev/v1alpha1
 kind: FlowTest
 metadata:
   name: smoke
+  description: Held-out async order happy path reaches the receiver and logs.
 spec:
   assertions:
   - equals: COMPLETED

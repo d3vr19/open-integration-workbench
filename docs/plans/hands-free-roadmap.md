@@ -278,3 +278,20 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   TTL enforcement, 9 new MockTransport tests, CLI suite 414 passed.
   Scratch package designated by operator: **AdequareGST**. Live smoke
   pending credentials in env.
+- 2026-08-25 — P3 LIVE SMOKE (partial PASS) + P4 exporter MVP live-proven —
+  against AdaequareGST/open_mateo_test with operator credentials:
+  - VERB DISCOVERIES (all live-proven, sketch was wrong): PUT $value=501;
+    multipart=501; POST entity=CREATE-only (existing id ⇒ misleading 500);
+    **UPDATE = PUT /IntegrationDesigntimeArtifacts(Id,V) {ArtifactContent:b64}**,
+    which rejects Bundle-SymbolicName changes (HTTP 400) — exporter now
+    inherits identity from the downloaded current bundle.
+  - Winning bundle shape (1826 bytes, HTTP 200): minimal MANIFEST.MF with
+    `Bundle-SymbolicName: <id>;singleton:=true`, `.project` without buildSpec,
+    `metainfo.prop` (NOT parameters.prop), our generated .iflw — SAP's parser
+    accepted OIW-generated BPMN2 verbatim.
+  - `oiw deploy upload --format cpi`: propose→approve→upload ALL GREEN via
+    CLI; artifact content replaced on the live tenant.
+  - OPEN: activation. /IntegrationRuntimeArtifacts is a read-only view
+    (GET ok, POST=405). The deploy-activate verb needs discovery (SAP docs
+    or devtools capture of a manual UI deploy). verify() polls that entity
+    once activation lands.

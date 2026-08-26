@@ -108,16 +108,22 @@ def validate_project(project: Project) -> SchemaValidationResult:
 
 
 def _project_to_dict(project: Project) -> dict[str, Any]:
+    # Optional fields are OMITTED when empty — injecting None here would
+    # fail the schema's own type checks (labels/description must be
+    # object/string, not null). A project without labels is valid.
+    metadata: dict[str, Any] = {
+        "id": project.id,
+        "name": project.name,
+        "created": project.created,
+    }
+    if project.description:
+        metadata["description"] = project.description
+    if project.labels:
+        metadata["labels"] = project.labels
     return {
         "apiVersion": "oiw.dev/v1alpha1",
         "kind": "IntegrationProject",
-        "metadata": {
-            "id": project.id,
-            "name": project.name,
-            "created": project.created,
-            "description": project.description or None,
-            "labels": project.labels or None,
-        },
+        "metadata": metadata,
         "spec": project.spec,
     }
 
