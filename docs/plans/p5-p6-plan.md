@@ -266,3 +266,11 @@ same loop from two sides; do them together.
   - OPEN (next): message exercise returns HTTP 403 at /http/<path> +
     zero MPL rows — runtime-endpoint auth (xsrfProtection?) is the next
     seam before reward-function wiring can consume live executions.
+  - SESSION 4 CLOSE — message ingress SOLVED (operator tip): /http/<path>
+    lives on the RUNTIME host (landscape segment takes '-rt' suffix);
+    designtime host 403s. `runtime_base_url()` derives it (+env override
+    OIW_TENANT_RUNTIME_URL); send verb now honors entrypoint methods.
+    FULL ORACLE LOOP GREEN: upload → STARTED → GET /http/open_mateo_test
+    → HTTP **200** → MPL row Status=**COMPLETED**
+    (AGqOeXB4VGtDoi1r--B4S_3QMcKz). P5a execution engine has live
+    ground truth end-to-end; reward wiring (P5c) can consume MPL verdicts.

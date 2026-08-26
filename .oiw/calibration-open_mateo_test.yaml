@@ -1,0 +1,18 @@
+calibration:
+  packageId: AdaequareGST
+  artifactId: open_mateo_test
+  uploadedOk: true
+  deployAccepted: true
+  trackingUuid: null
+  finalStatus: STARTED
+  errorDetail: null
+  messageSent: true
+  httpResponseStatus: 200
+  mplRows:
+  - MessageGuid: AGqOeXB4VGtDoi1r--B4S_3QMcKz
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787722096987)/
+  startedAt: '2026-08-26T05:27:59.101058+00:00'
+  finishedAt: ''

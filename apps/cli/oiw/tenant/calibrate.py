@@ -14,11 +14,14 @@ Findings baked in (2026-08-26, live):
     - RuntimeArtifactErrorInformations exists in the edmx but is NOT served
       ("could not find entity set") — startup-failure detail must be
       obtained by bundle bisection instead.
+    - Message ingress (/http/<path>) lives on the RUNTIME host (landscape
+      segment with '-rt' suffix); the designtime host returns 403.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +33,39 @@ import yaml
 from ..compiler.sap_export import build_cpi_bundle, cpi_bundle_identity
 from ..environments import EnvironmentProfile
 from .sap_ci_adapter import SapCiTenantAdapter, SapCiTenantError
+
+
+def runtime_base_url(tenant_url: str) -> str:
+    """Derive the CPI RUNTIME base URL from the designtime tenant URL.
+
+    Runtime-facing endpoints (/http/<path> message ingress) live on a host
+    whose landscape segment carries an '-rt' suffix; reusing the designtime
+    host returns HTTP 403 (live finding, 2026-08-26):
+
+        designtime: https://<tenant>.it-cpi021.cfapps.<region>.hana.ondemand.com
+        runtime:    https://<tenant>.it-cpi021-rt.cfapps.<region>.hana.ondemand.com
+
+    OIW_TENANT_RUNTIME_URL overrides outright for non-CF landscapes.
+    """
+    override = os.environ.get("OIW_TENANT_RUNTIME_URL", "").strip()
+    if override:
+        return override.rstrip("/")
+    base = tenant_url.split("/api/v1")[0].rstrip("/")
+    scheme, _, rest = base.partition("://")
+    host = rest.split("/")[0]
+    if "-rt." in host or host.endswith("-rt"):
+        return f"{scheme}://{host}"
+    if ".cfapps" in host:
+        head, tail = host.split(".cfapps", 1)
+        host = f"{head}-rt.cfapps{tail}"
+    return f"{scheme}://{host}"
+
+
+def message_method(entrypoint: dict) -> str:
+    """HTTP verb for exercising the entrypoint: honor its declared methods."""
+    cfg = entrypoint.get("config") or {}
+    methods = [str(m).upper() for m in (cfg.get("methods") or ["POST"])]
+    return "GET" if "GET" in methods else methods[0]
 
 
 @dataclass
@@ -163,17 +199,20 @@ async def calibrate_artifact(
         if status == "STARTED":
             entry = flow["spec"]["entrypoints"][0]
             path = str((entry.get("config") or {}).get("path", "/")).lstrip("/")
-            # iFlow HTTP endpoints live at <host>/http/<path> — NOT under /api/v1
-            host = str(adapter.tenant_url).split("/api/v1")[0]
+            # Message ingress lives on the RUNTIME host (-rt), NOT the
+            # designtime host (403 there).
+            host = runtime_base_url(str(adapter.tenant_url))
+            method = message_method(entry)
+            kwargs: dict[str, Any] = {
+                "headers": {
+                    **adapter._basic_auth_header(),
+                    "Content-Type": "application/json",
+                }
+            }
+            if method not in ("GET", "HEAD"):
+                kwargs["content"] = message_body.encode()
             try:
-                mr = await adapter._client.post(
-                    f"{host}/http/{path}",
-                    content=message_body.encode(),
-                    headers={
-                        **adapter._basic_auth_header(),
-                        "Content-Type": "application/json",
-                    },
-                )
+                mr = await adapter._client.request(method, f"{host}/http/{path}", **kwargs)
                 rep.message_sent = True
                 rep.http_response_status = mr.status_code
             except httpx.HTTPError as exc:
@@ -209,4 +248,10 @@ def write_report(report: CalibrationReport, out: Path | None = None) -> Path:
     return path
 
 
-__all__ = ["CalibrationReport", "calibrate_artifact", "write_report"]
+__all__ = [
+    "CalibrationReport",
+    "calibrate_artifact",
+    "message_method",
+    "runtime_base_url",
+    "write_report",
+]
