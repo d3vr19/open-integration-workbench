@@ -310,6 +310,38 @@ same loop from two sides; do them together.
   message-send for non-HTTP entrypoints. LIVE VERDICT: both STARTED;
   GET trigger -> 200 weather JSON; MPL COMPLETED pairs on BOTH artifacts.
   Designer-open confirmed by operator after v6.1 DI generation.
+- 2026-08-26 (SESSION CLOSE / HANDOFF) — READ THIS FIRST, NEXT SELF:
+  STATE: PR #4 green at 06d500c; 454 CLI tests pass. Tenant healthy:
+    open_mateo_test = writer flow (drops OIW-E2E files via SFTP) STARTED;
+    oiw_pd_hf = SFTP poller -> PD(/oiw_pd) forwarder STARTED;
+    oiw_pd = operator listener (variables.write oiw_var=${body}).
+    Flagship weather chain NOT currently deployed (its PD target /oiw_pd_hf
+    listener was replaced by the poller; flagship PD repointed to /oiw_pd
+    in /tmp/opencode/final-mateo project — rebuild when needed).
+  OPEN THREADS (ranked):
+    1. SFTP poll cadence: mirrored cron deploys+STARTs but no pickup
+       observed within minutes of a dropped OIW-E2E file. Suspects:
+       TIME_INTERVAL schedule semantics slower than they read, or silent
+       poll-connect failure (no MPL rows on failed polls). Probe via
+       Connectivity Test API (SSH) BEFORE touching code.
+    2. Writer-vs-flagship placement on open_mateo_test (operator call;
+       recommendation: keep writer, rebuild flagship pair when needed).
+    3. Grammar backlog: pattern-book census has 50 nominated shapes;
+       Mapping(x191), XmlToJson(x83), Filter(x63), Splitter(x17),
+       ProcessCall(x7) top the activity gaps.
+    4. Phase 3 turbo loop (THICK) approved and unstarted. Stage 1 of
+       LLM-free path agreed: offline-instantiate mode w/ fallback+label.
+  LAWS THAT COST US BLOOD - DO NOT RELITIGATE:
+    * Receiver URL must SPLIT across httpAddressWithoutQuery/httpAddressQuery.
+    * retryInterval='5' not '10000'; adapter boolean dialect is 0/1.
+    * Entrypoint paths are TENANT-GLOBAL (collision preflight exists).
+    * Sender Participant name = static 'Sender', never a URL path.
+    * ONE exchange pattern per artifact; main-process ends are
+      message-typed; plain cname::EndEvent only in subprocesses.
+    * Oracle verdicts are point-in-time: cool-down after ~10+ deploys/hr.
+    * Runtime message ingress lives on the -rt host; designtime host 403s.
+  METHOD, ALWAYS: harvest/reference bytes -> mirror verbatim -> unit
+    tests -> live oracle single-variable proof -> document -> commit.
 - 2026-08-26 (session 8) — SFTP LIFECYCLE: write PROVEN, poll-fetch grammar
   SHIPPED, cadence OPEN:
   * Complete-lifecycle attempt on ONE artifact failed -> ARCHITECTURE

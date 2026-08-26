@@ -381,3 +381,10 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   '5', not the fixture-inherited '10000'. Final `oiw tenant calibrate` with
   pure exporter output → STARTED on live tenant. Open seam: message-send
   403 (runtime endpoint auth) before reward wiring.
+- 2026-08-26 (sessions 7-9) — PHASES 0-2 COMPLETE + SFTP grammar live:
+  sharpening guards (collision preflight, designer-open gate), pattern-book
+  harvester (300 artifacts -> 59 shapes -> 50-gap backlog), receiver.sftp +
+  sender.sftp + UserCredentials verb, multi-entrypoint emitter rewrite,
+  participant-name law. Tenant state: writer + poller sibling artifacts
+  STARTED; poll cadence OPEN (next-session probe #1). LLM-free Stage 1
+  (offline-instantiate w/ fallback+label) agreed for Phase 3 kickoff.
