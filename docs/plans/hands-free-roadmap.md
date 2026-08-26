@@ -358,3 +358,11 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   (oracle harness first; parity suite as the honesty gate ≥90%; turbo loop
   with code-level tenant guard). Operator offered tenant API specs — MPL +
   Log Files requested NOW, Message Stores at 5c, Security Content deferred.
+- 2026-08-26 (session 3) — P5a bisection matrix CLOSED; blocker relocated.
+  Wedge theory confirmed (bare → STARTED after cool-down); then H-A and all
+  byte-parity variants of the UI-authored reference (full prop parity,
+  bpmndi DI section, combined) ERROR on a healthy tenant while bare sails
+  through ⇒ receiver runtime-start failure is NOT bundle bytes. Suspects:
+  API deploy-path semantics for messageFlow-bearing flows, or tenant-side
+  material. Awaiting operator UI-deploy dichotomy test (p5-p6-plan.md §6).
+  open_mateo_test left bare/STARTED.

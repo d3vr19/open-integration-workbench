@@ -196,3 +196,41 @@ same loop from two sides; do them together.
   - Transplant lesson: $value downloads of OTHER artifacts use the
     content-export archive format (resources.cnt…), not project zips —
     handle both formats when transplanting/diffing (new TODO in exporter).
+- 2026-08-26 (session 3) — WEDGE CONFIRMED + RECEIVER MATRIX CLOSED:
+  - Cool-down verdict: bare re-calibrate → **STARTED ✅** minutes into the
+    session. Yesterday's deploy-rate/runtime-wedge theory confirmed; oracle
+    verdicts taken today are clean.
+  - H-A REFUTED: v3 EndEvent-model receiver with literal reachable URL +
+    proxyType=default + authenticationMethod=None → ERROR on healthy tenant.
+  - Byte-parity matrix vs operator-provided UI-authored reference
+    (testing_oiw zip; structural diff tooling in session log):
+    | Variant | Delta vs H-A | Verdict |
+    |---|---|---|
+    | full | collab 15-key set (cors*/accessControl/log, returnExceptionToSender=false, cmdVariantUri 1.2.4) + sender MF 1.5.3/xsrf=1/clientCertificates + receiver value alignment | ERROR |
+    | di | reference bpmndi DI section (8 shapes/edges, ids adapted) | ERROR |
+    | fulldi | all of the above combined | ERROR |
+  - Reference facts newly extracted: UI exports carry a FULL bpmndi
+    diagram section (bare tolerates absence; receivers unproven either way
+    — tested, not sufficient); sender HTTPS adapter now at version 1.5.3
+    with a clientCertificates property row; collaboration default set has
+    15 keys (we emitted 7); `testing_oiw` does NOT exist on this tenant as
+    designtime or runtime ⇒ there is still NO proven-good receiver
+    baseline anywhere.
+  - CONCLUSION: every replicable content difference is eliminated.
+    Bare starts via our API path seconds before/after receiver variants
+    fail ⇒ failure is NOT bundle bytes. Remaining hypotheses:
+    (i) deploy-path semantics — PUT-update + DeployIntegrationDesigntimeArtifact
+    may skip regeneration the UI deploy performs for messageFlow-bearing
+    flows (~600 STARTED receivers were all UI-deployed);
+    (ii) tenant security/landscape material validated only on some paths.
+  - DECISIVE NEXT TEST (operator, ~2 min): create a trivial iFlow WITH an
+    HTTP receiver in the tenant UI and deploy it ONCE via the UI. If it
+    fails → environmental, stop artifact work, raise with SAP. If it
+    starts → we pull its bytes, PUT them onto open_mateo_test via API and
+    deploy: API-round ERROR ⇒ deploy-path wedge proven; START ⇒ byte-diff
+    isolates the final delta.
+  - Side findings: runtime message endpoint /http/<path> returns 403 with
+    basic auth + xsrfProtection=0 (entrypoint exercise needs its own fix —
+    ref uses xsrfProtection=1); adapter CSRF token does not survive rapid
+    reconnects — space calibrate runs ≥60s or refetch per connect;
+    open_mateo_test restored to bare/STARTED at session close.
