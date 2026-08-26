@@ -155,3 +155,25 @@ same loop from two sides; do them together.
     subprocesses — possible structural requirement).
   NOTE: operator can also just deploy once via UI and share the downloaded
   artifact zip — no devtools needed for THIS step.
+- 2026-08-26 (cont. 2) — REFERENCE-EXPORT ANALYSIS (operator provided
+  iflows/testing_oiw*.zip — a UI-authored flow with an HTTP receiver):
+  - STRUCTURAL REVELATION: in modern CPI exports the receiver is wired as
+    **EndEvent(messageEventDefinition) + messageFlow(EndEvent→Participant)**
+    — there is NO main-process serviceTask/ExternalCall (that shape only
+    occurs inside local subprocesses). Exporter v3 rewritten accordingly:
+    terminal receivers collapse into EndEvent_1; full 48-key receiver
+    property set mirrored from the reference; suite green.
+  - Reference config facts: proxyType=`default` (not internet),
+    URL externalized as {{openMateoURL}} via parameters.prop/.propdef,
+    authenticationMethod=Client Certificate with empty credentialName.
+  - Live results: ref-verbatim content on open_mateo_test ⇒ new distinct
+    status FAILED (likely empty externalized URL + missing credential).
+    `testing_oiw` itself was NEVER deployed by the operator (no runtime row)
+    so it is not evidence of a working shape.
+  - Tenant RESTORED to known-good: bare pass-through re-deployed,
+    final status **STARTED** ✅ — open_mateo_test is healthy again.
+- NEXT (ranked): H-A retry EndEvent-model receiver with proxyType=default +
+  literal reachable URL + no ext-param indirection; H-B replicate reference's
+  FULL collaboration prop set (cors*/accessControl keys); H-C create the
+  reference flow fresh in UI, DEPLOY it once via UI, then tenant-pull BOTH
+  designtime+runtime state for a proven-good byte baseline.

@@ -72,38 +72,56 @@ _SENDER_PROPS = [
 ]
 
 _RECEIVER_PROPS = [
+    ("apiName", ""),
     ("Description", ""),
     ("methodSourceExpression", ""),
+    ("apiArtifactType", ""),
+    ("providerAuth", ""),
+    ("retryOnExceptionsTable", ""),
     ("ComponentNS", "sap"),
     ("privateKeyAlias", ""),
     ("httpMethod", "{method}"),
+    ("apiprovider_location_id", ""),
     ("allowedResponseHeaders", "*"),
     ("Name", "HTTP"),
-    ("TransportProtocolVersion", "1.12.0"),
-    ("ComponentSWCVName", "external"),
+    ("internetProxyType", ""),
+    ("TransportProtocolVersion", "1.20.2"),
+    ("retryOnException", "false"),
     ("proxyPort", ""),
+    ("ComponentSWCVName", "external"),
+    ("streaming", "false"),
+    ("enableMPLAttachments", "false"),
+    ("pooledConnectionIdleTimeout", ""),
     ("httpAddressQuery", ""),
     ("httpRequestTimeout", "{timeout}"),
-    ("MessageProtocol", "None"),
-    ("ComponentSWCVId", "1.12.0"),
+    ("ComponentSWCVId", "1.20.2"),
+    ("providerName", ""),
     ("allowedRequestHeaders", ""),
+    ("MessageProtocol", "None"),
     ("direction", "Receiver"),
     ("ComponentType", "HTTP"),
     ("httpShouldSendBody", "false"),
     ("throwExceptionOnFailure", "true"),
     ("proxyType", "internet"),
-    ("componentVersion", "1.12"),
+    ("componentVersion", "1.20"),
+    ("retryIteration", "3"),
     ("proxyHost", ""),
+    ("providerUrl", ""),
+    ("retryOnConnectionFailure", "false"),
     ("system", "{system}"),
     ("authenticationMethod", "None"),
     ("locationID", "MBP"),
+    ("retryInterval", "10000"),
     ("TransportProtocol", "HTTP"),
     (
         "cmdVariantUri",
-        "ctype::AdapterVariant/cname::sap:HTTP/tp::HTTP/mp::None/direction::Receiver/version::1.12.0",
+        "ctype::AdapterVariant/cname::sap:HTTP/tp::HTTP/mp::None/direction::Receiver/version::1.20.2",
     ),
+    ("httpErrorResponseCodes", ""),
     ("credentialName", ""),
-    ("MessageProtocolVersion", "1.12.0"),
+    ("apiDisplayName", ""),
+    ("MessageProtocolVersion", "1.20.2"),
+    ("providerRelativeUrl", ""),
     ("httpAddressWithoutQuery", "{url}"),
 ]
 
@@ -165,9 +183,11 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
         L.append("        </bpmn2:participant>")
         cfg_r = r.get("config") or {}
         step_idx = nodes.index(r) + 1
+        if step_idx != len(nodes):
+            continue  # non-terminal receivers rejected during node pass
         receiver_mfs.append(
             f'        <bpmn2:messageFlow id="MessageFlow_R{step_idx}" name="HTTP" '
-            f'sourceRef="ServiceTask_{step_idx}" targetRef="Participant_{escape(r["id"])}">\n'
+            f'sourceRef="EndEvent_1" targetRef="Participant_{escape(r["id"])}">\n'
             + _props(
                 _fill(
                     _RECEIVER_PROPS,
@@ -223,27 +243,30 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
             return f"ExclusiveGateway_{i}"
         return f"CallActivity_{i}"
 
+    # CPI compiled model (from a UI-created reference export): receiver
+    # steps are TERMINAL END EVENTS wired to their participant via
+    # messageFlow — there is NO serviceTask/ExternalCall in the main
+    # process (that shape only appears inside subprocesses). Mid-flow
+    # receivers would need branching semantics → out of MVP scope.
+    receiver_terminals: set[int] = set()
+    for i, node in enumerate(nodes, start=1):
+        if node["type"].startswith("receiver.") and i == len(nodes):
+            receiver_terminals.add(i)
+    non_receiver_nodes = [n for n in nodes if not n["type"].startswith("receiver.")]
+
     for i, node in enumerate(nodes, start=1):
         nid = _elem_id(node["type"], i)
         ntype = node["type"]
         cfg = node.get("config") or {}
         incoming = f"SequenceFlow_{i - 1}"
         outgoing = f"SequenceFlow_{i}"
+        if i in receiver_terminals:
+            continue  # rendered as EndEvent below
         if ntype.startswith("receiver."):
-            L.append(f'        <bpmn2:serviceTask id="{nid}" name="{escape(str(node["id"]))}">')
-            L.append(
-                _props(
-                    [
-                        ("componentVersion", "1.0"),
-                        ("activityType", "ExternalCall"),
-                        ("cmdVariantUri", "ctype::FlowstepVariant/cname::ExternalCall/version::1.0.4"),
-                    ],
-                    indent="            ",
-                )
+            raise ValueError(
+                "mid-flow receiver (not terminal) needs branching semantics — "
+                "unsupported by the MVP exporter"
             )
-            L.append(f"            <bpmn2:incoming>{incoming}</bpmn2:incoming>")
-            L.append(f"            <bpmn2:outgoing>{outgoing}</bpmn2:outgoing>")
-            L.append("        </bpmn2:serviceTask>")
         else:
             activity = _OIW_TO_ACTIVITY.get(ntype)
             if activity is None:
@@ -308,12 +331,11 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
     L.append("        </bpmn2:endEvent>")
 
     # All sequenceFlows declared at process end, mirroring real exports.
+    # Terminal receivers collapse into EndEvent_1 (their messageFlow wires
+    # EndEvent_1 -> Participant_x in the collaboration).
     ids = (
         ["StartEvent_1"]
-        + [
-            ("ServiceTask_" if n["type"].startswith("receiver.") else "CallActivity_") + str(i)
-            for i, n in enumerate(nodes, start=1)
-        ]
+        + [f"CallActivity_{i}" for i, n in enumerate(nodes, start=1) if i not in receiver_terminals]
         + ["EndEvent_1"]
     )
     for i in range(len(ids) - 1):
