@@ -725,6 +725,11 @@ def deploy_approve(project_path: Path, profile: str, package_id: str, approver: 
     help="Allow upload when the tenant artifact differs from the local build. Digests recorded in evidence.",
 )
 @click.option(
+    "--display-name",
+    default=None,
+    help="Override the CPI Bundle-Name/display name (breaks circular identity inheritance).",
+)
+@click.option(
     "--format",
     "cpi_format",
     type=click.Choice(["oiw", "cpi"]),
@@ -737,7 +742,8 @@ def deploy_upload(
     package_id: str,
     archive_path: Path | None,
     overwrite_drift: bool,
-    cpi_format: bool,
+    cpi_format: str,
+    display_name: str | None,
 ) -> None:
     """Upload the build artifact to the tenant (transition to UPLOADED).
 
@@ -815,11 +821,27 @@ def deploy_upload(
                         await adapter_probe.disconnect()
 
                 existing = asyncio.run(_identity())
-                symbolic, iflw_name = cpi_bundle_identity(existing)
+                symbolic, iflw_name, bundle_name = cpi_bundle_identity(existing)
+                if display_name:
+                    bundle_name = display_name
+                # Pre-upload backup: every real write is reversible.
+                try:
+                    bdir = project_path / ".oiw" / "tenant-cache"
+                    bdir.mkdir(parents=True, exist_ok=True)
+                    from datetime import datetime as _dt
+
+                    stamp = _dt.now().strftime("%Y%m%dT%H%M%SZ")
+                    (bdir / f"backup-{package_id}-{iflw_name.rsplit('.', 1)[0]}-{stamp}.zip").write_bytes(
+                        existing
+                    )
+                except OSError:
+                    pass
             except (SapCiTenantError, ValueError, FileNotFoundError) as exc:
                 click.echo(f"note: no existing bundle identity to inherit ({exc}); using defaults")
             try:
-                archive, digest = build_cpi_bundle(flow, symbolic_name=symbolic, iflw_name=iflw_name)
+                archive, digest = build_cpi_bundle(
+                    flow, symbolic_name=symbolic, iflw_name=iflw_name, display_name=bundle_name
+                )
             except ValueError as exc:
                 click.echo(f"error: CPI export failed: {exc}", err=True)
                 raise click.Abort() from exc

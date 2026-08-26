@@ -295,3 +295,12 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
     (GET ok, POST=405). The deploy-activate verb needs discovery (SAP docs
     or devtools capture of a manual UI deploy). verify() polls that entity
     once activation lands.
+- 2026-08-25 — P4 v2 exporter (designer-safe) + tenant restore COMPLETE —
+  root cause of the unopenable artifact: display Name is derived from the
+  uploaded bundle, and v1's minimal BPMN2 lacked designer-required
+  structures. v2 mirrors REAL fixture element/property sets per component,
+  emits sequenceFlows at process end (fixture convention), and passes our
+  own parse_bpm2 round-trip. open_mateo_test restored: PUT 200, display
+  name verified back to 'open_mateo_test'. New guards: pre-upload backup
+  to .oiw/tenant-cache/, --display-name override breaks circular
+  identity inheritance, exporter refuses designer-unproven node types.

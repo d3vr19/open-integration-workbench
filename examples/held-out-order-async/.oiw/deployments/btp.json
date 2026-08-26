@@ -4,7 +4,7 @@
     {
       "from_state": "DRAFT",
       "to_state": "VALIDATED",
-      "timestamp": "2026-08-26T00:09:49.872301+00:00",
+      "timestamp": "2026-08-26T00:31:55.407047+00:00",
       "actor": "cli",
       "evidence": {
         "package_id": "AdaequareGST"
@@ -13,7 +13,7 @@
     {
       "from_state": "VALIDATED",
       "to_state": "TESTED",
-      "timestamp": "2026-08-26T00:09:49.872680+00:00",
+      "timestamp": "2026-08-26T00:31:55.407544+00:00",
       "actor": "cli",
       "evidence": {
         "package_id": "AdaequareGST"
@@ -22,7 +22,7 @@
     {
       "from_state": "TESTED",
       "to_state": "BUILT",
-      "timestamp": "2026-08-26T00:09:49.872809+00:00",
+      "timestamp": "2026-08-26T00:31:55.407697+00:00",
       "actor": "cli",
       "evidence": {
         "package_id": "AdaequareGST"
@@ -31,7 +31,7 @@
     {
       "from_state": "BUILT",
       "to_state": "PROPOSED",
-      "timestamp": "2026-08-26T00:09:49.877261+00:00",
+      "timestamp": "2026-08-26T00:31:55.412585+00:00",
       "actor": "cli",
       "evidence": {
         "package_id": "AdaequareGST"
@@ -40,7 +40,7 @@
     {
       "from_state": "PROPOSED",
       "to_state": "APPROVED",
-      "timestamp": "2026-08-26T00:09:49.987778+00:00",
+      "timestamp": "2026-08-26T00:31:55.518609+00:00",
       "actor": "d3vr19",
       "evidence": {
         "approver": "d3vr19"
@@ -49,14 +49,14 @@
     {
       "from_state": "APPROVED",
       "to_state": "UPLOADED",
-      "timestamp": "2026-08-26T00:09:53.600446+00:00",
+      "timestamp": "2026-08-26T00:31:59.124345+00:00",
       "actor": "cli",
       "evidence": {
         "version": "1.0.0",
-        "digest": "046567aecfd261a11f4138b0c1963e39fcb19daa75a52d3ec1cf699f8892182a",
-        "bytes": 1826,
+        "digest": "8265f4d97a758c4ac52ea3667e921821644c466a3a79bf92b00523c7cf78398a",
+        "bytes": 2510,
         "overwriteDrift": true,
-        "tenantDigestBefore": "sha256:08c97ffc4b8a131f1df89f4e4c775b98b1bd8a5f8b1e20046bee5cd632beb052"
+        "tenantDigestBefore": "sha256:b3595b1077167c2a986e55030d39e52a40cde8968139d484519e19fcda038c31"
       }
     }
   ],
