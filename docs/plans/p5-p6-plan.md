@@ -301,6 +301,15 @@ same loop from two sides; do them together.
     ⇒ runtime ERROR that looks like a content failure. Rule recorded:
     entrypoint paths are TENANT-GLOBAL; the compiler/oracle must treat
     404-vs-collision distinctly and check bound paths before deploy.
+- 2026-08-26 (session 5, cont.) — TOPOLOGY CORRECTED per operator:
+  open_mateo_test REIMPLEMENTS testing_oiw v3 (HTTPS /open_mateo_test ->
+  RR open-meteo -> Groovy -> ProcessDirect /oiw_pd_hf); oiw_pd_hf is the
+  LISTENER (sender.processdirect + variables.write oiw_var=${body}).
+  New exporter capability: sender.processdirect entrypoints (16-prop
+  sender shape mirrored from oiw_pd reference); calibrate skips HTTP
+  message-send for non-HTTP entrypoints. LIVE VERDICT: both STARTED;
+  GET trigger -> 200 weather JSON; MPL COMPLETED pairs on BOTH artifacts.
+  Designer-open confirmed by operator after v6.1 DI generation.
   - State at close: open_mateo_test (path /oiw_pd_hf) and oiw_pd_hf
     (path /oiw_pd_hf2) BOTH STARTED running the identical full chain;
     oiw_pd consuming via ProcessDirect. Next: variables.write live use,

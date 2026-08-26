@@ -196,8 +196,11 @@ def test_diagram_section_covers_every_element(tmp_path):
             "edges": [],
             "entrypoints": [_entry("/p")],
             "nodes": [
-                {"id": "rr", "type": "receiver.http",
-                 "config": {"url": "https://a.example.com/x", "method": "GET"}},
+                {
+                    "id": "rr",
+                    "type": "receiver.http",
+                    "config": {"url": "https://a.example.com/x", "method": "GET"},
+                },
                 {"id": "gx", "type": "script.groovy", "config": {"resource": "scripts/g.groovy"}},
                 {"id": "pd", "type": "receiver.processdirect", "config": {"address": "/oiw_pd"}},
             ],
@@ -207,9 +210,53 @@ def test_diagram_section_covers_every_element(tmp_path):
     root = _parse(xml)
     plane = root.find(".//{http://www.omg.org/spec/BPMN/20100524/DI}BPMNPlane")
     assert plane is not None
-    shaped = {s.get("bpmnElement") for s in plane.findall("{http://www.omg.org/spec/BPMN/20100524/DI}BPMNShape")}
-    edged = {e.get("bpmnElement") for e in plane.findall("{http://www.omg.org/spec/BPMN/20100524/DI}BPMNEdge")}
-    for pid in ("StartEvent_1", "EndEvent_1", "ServiceTask_1", "CallActivity_2",
-                "Participant_1", "Participant_rr", "Participant_pd", "Participant_Process_1"):
+    shaped = {
+        s.get("bpmnElement") for s in plane.findall("{http://www.omg.org/spec/BPMN/20100524/DI}BPMNShape")
+    }
+    edged = {
+        e.get("bpmnElement") for e in plane.findall("{http://www.omg.org/spec/BPMN/20100524/DI}BPMNEdge")
+    }
+    for pid in (
+        "StartEvent_1",
+        "EndEvent_1",
+        "ServiceTask_1",
+        "CallActivity_2",
+        "Participant_1",
+        "Participant_rr",
+        "Participant_pd",
+        "Participant_Process_1",
+    ):
         assert pid in shaped, pid
-    assert {"SequenceFlow_0", "SequenceFlow_1", "SequenceFlow_2", "MessageFlow_1", "MessageFlow_R1", "MessageFlow_R3"} <= edged
+    assert {
+        "SequenceFlow_0",
+        "SequenceFlow_1",
+        "SequenceFlow_2",
+        "MessageFlow_1",
+        "MessageFlow_R1",
+        "MessageFlow_R3",
+    } <= edged
+
+
+def test_processdirect_sender_entrypoint():
+    """Listener flows (oiw_pd_hf role): PD sender + variables.write."""
+    flow = {
+        "metadata": {"id": "t", "version": 1},
+        "spec": {
+            "edges": [{"from": "s", "to": "wv"}],
+            "entrypoints": [{"id": "s", "type": "sender.processdirect", "config": {"address": "/oiw_pd_hf"}}],
+            "nodes": [
+                {
+                    "id": "wv",
+                    "type": "variables.write",
+                    "config": {"name": "oiw_var", "value": "${body}", "encrypt": True},
+                }
+            ],
+        },
+    }
+    xml = export_flow_to_iflw(flow)
+    root = _parse(xml)
+    mf, props = _mfs(root)["ProcessDirect"]
+    assert mf.get("sourceRef") == "Participant_1"
+    assert props["address"] == "/oiw_pd_hf"
+    assert props["direction"] == "Sender"
+    assert "<key>urlPath</key>" not in xml  # no HTTPS adapter residue

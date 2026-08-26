@@ -185,9 +185,7 @@ async def calibrate_artifact(
             rep.error_detail = result.error
             return rep
 
-        deploy_result = await adapter.deploy(
-            package_id, target.version, artifact_id=artifact_id
-        )
+        deploy_result = await adapter.deploy(package_id, target.version, artifact_id=artifact_id)
         rep.deploy_accepted = bool(deploy_result.success)
 
         status, raw = await _poll_terminal(
@@ -201,8 +199,10 @@ async def calibrate_artifact(
                 "Use bundle bisection: drop steps until STARTED."
             )
 
-        # If started, exercise the HTTP entrypoint and pull MPL evidence
-        if status == "STARTED":
+        # If started, exercise the HTTP entrypoint and pull MPL evidence.
+        # ProcessDirect (and other non-HTTP) entrypoints have no runtime
+        # HTTP endpoint — their verdict arrives via the CALLER's chain.
+        if status == "STARTED" and flow["spec"]["entrypoints"][0].get("type") == "sender.http":
             entry = flow["spec"]["entrypoints"][0]
             path = str((entry.get("config") or {}).get("path", "/")).lstrip("/")
             # Message ingress lives on the RUNTIME host (-rt), NOT the

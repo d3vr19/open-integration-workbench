@@ -1,0 +1,13 @@
+calibration:
+  packageId: AdaequareGST
+  artifactId: oiw_pd_hf
+  uploadedOk: true
+  deployAccepted: true
+  trackingUuid: null
+  finalStatus: STARTED
+  errorDetail: null
+  messageSent: false
+  httpResponseStatus: null
+  mplRows: []
+  startedAt: '2026-08-26T07:04:26.385320+00:00'
+  finishedAt: ''

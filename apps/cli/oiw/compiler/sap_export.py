@@ -154,6 +154,30 @@ _PROCESSDIRECT_RECEIVER_PROPS = [
     ("direction", "Receiver"),
 ]
 
+# ProcessDirect sender messageFlow — mirrored verbatim from the UI-authored
+# oiw_pd reference (the listener side of a ProcessDirect hop).
+_PROCESSDIRECT_SENDER_PROPS = [
+    ("ComponentType", "ProcessDirect"),
+    ("Description", ""),
+    ("address", "{address}"),
+    ("ComponentNS", "sap"),
+    ("Vendor", "SAP"),
+    ("componentVersion", "1.1"),
+    ("Name", "ProcessDirect"),
+    ("TransportProtocolVersion", "1.1.2"),
+    ("ComponentSWCVName", "external"),
+    ("system", "Sender"),
+    ("TransportProtocol", "Not Applicable"),
+    (
+        "cmdVariantUri",
+        "ctype::AdapterVariant/cname::ProcessDirect/vendor::SAP/tp::Not Applicable/mp::Not Applicable/direction::Sender/version::1.1.2",
+    ),
+    ("MessageProtocol", "Not Applicable"),
+    ("MessageProtocolVersion", "1.1.2"),
+    ("ComponentSWCVId", "1.1.2"),
+    ("direction", "Sender"),
+]
+
 
 def _elem_id(node_type: str, i: int) -> str:
     """BPMN element id for the i-th node — CPI's runtime compiler keys off
@@ -315,12 +339,26 @@ def export_flow_to_iflw(
             )
             + "\n        </bpmn2:messageFlow>"
         )
-    path = str((entry.get("config") or {}).get("path", "/"))
-    L.append(
-        '        <bpmn2:messageFlow id="MessageFlow_1" name="HTTPS" sourceRef="Participant_1" targetRef="StartEvent_1">'
-    )
-    L.append(_props(_fill(_SENDER_PROPS, path=path, system=escape(name))))
-    L.append("        </bpmn2:messageFlow>")
+    if entry.get("type") == "sender.processdirect":
+        address = str((entry.get("config") or {}).get("address", "")).strip()
+        if not address:
+            raise ValueError(
+                "sender.processdirect entrypoint requires config.address "
+                "(the process name this flow listens on, e.g. /oiw_pd_hf)"
+            )
+        L.append(
+            '        <bpmn2:messageFlow id="MessageFlow_1" name="ProcessDirect" '
+            'sourceRef="Participant_1" targetRef="StartEvent_1">'
+        )
+        L.append(_props(_fill(_PROCESSDIRECT_SENDER_PROPS, address=escape(address))))
+        L.append("        </bpmn2:messageFlow>")
+    else:
+        path = str((entry.get("config") or {}).get("path", "/"))
+        L.append(
+            '        <bpmn2:messageFlow id="MessageFlow_1" name="HTTPS" sourceRef="Participant_1" targetRef="StartEvent_1">'
+        )
+        L.append(_props(_fill(_SENDER_PROPS, path=path, system=escape(name))))
+        L.append("        </bpmn2:messageFlow>")
     # Every real export declares the process as an IntegrationProcess
     # participant with processRef (runtime binds endpoint routing to it).
     L.append(

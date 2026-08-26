@@ -9,15 +9,30 @@ calibration:
   messageSent: true
   httpResponseStatus: 200
   mplRows:
+  - MessageGuid: AGqOkEHnuz1fMfbPORirCBWsa-md
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787727937667)/
+  - MessageGuid: AGqOjUX66cUQpfhxMQow0Uc9zfSP
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787727173733)/
+  - MessageGuid: AGqOh0zdksAIcsnTg-nwpFqgyPDY
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787725644314)/
+  - MessageGuid: AGqOgtnddMlRm4FD2JIGjKnIssA8
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: open_mateo_test
+    LogStart: /Date(1787724505935)/
   - MessageGuid: AGqOfEqDcnDIGjDkXj9SwaH8tj6F
     Status: COMPLETED
     CustomStatus: COMPLETED
     IntegrationFlowName: open_mateo_test
     LogStart: /Date(1787722826864)/
-  - MessageGuid: AGqOeXB4VGtDoi1r--B4S_3QMcKz
-    Status: COMPLETED
-    CustomStatus: COMPLETED
-    IntegrationFlowName: open_mateo_test
-    LogStart: /Date(1787722096987)/
-  startedAt: '2026-08-26T05:40:12.615368+00:00'
+  startedAt: '2026-08-26T07:05:24.096581+00:00'
   finishedAt: ''
