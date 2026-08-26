@@ -102,7 +102,7 @@ _RECEIVER_PROPS = [
     ("ComponentType", "HTTP"),
     ("httpShouldSendBody", "false"),
     ("throwExceptionOnFailure", "true"),
-    ("proxyType", "internet"),
+    ("proxyType", "default"),
     ("componentVersion", "1.20"),
     ("retryIteration", "3"),
     ("proxyHost", ""),
@@ -205,6 +205,13 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
     )
     L.append(_props(_fill(_SENDER_PROPS, path=path, system=escape(name))))
     L.append("        </bpmn2:messageFlow>")
+    # Every real export declares the process as an IntegrationProcess
+    # participant with processRef (runtime binds endpoint routing to it).
+    L.append(
+        '<bpmn2:participant id="Participant_Process_1" ifl:type="IntegrationProcess" '
+        'name="Integration Process" processRef="Process_1">'
+        "<bpmn2:extensionElements/></bpmn2:participant>"
+    )
     for mf in receiver_mfs:
         L.append(mf)
     L.append("    </bpmn2:collaboration>")

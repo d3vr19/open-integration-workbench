@@ -177,3 +177,22 @@ same loop from two sides; do them together.
   FULL collaboration prop set (cors*/accessControl keys); H-C create the
   reference flow fresh in UI, DEPLOY it once via UI, then tenant-pull BOTH
   designtime+runtime state for a proven-good byte baseline.
+- 2026-08-26 (final) — ENVIRONMENTAL FINDING + session close:
+  - Configurations API confirmed artifact-scoped only
+    (/IntegrationDesigntimeArtifacts(Id,V)/Configurations); testing_oiw's
+    openMateoURL is EMPTY on the tenant ⇒ its FAILED was config, not structure.
+  - proxyType=default, IntegrationProcess participant(processRef) both tested:
+    NOT the cause.
+  - Operator's own UI-authored receiver flow (URL+auth fixed by us) ALSO fails
+    runtime-start ⇒ receiver failures are NOT exporter-specific.
+  - Tenant currently shows ~600 STARTED flows incl. receivers ⇒ receivers CAN
+    run here; but by session end EVEN previously-STARTED bare content redeployed
+    by us went ERROR ⇒ strong evidence of deploy-rate/runtime-wedge behavior
+    after ~15 rapid redeploys in one hour. Oracle verdicts are point-in-time;
+    add cool-down/backoff to calibrate polling next session.
+  - open_mateo_test left holding last-attempt content; next session FIRST
+    re-run calibrate after cool-down (bare variant expected STARTED again),
+    THEN resume receiver work with fresh runtime state.
+  - Transplant lesson: $value downloads of OTHER artifacts use the
+    content-export archive format (resources.cnt…), not project zips —
+    handle both formats when transplanting/diffing (new TODO in exporter).
