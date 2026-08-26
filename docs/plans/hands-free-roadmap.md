@@ -161,11 +161,23 @@ Per WP-06 §7 sketch:
    oiw deploy execute --profile btp --package AdequareGST
    oiw deploy verify --profile btp --package AdequareGST
    ```
-6. [ ] Live smoke results recorded here.
+6. [x] **Live smoke COMPLETE (2026-08-26)** — verbs re-proven against
+   AdaequareGST/open_mateo_test: UPDATE=PUT entity {ArtifactContent},
+   deploy=`DeployIntegrationDesigntimeArtifact` fn import (202), poll via
+   /IntegrationRuntimeArtifacts?$filter=Name eq '<id>'. CLI
+   propose→approve→upload→execute→verify all GREEN mechanically;
+   verify honestly reports SAP runtime verdict (see P4).
 
-### Phase 4 — CPI bundle exporter *(the hidden blocker, 4–5 days)*
+### Phase 4 — CPI bundle exporter *(the hidden blocker)*
 
-Without this, "upload the integration" cannot happen regardless of Phase 3:
+**STATUS (2026-08-26): MVP v2 LIVE** — designer-safe BPMN2 (fixture-fidelity
+props), identity inheritance (`cpi_bundle_identity`), manifest folding,
+`--format cpi` + `--display-name` on deploy upload; pre-upload backups.
+Upload+deploy mechanics fully green; **remaining: runtime-START fidelity**
+(SAP runtime compiler rejects our flow at start; hypotheses H1–H3 queued in
+p5-p6-plan.md §6; bisection via `oiw tenant calibrate`).
+
+Original scope (for reference):
 
 1. IR→designtime-ZIP writer: BPMN2/iflw serialization (inverse of
    `parse_bpmn2_iflw`, reusing `_ACTIVITY_TYPE_MAP` inverted),
