@@ -155,6 +155,17 @@ _PROCESSDIRECT_RECEIVER_PROPS = [
 ]
 
 
+def _elem_id(node_type: str, i: int) -> str:
+    """BPMN element id for the i-th node — CPI's runtime compiler keys off
+    prefixes (StartEvent_/CallActivity_/ServiceTask_/EndEvent_); generic ids
+    import fine but fail runtime-start (H1, p5-p6-plan.md §6)."""
+    if node_type.startswith("receiver."):
+        return f"ServiceTask_{i}"
+    if node_type == "router.content-based":
+        return f"ExclusiveGateway_{i}"
+    return f"CallActivity_{i}"
+
+
 def _props(pairs: list[tuple[str, str]], indent: str = "                ") -> str:
     out = ["<bpmn2:extensionElements>"]
     for k, v in pairs:
@@ -345,16 +356,6 @@ def export_flow_to_iflw(
     L.append("            <bpmn2:messageEventDefinition/>")
     L.append("        </bpmn2:startEvent>")
 
-    # CPI's runtime compiler keys off BPMN element-id prefixes (every real
-    # export uses StartEvent_/CallActivity_/ServiceTask_/EndEvent_); generic
-    # ids import fine but fail runtime-start (H1, p5-p6-plan.md §6).
-    def _elem_id(node_type: str, i: int) -> str:
-        if node_type.startswith("receiver."):
-            return f"ServiceTask_{i}"
-        if node_type == "router.content-based":
-            return f"ExclusiveGateway_{i}"
-        return f"CallActivity_{i}"
-
     # CPI compiled model (from UI-authored reference exports):
     #  - TERMINAL receivers render as EndEvent + messageFlow(EndEvent ->
     #    participant) — HTTP and ProcessDirect both proven live.
@@ -448,7 +449,9 @@ def export_flow_to_iflw(
                 name_v = escape(str(cfg.get("name", "")))
                 if not name_v:
                     raise ValueError(f"variables.write node '{node['id']}' requires config.name")
-                value = escape(str(cfg.get("value", "$in.body")))
+                # Operator-corrected expression (2026-08-26): ${body},
+                # not the $in.body seen in the first reference export.
+                value = escape(str(cfg.get("value", "${body}")))
                 vtype = escape(str(cfg.get("valueType", "expression")))
                 scope = escape(str(cfg.get("scope", "global")))
                 row = f"<row><cell>{name_v}</cell><cell></cell><cell>{vtype}</cell><cell>{value}</cell><cell>{scope}</cell></row>"
@@ -498,8 +501,95 @@ def export_flow_to_iflw(
             f'        <bpmn2:sequenceFlow id="SequenceFlow_{i}" sourceRef="{ids[i]}" targetRef="{ids[i + 1]}"/>'
         )
     L.append("    </bpmn2:process>")
+    L.append(_diagram_section(flow, nodes, receiver_terminals, name))
     L.append("</bpmn2:definitions>")
     return "\n".join(L)
+
+
+def _diagram_section(flow: dict, nodes: list[dict], receiver_terminals: set[int], flow_name: str) -> str:
+    """bpmndi section — REQUIRED for the web designer to open the artifact.
+
+    Bundles without BPMNDiagram deploy and run but render unopenable in
+    the UI (live finding, 2026-08-26). Layout mirrors the coordinate
+    scheme of real UI exports: sender left, process lane center with
+    steps left-to-right, HTTP receivers above their Request-Reply tasks,
+    terminal receivers right of the end event.
+    """
+    entry_id = "StartEvent_1"
+    shapes: list[tuple[str, int, int, int, int]] = []  # id,x,y,w,h
+
+    # Process-lane geometry
+    step_x0, step_y, task_w, task_h = 412, 132, 100, 60
+    rendered = [i for i in range(1, len(nodes) + 1) if i not in receiver_terminals]
+    last_right = step_x0 - 150 + 150 * len(rendered) + task_w if rendered else 292 + 32
+    end_x = last_right + 41 if rendered else 365
+
+    shapes.append((entry_id, 292, 142, 32, 32))
+    k = 0
+    for i, node in enumerate(nodes, start=1):
+        if i in receiver_terminals:
+            continue
+        x = step_x0 + 150 * k
+        shapes.append((_elem_id(node["type"], i), x, step_y, task_w, task_h))
+        k += 1
+    shapes.append(("EndEvent_1", end_x, 142, 32, 32))
+    shapes.append(("Participant_1", 40, 100, 100, 140))  # sender
+    shapes.append(("Participant_Process_1", 250, 60, end_x + 87 - 250, 220))
+
+    # Receiver participants: mid-flow (Request-Reply) above their task;
+    # terminal receivers right of the end event.
+    k = 0
+    for i, node in enumerate(nodes, start=1):
+        if not node["type"].startswith("receiver."):
+            continue
+        pid = f"Participant_{node['id']}"
+        if i in receiver_terminals:
+            shapes.append((pid, end_x + 175, 69, 100, 140))
+        else:
+            shapes.append((pid, step_x0 + 150 * k + 8, -182, 100, 140))
+            k += 1
+
+    def center(shape_id: str) -> tuple[int, int]:
+        _, x, y, w, h = next(s for s in shapes if s[0] == shape_id)
+        return x + w // 2, y + h // 2
+
+    edges: list[tuple[str, str, str]] = []  # bpmnId, sourceShapeId, targetShapeId
+    seq_ids = (
+        ["StartEvent_1"]
+        + [_elem_id(n["type"], i) for i, n in enumerate(nodes, start=1) if i not in receiver_terminals]
+        + ["EndEvent_1"]
+    )
+    for i in range(len(seq_ids) - 1):
+        edges.append((f"SequenceFlow_{i}", seq_ids[i], seq_ids[i + 1]))
+    edges.append(("MessageFlow_1", "Participant_1", "StartEvent_1"))
+    for r in nodes:
+        if not r["type"].startswith("receiver."):
+            continue
+        idx = nodes.index(r) + 1
+        src = "EndEvent_1" if idx == len(nodes) else f"ServiceTask_{idx}"
+        edges.append((f"MessageFlow_R{idx}", src, f"Participant_{r['id']}"))
+
+    out = ['    <bpmndi:BPMNDiagram id="BPMNDiagram_1" name="Default Collaboration Diagram">']
+    out.append('        <bpmndi:BPMNPlane bpmnElement="Collaboration_1" id="BPMNPlane_1">')
+    for sid, x, y, w, h in shapes:
+        out.append(f'            <bpmndi:BPMNShape bpmnElement="{escape(sid)}" id="BPMNShape_{escape(sid)}">')
+        out.append(
+            f'                <dc:Bounds height="{float(h)}" width="{float(w)}" x="{float(x)}" y="{float(y)}"/>'
+        )
+        out.append("            </bpmndi:BPMNShape>")
+    for eid, src, tgt in edges:
+        sx, sy = center(src)
+        tx, ty = center(tgt)
+        out.append(
+            f'            <bpmndi:BPMNEdge bpmnElement="{escape(eid)}" id="BPMNEdge_{escape(eid)}" '
+            f'sourceElement="BPMNShape_{escape(src)}" targetElement="BPMNShape_{escape(tgt)}">'
+        )
+        out.append(f'                <di:waypoint x="{float(sx)}" xsi:type="dc:Point" y="{float(sy)}"/>')
+        out.append(f'                <di:waypoint x="{float(tx)}" xsi:type="dc:Point" y="{float(ty)}"/>')
+        out.append("            </bpmndi:BPMNEdge>")
+    out.append("        </bpmndi:BPMNPlane>")
+    out.append("    </bpmndi:BPMNDiagram>")
+    return "\n".join(out)
 
 
 def _fold_manifest_line(line: str, limit: int = 70) -> str:

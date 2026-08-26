@@ -184,3 +184,32 @@ def test_full_chain_bundle(tmp_path):
     assert "serviceTask" in kinds  # request-reply task present
     assert "endEvent" in kinds  # terminal PD end event
     assert "src/main/resources/script/weather_transform.groovy" in z.namelist()
+
+
+def test_diagram_section_covers_every_element(tmp_path):
+    """Designer-open requirement: every node/participant/flow needs DI."""
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "g.groovy").write_text(GROOVY)
+    flow = {
+        "metadata": {"id": "t", "version": 1},
+        "spec": {
+            "edges": [],
+            "entrypoints": [_entry("/p")],
+            "nodes": [
+                {"id": "rr", "type": "receiver.http",
+                 "config": {"url": "https://a.example.com/x", "method": "GET"}},
+                {"id": "gx", "type": "script.groovy", "config": {"resource": "scripts/g.groovy"}},
+                {"id": "pd", "type": "receiver.processdirect", "config": {"address": "/oiw_pd"}},
+            ],
+        },
+    }
+    xml = export_flow_to_iflw(flow, project_root=tmp_path)
+    root = _parse(xml)
+    plane = root.find(".//{http://www.omg.org/spec/BPMN/20100524/DI}BPMNPlane")
+    assert plane is not None
+    shaped = {s.get("bpmnElement") for s in plane.findall("{http://www.omg.org/spec/BPMN/20100524/DI}BPMNShape")}
+    edged = {e.get("bpmnElement") for e in plane.findall("{http://www.omg.org/spec/BPMN/20100524/DI}BPMNEdge")}
+    for pid in ("StartEvent_1", "EndEvent_1", "ServiceTask_1", "CallActivity_2",
+                "Participant_1", "Participant_rr", "Participant_pd", "Participant_Process_1"):
+        assert pid in shaped, pid
+    assert {"SequenceFlow_0", "SequenceFlow_1", "SequenceFlow_2", "MessageFlow_1", "MessageFlow_R1", "MessageFlow_R3"} <= edged
