@@ -108,3 +108,30 @@ same loop from two sides; do them together.
 ## 5. Progress log (append-only)
 
 - 2026-08-26 — Plan ratified; awaiting operator specs for MPL + Log Files.
+## 6. P5a-M1 execution log (append-only)
+
+- 2026-08-26 — M1 SHIPPED: `oiw tenant calibrate` (apps/cli/oiw/tenant/calibrate.py)
+  runs export→upload→deploy→poll→[message]→MPL and writes a calibration YAML.
+  Live-run verified against AdaequareGST/open_mateo_test.
+- API ground truth captured this session:
+  - LogFiles endpoint = HTTP 501 on CF tenants (server logs unavailable).
+  - RuntimeArtifactErrorInformations exists in edmx (HasStream) but the
+    tenant does NOT serve it ("could not find entity set").
+  - MPL nav ErrorInformation exists; startup failures produce NO MPL rows,
+    so error detail must come from bundle bisection.
+  - $expand unsupported on IntegrationRuntimeArtifacts queries.
+- Bisection results so far (all upload→deploy→poll via oracle):
+  - Drop Enricher (sender→receiver only): still ERROR ⇒ not the cause.
+  - Import-Package/Import-Service headers: naive fold ⇒ upload 400
+    ("invalid header field line 11"); folded impl added to exporter;
+    VERBATIM SAP-authored fixture manifest (identity swapped): still ERROR
+    ⇒ OSGi headers EXONERATED. Fault is in the .iflw itself.
+- Queued hypotheses (next session, cheapest first):
+  H1: BPMN element-id prefixes matter to CPI's runtime compiler
+      (fixture uses StartEvent_/CallActivity_/ServiceTask_/ExclusiveGateway_;
+       we emit generic Step_N). Fix = prefix-correct ids.
+  H2: Enricher with EMPTY propertyTable + constant body NPEs runtime init
+      (fixture rows are always populated). Fix = emit a real row or drop
+      wrapContent path.
+  H3: metainfo.prop carried required config we can't see (original lost);
+      probe by exporting a UI-created trivial iFlow's bytes as reference.

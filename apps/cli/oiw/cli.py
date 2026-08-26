@@ -1425,6 +1425,75 @@ def tenant() -> None:
     """
 
 
+@tenant.command("calibrate")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+    help="Project root (single flow).",
+)
+@click.option("--profile", required=True, help="Environment profile (e.g. btp).")
+@click.option("--package", "package_id", required=True, help="Scratch package id.")
+@click.option("--display-name", default=None, help="Override CPI Bundle-Name.")
+@click.option("--timeout", "timeout_s", type=int, default=60, help="Deploy poll timeout seconds.")
+@click.option(
+    "--out", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Report YAML path."
+)
+def tenant_calibrate(
+    project_path: Path,
+    profile: str,
+    package_id: str,
+    display_name: str | None,
+    timeout_s: int,
+    out: Path | None,
+) -> None:
+    """P5a-M1 oracle harness: upload->deploy->poll->[message]->MPL report.
+
+    Scratch packages only (allowlist + pinning enforced). Never in CI.
+    """
+    import asyncio
+
+    from .environments import load_profile
+    from .tenant.calibrate import calibrate_artifact, write_report
+    from .tenant.sap_ci_adapter import build_tenant_adapter
+
+    prof = load_profile(project_path, profile)
+    adapter = build_tenant_adapter(writable_packages=[package_id])
+    from .tenant.sap_ci_adapter import SapCiTenantAdapter as _Real
+
+    if not isinstance(adapter, _Real):
+        click.echo("error: calibrate requires the REAL tenant adapter (set OIW_USE_REAL_TENANT=1)", err=True)
+        raise click.Abort()
+
+    async def _run():
+        return await calibrate_artifact(
+            project_path,
+            prof,
+            adapter,
+            package_id,
+            display_name=display_name,
+            timeout_s=timeout_s,
+        )
+
+    try:
+        report = asyncio.run(_run())
+    except Exception as exc:
+        click.echo(f"error: calibration failed: {exc}", err=True)
+        raise click.Abort() from exc
+    path = write_report(report, out)
+    c = report.to_dict()["calibration"]
+    click.echo(f"Calibration report: {path}")
+    click.echo(f"  artifact:      {c['artifactId']}")
+    click.echo(f"  uploaded:      {c['uploadedOk']}")
+    click.echo(f"  deploy accept: {c['deployAccepted']}")
+    click.echo(f"  final status:  {c['finalStatus']}")
+    if c.get("errorDetail"):
+        click.echo(f"  error detail:  {c['errorDetail']}")
+    if c["messageSent"]:
+        click.echo(f"  message HTTP:  {c['httpResponseStatus']} | MPL rows: {len(c['mplRows'])}")
+
+
 @tenant.command("ping")
 @click.option(
     "--profile",

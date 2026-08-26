@@ -302,6 +302,28 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
     return "\n".join(L)
 
 
+def _fold_manifest_line(line: str, limit: int = 70) -> str:
+    """Fold one manifest header to jar-spec continuation lines.
+
+    JAR manifests reject lines >72 bytes; continuations start with a
+    single space. Splits after commas first (OSGi header convention).
+    """
+    key, sep, val = line.partition(": ")
+    if not sep:
+        return line
+    out: list[str] = []
+    cur = f"{key}: "
+    for i, part in enumerate(val.split(",")):
+        piece = part if i == 0 else "," + part
+        if len(cur) + len(piece) > limit and cur.strip():
+            out.append(cur.rstrip())
+            cur = " " + part.lstrip()
+        else:
+            cur += piece
+    out.append(cur.rstrip())
+    return "\n".join(out)
+
+
 _MANIFEST_TEMPLATE = """Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: {name}
@@ -345,8 +367,14 @@ def build_cpi_bundle(
     symbolic_name: str | None = None,
     iflw_name: str | None = None,
     display_name: str | None = None,
+    import_headers: str | None = None,
 ) -> tuple[bytes, str]:
-    """Build the designtime ZIP for one flow. Returns (bytes, sha256hex)."""
+    """Build the designtime ZIP for one flow. Returns (bytes, sha256hex).
+
+    `import_headers`: optional raw text of extra OSGi manifest headers
+    (e.g. "Import-Package: ...\nImport-Service: ...") — folded to the
+    72-byte jar limit automatically.
+    """
     flow_id = flow.get("metadata", {}).get("id", "flow")
     name = display_name or flow_id
     symbolic = symbolic_name or flow_id.replace("-", "_").replace(".", "_")
@@ -363,7 +391,20 @@ def build_cpi_bundle(
                 "<nature>com.sap.ide.ifl.project-support.project.nature</nature>"
                 "<nature>com.sap.ide.ifl.bsn</nature></natures></projectDescription>"
             ),
-            "META-INF/MANIFEST.MF": _MANIFEST_TEMPLATE.format(symbolic=escape(symbolic), name=escape(name)),
+            "META-INF/MANIFEST.MF": "\n".join(
+                [
+                    _fold_manifest_line(line)
+                    for line in _MANIFEST_TEMPLATE.format(
+                        symbolic=escape(symbolic), name=escape(name)
+                    ).splitlines()
+                ]
+                + [
+                    _fold_manifest_line(line)
+                    for line in (import_headers or "").splitlines()
+                    if line.strip()
+                ]
+            )
+            + "\n",
             "metainfo.prop": "",
             f"src/main/resources/scenarioflows/integrationflow/{iflw_file}": iflw,
         }
