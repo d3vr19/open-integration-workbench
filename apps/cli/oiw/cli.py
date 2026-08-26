@@ -153,6 +153,13 @@ def validate(project_path: Path, strict: bool, json_output: bool) -> None:
 @click.option(
     "--json", "json_output", is_flag=True, default=False, help="Output structured JSON (WP-05 OW-024)."
 )
+@click.option(
+    "--engine",
+    type=click.Choice(["simulated", "real"]),
+    default="simulated",
+    show_default=True,
+    help="P5a-M2: 'real' refuses simulated-fidelity steps and emits MPL-shaped records.",
+)
 def test(
     project_path: Path,
     all_tests: bool,
@@ -160,6 +167,7 @@ def test(
     test_name: str | None,
     junit_path: Path | None,
     json_output: bool,
+    engine: str,
 ) -> None:
     """Run flow tests.
 
@@ -173,14 +181,14 @@ def test(
 
     results: list[TestResult] = []
     if test_name:
-        results = run_tests(project, flow_id=flow_id, test_name=test_name)
+        results = run_tests(project, flow_id=flow_id, test_name=test_name, engine=engine)
     elif flow_id:
-        results = run_tests(project, flow_id=flow_id)
+        results = run_tests(project, flow_id=flow_id, engine=engine)
     elif all_tests:
-        results = run_tests(project)
+        results = run_tests(project, engine=engine)
     else:
         # default: run all
-        results = run_tests(project)
+        results = run_tests(project, engine=engine)
 
     passed = sum(1 for r in results if r.passed)
     failed = len(results) - passed
@@ -197,6 +205,7 @@ def test(
                     "passed_count": passed,
                     "failed_count": failed,
                     "pass_rate": passed / len(results) if results else 0.0,
+                    "engine": engine,
                     "results": [
                         {
                             "flow_id": r.flow_id,
@@ -204,6 +213,7 @@ def test(
                             "passed": r.passed,
                             "duration_ms": r.duration_ms,
                             "failures": r.failures,
+                            "mpl_records": r.mpl_records,
                         }
                         for r in results
                     ],
@@ -224,6 +234,67 @@ def test(
         _write_junit(results, junit_path)
         click.echo(f"junit: {junit_path}")
     if failed:
+        sys.exit(1)
+
+
+@main.command()
+@click.option(
+    "--corpus",
+    "corpus_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=Path("packages/parity-corpus/manifest.yaml"),
+    show_default=True,
+    help="Parity corpus manifest (P5a-M3).",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("docs/emg/sim-parity.yaml"),
+    show_default=True,
+    help="Where to publish the fidelity report.",
+)
+@click.option(
+    "--enforce-gate",
+    is_flag=True,
+    default=False,
+    help="Exit non-zero if the ≥90%/10-case gate is not passed (report-only by default).",
+)
+def parity(corpus_path: Path, out_path: Path, enforce_gate: bool) -> None:
+    """Run the parity suite: local real-engine verdicts vs cached oracle reports.
+
+    Publishes docs/emg/sim-parity.yaml. Honesty instrument — never CI-gated
+    by default; oracle data comes from CACHED calibration reports only.
+    """
+    from .parity import run_parity
+
+    report = run_parity(corpus_path, out_path)
+    s = report["sim_parity"]
+    a = s["agreement"]
+    click.echo(f"parity corpus: {s['corpus']}")
+    for row in s["cases"]:
+        mark = {
+            "agreed": "green",
+            "mismatched": "red",
+            "unsupported": "yellow",
+            "pending-oracle": "cyan",
+            "pending-oracle-message": "cyan",
+            "stale-oracle": "yellow",
+            "no-local-tests": "yellow",
+            "PROJECT-ERROR": "red",
+        }.get(row["verdict"], "white")
+        click.secho(
+            f"  {row['verdict']:<22} {row['name']:<28} local={row.get('localStatus', '-')}",
+            fg=mark,
+        )
+    ratio = f"{a['ratio']:.2%}" if a["ratio"] is not None else "n/a"
+    click.echo(
+        f"agreement: {a['agreed']}/{a['comparable']} comparable ({ratio}); "
+        f"gate(≥{s['gate']['threshold']:.0%}, ≥{s['gate']['minComparable']} cases): "
+        + ("PASSED" if s["gate"]["passed"] else "NOT PASSED")
+    )
+    click.echo(f"published: {out_path}")
+    if enforce_gate and not s["gate"]["passed"]:
         sys.exit(1)
 
 

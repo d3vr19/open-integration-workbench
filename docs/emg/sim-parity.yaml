@@ -1,0 +1,54 @@
+sim_parity:
+  generatedAt: '2026-08-26T13:47:39.142358+00:00'
+  corpus: packages/parity-corpus/manifest.yaml
+  engine: real
+  cases:
+  - name: heldout-order-async-smoke
+    project: examples/held-out-order-async
+    artifactId: open_mateo_test
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: ERROR
+      messageSent: false
+      mplRows: 0
+      mplCompleted: 0
+      success: false
+    oracleReportAgeHours: 11.89
+    verdict: mismatched
+    details: 'local=PASS vs oracle=ERROR (runtime start failed; SAP exposes no API-side
+      startup log (LogFiles=501, RuntimeArtifactErrorInformations not served). Use
+      bundle bisection: drop steps until STARTED.)'
+  - name: order-to-s4-happy-path
+    project: examples/order-to-s4
+    artifactId: null
+    localPassed: false
+    localStatus: UNSUPPORTED
+    verdict: unsupported
+    details: 'OIW-REAL-UNSUPPORTED: real engine refuses simulated-fidelity step(s):
+      transform (transform.xslt). Implement true logic or run with --engine simulated.'
+  - name: sftp-order-drop-happy-path
+    project: examples/sftp-order-drop
+    artifactId: null
+    localPassed: false
+    localStatus: UNSUPPORTED
+    verdict: unsupported
+    details: 'OIW-REAL-UNSUPPORTED: real engine refuses simulated-fidelity step(s):
+      gather-orders (gather), split-orders (splitter.general). Implement true logic
+      or run with --engine simulated.'
+  agreement:
+    comparable: 1
+    agreed: 0
+    ratio: 0.0
+  gate:
+    threshold: 0.9
+    minComparable: 10
+    passed: false
+  caveats:
+  - "Oracle verdicts are POINT-IN-TIME (blood law, p5-p6-plan.md \xA76): a mismatch\
+    \ against an old report may reflect tenant drift or the deploy-rate wedge, not\
+    \ local infidelity."
+  - Comparable set counts only cases with fresh oracle MESSAGE evidence; pending/stale/unsupported
+    cases are excluded from the ratio but listed.
+  - "Corpus grows from observed mismatches and fresh calibrate runs only \u2014 never\
+    \ fabricated."

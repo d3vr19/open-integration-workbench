@@ -1,0 +1,24 @@
+apiVersion: oiw.dev/v1alpha1
+kind: ParityCorpus
+metadata:
+  name: golden-corpus-v0
+  description: >
+    P5a-M3 golden corpus (p5-p6-plan.md §2). Starts at the example projects;
+    grows ONLY from observed mismatches and fresh `oiw tenant calibrate`
+    runs — never fabricated. Cases without a cached calibration report are
+    listed as pending-oracle so the comparable set is honest about its size.
+spec:
+  defaults:
+    maxOracleAgeHours: 168
+  cases:
+    - name: heldout-order-async-smoke
+      project: examples/held-out-order-async
+      artifactId: open_mateo_test
+      calibration: examples/held-out-order-async/.oiw/calibration-open_mateo_test.yaml
+      test: smoke
+    - name: order-to-s4-happy-path
+      project: examples/order-to-s4
+      test: happy-path
+    - name: sftp-order-drop-happy-path
+      project: examples/sftp-order-drop
+      test: happy-path

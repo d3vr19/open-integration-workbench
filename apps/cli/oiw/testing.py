@@ -10,7 +10,8 @@ import time
 from typing import Any
 
 from .project import FlowTest, Project
-from .runtime.engine import execute_flow
+from .runtime.engine import REAL_UNSUPPORTED_MARKER, ExecutionError, execute_flow
+from .runtime.mpl import mpl_records_from_context
 
 
 @dataclasses.dataclass
@@ -20,12 +21,16 @@ class TestResult:
     passed: bool
     duration_ms: int
     failures: list[str] = dataclasses.field(default_factory=list)
+    # P5a-M2 (--engine real): MPL-shaped local records + refusal marker.
+    mpl_records: list[dict[str, Any]] | None = None
+    real_engine_blocked: bool = False
 
 
 def run_tests(
     project: Project,
     flow_id: str | None = None,
     test_name: str | None = None,
+    engine: str = "simulated",
 ) -> list[TestResult]:
     results: list[TestResult] = []
     for test in project.tests:
@@ -33,11 +38,11 @@ def run_tests(
             continue
         if test_name and test.name != test_name:
             continue
-        results.append(_run_one(project, test))
+        results.append(_run_one(project, test, engine=engine))
     return results
 
 
-def _run_one(project: Project, test: FlowTest) -> TestResult:
+def _run_one(project: Project, test: FlowTest, engine: str = "simulated") -> TestResult:
     start = time.monotonic()
     flow = None
     try:
@@ -78,6 +83,7 @@ def _run_one(project: Project, test: FlowTest) -> TestResult:
         input_headers=headers,
         resources=project.resources,
         mocks=mocks,
+        engine=engine,
     )
 
     duration_ms = int((time.monotonic() - start) * 1000)
@@ -88,12 +94,24 @@ def _run_one(project: Project, test: FlowTest) -> TestResult:
         if not ok:
             failures.append(msg)
 
+    mpl_records: list[dict[str, Any]] | None = None
+    real_engine_blocked = False
+    if engine == "real":
+        mpl_records = mpl_records_from_context(ctx, flow.id)
+        if isinstance(ctx.exception, ExecutionError) and (
+            REAL_UNSUPPORTED_MARKER in str(ctx.exception)
+        ):
+            real_engine_blocked = True
+            failures.insert(0, str(ctx.exception))
+
     return TestResult(
         flow_id=test.flow,
         test_name=test.name,
         passed=not failures,
         duration_ms=duration_ms,
         failures=failures,
+        mpl_records=mpl_records,
+        real_engine_blocked=real_engine_blocked,
     )
 
 

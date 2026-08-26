@@ -388,3 +388,11 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   participant-name law. Tenant state: writer + poller sibling artifacts
   STARTED; poll cadence OPEN (next-session probe #1). LLM-free Stage 1
   (offline-instantiate w/ fallback+label) agreed for Phase 3 kickoff.
+- 2026-08-26 (session 9) — CALIBRATION FLOOR BACKFILLED (P5a-M2 + M3 shipped;
+  governance repair logged in p5-p6-plan.md §5): `oiw test --engine real`
+  with loud stub refusal + MPL-shaped local records; `oiw parity` corpus
+  runner publishing docs/emg/sim-parity.yaml (v0: ratio 0.0 on 1 comparable
+  case vs wedge-era oracle report — honest baseline, gate open until fresh
+  calibrate runs land). Phase A-D vision plan ratified: calibration before
+  coverage before autonomy; turbo = piece-assembler, LLM = last-resort
+  teacher; teacher-summons rate is the self-improvement headline metric.

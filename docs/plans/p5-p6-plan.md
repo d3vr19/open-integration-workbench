@@ -108,6 +108,37 @@ same loop from two sides; do them together.
 ## 5. Progress log (append-only)
 
 - 2026-08-26 — Plan ratified; awaiting operator specs for MPL + Log Files.
+- 2026-08-26 — GOVERNANCE REPAIR (retroactive deviation record, rule at §0
+  header): P5b-M1 and P5c-M1 shipped in session 6 BEFORE P5a-M2/M3 and while
+  the §3 parity gate (≥90%) had never been measured — `docs/emg/sim-parity.yaml`
+  did not exist. Consequence: reward wiring consumes oracle verdicts with no
+  quantified local-fidelity floor underneath. Remedy (same day): backfill
+  M2+M3 first; no Phase B/C/D work before the fidelity number is published.
+- 2026-08-26 — PHASE A–D PLAN RATIFIED (vision: self-improving human-assisting
+  harness for SAP CPI with low-latency simulated artifact building that
+  removes the BTP web-UI round-trip tax):
+  - **A · Calibration floor** — backfill P5a-M2 (`--engine real`, true-logic
+    execution, loud refusal of stub-fidelity steps, MPL-shaped local records)
+    + P5a-M3 (parity corpus runner publishing sim-parity.yaml; ≥90% gate,
+    min 10 comparable cases; cached oracle reports only, never CI; stale-
+    oracle handling per blood law: verdicts are point-in-time).
+  - **B · Breadth inside the measured harness** — grammar backlog strictly
+    by harvest frequency: Mapping(×191) → XmlToJson(×83) → Filter(×63) →
+    Splitter(×17) → ProcessCall(×7); every shape lands through the standing
+    METHOD chain PLUS one new step: parity case appended, sim-parity.yaml
+    re-published.
+  - **C · Closed LLM-free learning loop** — record_oracle_outcome promotion
+    hookup on PROJECT_APPROVED; failure→corpus automation (every parity miss
+    or oracle ERROR auto-files an exporter-fix candidate or executor test);
+    pattern-book crawler on a schedule (harvest stops being one-shot).
+  - **D · Turbo as PIECE-ASSEMBLER** — plan→implement→simulate→repair using
+    ONLY grammar pieces + corpus; budgets + code-level tenant guard; teacher-
+    escalation protocol: when no piece matches or N repair cycles fail, emit
+    a structured teacher-request; the answer must merge back as a new piece +
+    regression case. TEACHER-SUMMONS RATE is the headline self-improvement
+    metric and must trend to zero. LLM is the last-resort teacher, never the
+    first mover (operator decision, 2026-08-26).
+  Sequencing law: **calibration before coverage before autonomy.**
 ## 6. P5a-M1 execution log (append-only)
 
 - 2026-08-26 — M1 SHIPPED: `oiw tenant calibrate` (apps/cli/oiw/tenant/calibrate.py)
@@ -397,7 +428,31 @@ same loop from two sides; do them together.
     the exact open-meteo response body (Warsaw 16.4C @ 2026-08-26T07:00)
     — ${body} capture via ProcessDirect hop is byte-faithful. First
     durable side effect produced by an OIW-built multi-artifact chain.
-  - State at close: open_mateo_test (path /oiw_pd_hf) and oiw_pd_hf
-    (path /oiw_pd_hf2) BOTH STARTED running the identical full chain;
-    oiw_pd consuming via ProcessDirect. Next: variables.write live use,
-    then P5b world dynamics.
+   - State at close: open_mateo_test (path /oiw_pd_hf) and oiw_pd_hf
+     (path /oiw_pd_hf2) BOTH STARTED running the identical full chain;
+     oiw_pd consuming via ProcessDirect. Next: variables.write live use,
+     then P5b world dynamics.
+- 2026-08-26 (session 9) — P5a-M2 + P5a-M3 BACKFILLED (calibration floor):
+   * M2 SHIPPED: `oiw test --engine real` (default stays simulated). Real
+     mode executes true logic and REFUSES loudly (exchange FAILED +
+     OIW-REAL-UNSUPPORTED marker) any executed non-endpoint step whose
+     plugin declares fidelity=simulated — sender./receiver.* are exempt
+     (mock seam = world dynamics, P5b). New runtime/mpl.py emits MPL-shaped
+     records from local runs: same field names/status vocabulary as the
+     tenant API (/Date(ms)/ LogStart/LogEnd wrapper, COMPLETED/FAILED),
+     provenance-marked Origin=local-sim.
+   * M3 SHIPPED: `oiw parity` — corpus manifest (packages/parity-corpus/
+     manifest.yaml) → local real-engine run per case vs CACHED calibration
+     report (never CI; stale-oracle detection per maxOracleAgeHours).
+     Verdicts: agreed | mismatched | pending-oracle | stale-oracle |
+     unsupported | no-local-tests. Publishes docs/emg/sim-parity.yaml with
+     agreement ratio + gate (≥90%, min 10 comparable). Gate NOT auto-enforced
+     in v0 (--enforce-gate opts in).
+   * First published number is honest-ugly: 1 comparable case (held-out-
+     order-async), tenant side is the wedge-era ERROR verdict (01:54, blood
+     law #6 applies) ⇒ mismatch, ratio 0.0, gate false. order-to-s4 local =
+     UNSUPPORTED in real engine (transform.xslt is XSLT1-only stub);
+     sftp-order-drop UNSUPPORTED (splitter/gather stubs). These refusals are
+     the instrument working, not failures of it.
+   * NEXT: fresh oracle runs to replace wedge-era reports; then Phase B
+     breadth (Mapping first) inside the measured harness.
