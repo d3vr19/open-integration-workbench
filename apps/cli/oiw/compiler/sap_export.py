@@ -144,8 +144,54 @@ def _fill(template: list[tuple[str, str]], **kwargs: str) -> list[tuple[str, str
     return [(k, v.format(**kwargs)) for k, v in template]
 
 
-def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
-    """Export one OIW IntegrationFlow dict to designer-safe .iflw text."""
+def _resolve_script_name(node: dict, project_root: Path | None) -> str:
+    """Bundle-relative script file name for a script.groovy node.
+
+    Mirrors real exports: resources live at src/main/resources/script/
+    <basename> and the callActivity's `script` property carries exactly
+    that basename.
+    """
+    resource = str((node.get("config") or {}).get("resource") or "").strip()
+    if not resource:
+        raise ValueError(
+            f"script.groovy node '{node.get('id')}' requires config.resource "
+            "(project-relative path to the .groovy source)"
+        )
+    if project_root is None:
+        raise ValueError(
+            f"script.groovy node '{node.get('id')}' requires project_root to "
+            "resolve config.resource — refusing to emit a Script step whose "
+            "resource would be missing from the bundle"
+        )
+    src = (project_root / resource).resolve()
+    if not src.is_file():
+        raise ValueError(f"script source not found: {src}")
+    return src.name
+
+
+def collect_flow_scripts(flow: dict, project_root: Path | None) -> dict[str, str]:
+    """Return {bundle_path: text} for every script.groovy in the flow."""
+    out: dict[str, str] = {}
+    for node in flow.get("spec", {}).get("nodes", []):
+        if not str(node.get("type", "")).startswith("script.groovy"):
+            continue
+        name = _resolve_script_name(node, project_root)
+        src = (project_root / str(node["config"]["resource"])).resolve()  # type: ignore[union-attr]
+        out[f"src/main/resources/script/{name}"] = src.read_text(encoding="utf-8")
+    return out
+
+
+def export_flow_to_iflw(
+    flow: dict,
+    display_name: str | None = None,
+    project_root: Path | None = None,
+) -> str:
+    """Export one OIW IntegrationFlow dict to designer-safe .iflw text.
+
+    `project_root` is required when the flow contains script.groovy nodes:
+    each node's config.resource is resolved against it to determine the
+    bundle-relative script file name.
+    """
     spec = flow["spec"]
     flow_id = flow.get("metadata", {}).get("id", "flow")
     name = display_name or flow_id
@@ -320,14 +366,15 @@ def export_flow_to_iflw(flow: dict, display_name: str | None = None) -> str:
                     ("cmdVariantUri", "ctype::FlowstepVariant/cname::JsonToXmlConverter/version::1.1.1"),
                 ]
             elif activity == "Script":
+                resource = _resolve_script_name(node, project_root)
                 extra = [
-                    ("scriptFunction", "processData"),
+                    ("scriptFunction", str(cfg.get("function", "processData"))),
                     ("scriptBundleId", ""),
                     ("componentVersion", "1.1"),
                     ("activityType", "Script"),
                     ("cmdVariantUri", "ctype::FlowstepVariant/cname::GroovyScript/version::1.1.1"),
                     ("subActivityType", "GroovyScript"),
-                    ("script", f"{node['id']}.groovy"),
+                    ("script", escape(resource)),
                 ]
             else:
                 raise ValueError(f"unhandled activity {activity}")
@@ -434,18 +481,23 @@ def build_cpi_bundle(
     iflw_name: str | None = None,
     display_name: str | None = None,
     import_headers: str | None = None,
+    project_root: Path | None = None,
 ) -> tuple[bytes, str]:
     """Build the designtime ZIP for one flow. Returns (bytes, sha256hex).
 
     `import_headers`: optional raw text of extra OSGi manifest headers
     (e.g. "Import-Package: ...\nImport-Service: ...") — folded to the
     72-byte jar limit automatically.
+
+    `project_root`: required when the flow contains script.groovy nodes;
+    their sources are emitted under src/main/resources/script/.
     """
     flow_id = flow.get("metadata", {}).get("id", "flow")
     name = display_name or flow_id
     symbolic = symbolic_name or flow_id.replace("-", "_").replace(".", "_")
     iflw_file = Path(iflw_name or f"{flow_id}.iflw").name
-    iflw = export_flow_to_iflw(flow, display_name=name)
+    iflw = export_flow_to_iflw(flow, display_name=name, project_root=project_root)
+    scripts = collect_flow_scripts(flow, project_root)
 
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -470,6 +522,7 @@ def build_cpi_bundle(
             "metainfo.prop": "",
             f"src/main/resources/scenarioflows/integrationflow/{iflw_file}": iflw,
         }
+        entries.update(scripts)
         for ename in sorted(entries):
             info = zipfile.ZipInfo(ename, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
@@ -478,4 +531,9 @@ def build_cpi_bundle(
     return data, hashlib.sha256(data).hexdigest()
 
 
-__all__ = ["build_cpi_bundle", "cpi_bundle_identity", "export_flow_to_iflw"]
+__all__ = [
+    "build_cpi_bundle",
+    "cpi_bundle_identity",
+    "collect_flow_scripts",
+    "export_flow_to_iflw",
+]

@@ -174,6 +174,7 @@ async def calibrate_artifact(
             symbolic_name=symbolic,
             iflw_name=iflw_name,
             display_name=display_name or bundle_name or target.id,
+            project_root=project_path,
         )
         result = await adapter.upload_package(package_id, archive, "sha256:calibrate")
         rep.uploaded_ok = bool(result.success)
