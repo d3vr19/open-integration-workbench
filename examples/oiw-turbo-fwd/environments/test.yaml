@@ -1,0 +1,17 @@
+apiVersion: oiw.dev/v1alpha1
+kind: EnvironmentProfile
+metadata:
+  name: test
+spec:
+  auth:
+    clientId: ${TEST_CLIENT_ID}
+    credentialRef: sap-test-api-client
+    method: oauth2-client-credentials
+    tokenUrl: ${TEST_TOKEN_URL}
+  deploymentPolicy:
+    approvers: []
+    autoVerify: false
+    requiresApproval: true
+  externalizedParameters: {}
+  target: sap-cloud-integration-2026-07
+  tenantUrl: ${TEST_TENANT_URL}

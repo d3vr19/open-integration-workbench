@@ -1,24 +1,47 @@
 sim_parity:
-  generatedAt: '2026-08-26T13:47:39.142358+00:00'
+  generatedAt: '2026-09-02T17:51:49.981621+00:00'
   corpus: packages/parity-corpus/manifest.yaml
   engine: real
   cases:
   - name: heldout-order-async-smoke
     project: examples/held-out-order-async
-    artifactId: open_mateo_test
+    artifactId: oiw-heldout-async
     localPassed: true
     localStatus: PASS
     oracle:
-      finalStatus: ERROR
-      messageSent: false
-      mplRows: 0
-      mplCompleted: 0
-      success: false
-    oracleReportAgeHours: 11.89
-    verdict: mismatched
-    details: 'local=PASS vs oracle=ERROR (runtime start failed; SAP exposes no API-side
-      startup log (LogFiles=501, RuntimeArtifactErrorInformations not served). Use
-      bundle bisection: drop steps until STARTED.)'
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 5.3
+    verdict: agreed
+  - name: oiw-turbo-fwd-smoke
+    project: examples/oiw-turbo-fwd
+    artifactId: oiw_turbo_fwd
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 5.81
+    verdict: agreed
+  - name: oiw-conv-fwd-smoke
+    project: examples/oiw-conv-fwd
+    artifactId: oiw_turbo_fwd
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 0.53
+    verdict: agreed
   - name: order-to-s4-happy-path
     project: examples/order-to-s4
     artifactId: null
@@ -37,9 +60,9 @@ sim_parity:
       gather-orders (gather), split-orders (splitter.general). Implement true logic
       or run with --engine simulated.'
   agreement:
-    comparable: 1
-    agreed: 0
-    ratio: 0.0
+    comparable: 3
+    agreed: 3
+    ratio: 1.0
   gate:
     threshold: 0.9
     minComparable: 10

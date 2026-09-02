@@ -13,8 +13,18 @@ spec:
   cases:
     - name: heldout-order-async-smoke
       project: examples/held-out-order-async
-      artifactId: open_mateo_test
-      calibration: examples/held-out-order-async/.oiw/calibration-open_mateo_test.yaml
+      artifactId: oiw-heldout-async
+      calibration: examples/held-out-order-async/.oiw/calibration-oiw-heldout-async.yaml
+      test: smoke
+    - name: oiw-turbo-fwd-smoke
+      project: examples/oiw-turbo-fwd
+      artifactId: oiw_turbo_fwd
+      calibration: examples/oiw-turbo-fwd/.oiw/calibration-oiw_turbo_fwd.yaml
+      test: turbo-smoke-oiw-turbo-fwd
+    - name: oiw-conv-fwd-smoke
+      project: examples/oiw-conv-fwd
+      artifactId: oiw_turbo_fwd
+      calibration: examples/oiw-conv-fwd/.oiw/calibration-oiw_turbo_fwd.yaml
       test: smoke
     - name: order-to-s4-happy-path
       project: examples/order-to-s4

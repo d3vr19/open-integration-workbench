@@ -1,0 +1,24 @@
+candidate:
+  id: oracle-fail-oiw-conv-main-9d7a71
+  kind: oracle-failure
+  createdAt: '2026-09-02T17:45:44.119708+00:00'
+  provenance:
+    source: tenant-oracle
+    packageId: AdaequareGST
+    artifactId: oiw-conv-main
+    isReal: true
+  verdict:
+    finalStatus: STARTED
+    uploadedOk: true
+    deployAccepted: true
+    messageSent: true
+    httpResponseStatus: 500
+    mplRows: 1
+    errorDetail: null
+    diagnostic: ORACLE-MESSAGE-FAILED
+  suggestedTriage: executor-test
+  notes:
+  - "Blood law: oracle verdicts are point-in-time \u2014 check for the deploy-rate\
+    \ wedge before treating this as content failure."
+  - 'Triage options: exporter-fix | executor-test | tenant-drift | discard.'
+  project: .

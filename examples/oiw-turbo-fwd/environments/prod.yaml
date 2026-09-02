@@ -1,0 +1,18 @@
+apiVersion: oiw.dev/v1alpha1
+kind: EnvironmentProfile
+metadata:
+  name: prod
+spec:
+  auth:
+    clientId: ${PROD_CLIENT_ID}
+    credentialRef: sap-prod-api-client
+    method: oauth2-client-credentials
+    tokenUrl: ${PROD_TOKEN_URL}
+  deploymentPolicy:
+    approvers:
+    - integration-lead
+    autoVerify: false
+    requiresApproval: true
+  externalizedParameters: {}
+  target: sap-cloud-integration-2026-07
+  tenantUrl: ${PROD_TENANT_URL}

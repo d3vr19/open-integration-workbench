@@ -1,0 +1,26 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: oiw-turbo-fwd-listener
+  labels:
+    archetype: turbo-assembled
+  name: oiw-turbo-fwd-listener
+  version: 1
+spec:
+  edges:
+  - from: pd-in
+    to: log-receive
+  entrypoints:
+  - config:
+      address: /oiw-turbo-fwd_pd
+    fidelity: simulated
+    id: pd-in
+    type: sender.processdirect
+  extensions: {}
+  nodes:
+  - config:
+      level: INFO
+      message: PD payload received
+    fidelity: compatible-subset
+    id: log-receive
+    type: log.message
