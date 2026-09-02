@@ -208,7 +208,10 @@ def _seed_archetype(target: Path, archetype: str, project_id: str, project_name:
     test = {
         "apiVersion": "oiw.dev/v1alpha1",
         "kind": "FlowTest",
-        "metadata": {"name": "smoke"},
+        "metadata": {
+            "name": "smoke",
+            "description": "Scaffold smoke test: exchange completes, core step executes.",
+        },
         "spec": {
             "flow": flow_id,
             "input": {

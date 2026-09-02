@@ -1647,25 +1647,28 @@ def emg_reindex(store_root: Path | None, backend: str | None, model: str | None,
 
     # Re-embed every task node's normalized requirement with the new embedder.
     # Build a fresh JsonlEmgStore that writes to the same root but with the
-    # new manifest. Easiest path: reload with new config, re-upsert nodes.
+    # new manifest. Build into a TEMP directory first, then atomically swap
+    # into place — a crash mid-reindex must never leave a wiped store
+    # (live data-loss incident 2026-09-02: the old wipe-first order lost a
+    # 602-insight store when the run was interrupted).
+    import shutil as _shutil
+
     from .emg.store import JsonlEmgStore as _Store
 
+    tmp_root = store.root_path.parent / (store.root_path.name + ".reindexing")
+    if tmp_root.exists():
+        _shutil.rmtree(tmp_root)
+    tmp_root.mkdir(parents=True)
+
     reindexed = _Store(
-        root=store.root_path,
+        root=tmp_root,
         embedder=embedder,
         embedding_backend=resolved_backend,
         embedding_model=resolved_model,
         embedding_dim=resolved_dim,
     )
-    # Start with a clean in-memory state — we want a fresh manifest + fresh
-    # tasks.jsonl. Insights/edges/tasks will be re-upserted from the old store.
-    # Wipe any JSONL on disk so we don't double-count.
-    for fname in ("insights.jsonl", "tasks.jsonl", "edges.jsonl"):
-        p = store.root_path / fname
-        if p.is_file():
-            p.unlink()
-    reindexed.load()  # loads any existing manifest (will be incompatible with target)
-    reindexed.force_remanifest()  # rewrite manifest to target backend/dim
+    reindexed.load()  # fresh dir: empty store with no manifest
+    reindexed.force_remanifest()  # stamp the target backend/dim
 
     # Carry over insights and edges unchanged
     for rec in store.list_insights():
@@ -1719,12 +1722,29 @@ def emg_reindex(store_root: Path | None, backend: str | None, model: str | None,
     after = reindexed.stats()
     mismatch = reindexed.backend_vector_mismatches()
 
+    # Verify the rebuilt store BEFORE swapping it in — count parity on
+    # insights is the gate; a partial rebuild stays in .reindexing.
+    if after["insights"] < before["insights"] or after["tasks"] < reembedded:
+        raise click.ClickException(
+            f"reindex rebuilt an incomplete store "
+            f"(insights {after['insights']} < {before['insights']} or tasks "
+            f"{after['tasks']} < {reembedded}); original store left untouched at "
+            f"{store.root_path}, partial rebuild at {tmp_root}"
+        )
+
+    # Atomic swap: old → .bak, rebuilt → live. Never a moment without a store.
+    bak_root = store.root_path.parent / (store.root_path.name + ".bak")
+    if bak_root.exists():
+        _shutil.rmtree(bak_root)
+    _shutil.move(str(store.root_path), str(bak_root))
+    _shutil.move(str(tmp_root), str(store.root_path))
+
     click.echo("Reindex complete.")
     click.echo(f"  Backend (resolved): {resolved_backend} / {resolved_model} / dim={resolved_dim}")
     click.echo(f"  Tasks re-embedded: {reembedded} (skipped {skipped_dupes} duplicates)")
     click.echo(f"  Insights preserved: {before['insights']} → {after['insights']}")
     click.echo(f"  Edges preserved: {before['edges']} → {after['edges']}")
-    click.echo(f"  Store path: {reindexed.root_path}")
+    click.echo(f"  Store path: {store.root_path} (previous store kept at {bak_root})")
     if mismatch["backend"] or mismatch["dim"]:
         click.echo(
             f"  WARNING: {mismatch['backend']} backend / {mismatch['dim']} dim "

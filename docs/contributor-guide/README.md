@@ -109,3 +109,36 @@ Append a new entry to the Change Log section. Format:
 ```
 
 Never rewrite history. Mark entries as superseded with a strikethrough note if needed.
+
+## 8. The Piece Recipe (the flagship contribution)
+
+The machine that assembles integrations autonomously is exactly as capable
+as its **piece library** — the set of step types with *live-proven* export
+shapes and local implementations. Adding a piece is a complete, bounded,
+high-value contribution. The recipe:
+
+1. **Census the need.** `packages/pattern-book/census.yaml` ranks adapter
+   shapes by real-world frequency (from tenant harvests). Pick one.
+2. **IR schema**: add the type to `packages/ir-schema/schemas/integration-flow.json`
+   (`nodes` or `entrypoints` enum).
+3. **Runtime plugin**: `apps/cli/oiw/runtime/steps/<type>.py` — implement
+   `StepPlugin` with honest `compatibility()` fidelity + a `validate()`
+   for config requirements. Register it in `steps/__init__.py`.
+4. **Exporter shape**: `apps/cli/oiw/compiler/sap_export.py` — mirror the
+   BPMN2/`ifl:property` set VERBATIM from a reference bundle (see
+   `_OIW_TO_ACTIVITY` + the existing step renderers). Never guess a shape —
+   harvest reference bytes first (the METHOD).
+5. **Test**: local runtime test + exporter shape test (assert the property
+   set matches the reference).
+6. **Parity case**: an example project + a calibration report →
+   `packages/parity-corpus/manifest.yaml` (only with a real oracle run —
+   ask a maintainer to calibrate against the scratch tenant if you can't).
+7. **Piece entry**: add the type to `_COMPONENT_TO_PIECE` in
+   `apps/cli/oiw/agent/turbo_pieces.py` once live-proven.
+
+Steps 1–5 are doable without any SAP access; 6–7 need a live tenant run
+(maintainers will run it for you — open a PR with 1–5 done and a note).
+
+**Even smaller**: the [law registry work](../plans/) (tenant-behavior laws
+as YAML consumed by validators), example flows, FlowTest assertions, and
+documentation fixes are all valuable first contributions.

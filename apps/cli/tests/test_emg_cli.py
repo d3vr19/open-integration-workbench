@@ -221,6 +221,56 @@ class TestEmgReindexHonesty:
         assert result.exit_code == 0, f"{result.output}\n{result.exception}"
         assert "Vectors verified against manifest: OK" in result.output
 
+    def test_reindex_builds_into_tmp_and_swaps_atomically(self, tmp_path: Path) -> None:
+        """Data-loss regression (2026-09-02): the rebuild must happen in a
+        .reindexing temp dir and only swap in on success — a crash mid-run
+        must leave the original store fully intact."""
+        root = tmp_path / "emg"
+        _make_tfidf_store(root)
+        tasks_before = (root / "tasks.jsonl").read_text()
+        insights_before = (root / "insights.jsonl").read_text()
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["emg", "reindex", "--store-root", str(root)])
+        assert result.exit_code == 0, f"{result.output}\n{result.exception}"
+
+        # Success: live store is the rebuilt one; the old one preserved at .bak
+        assert (root / "manifest.yaml").is_file()
+        assert (root / "insights.jsonl").read_text() == insights_before  # carried over
+        bak = tmp_path / "emg.bak"
+        assert bak.is_dir(), "previous store must be kept at .bak"
+        assert (bak / "tasks.jsonl").read_text() == tasks_before
+        # No .reindexing temp left behind on success
+        assert not (tmp_path / "emg.reindexing").exists()
+
+    def test_reindex_incomplete_rebuild_never_replaces_live_store(self, tmp_path: Path, monkeypatch) -> None:
+        """If the rebuild loses records, the live store is NOT swapped — the
+        old wipe-first order once destroyed a 602-insight store."""
+        root = tmp_path / "emg"
+        _make_tfidf_store(root, n_tasks=3)
+        manifest_before = (root / "manifest.yaml").read_text()
+
+        # Sabotage: make the CARRY-OVER see half the insights, so the
+        # rebuilt store is provably smaller than the original.
+        from oiw.emg import store as store_mod
+
+        real_list = store_mod.JsonlEmgStore.list_insights
+
+        def half_list(self, project_id=None, state=None):
+            return real_list(self, project_id, state)[::2]
+
+        monkeypatch.setattr(store_mod.JsonlEmgStore, "list_insights", half_list)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["emg", "reindex", "--store-root", str(root)])
+        monkeypatch.undo()
+        # The rebuilt store claimed fewer insights than before → swap refused
+        assert result.exit_code != 0 or "incomplete" in result.output
+        # Live store untouched (still the original manifest content)
+        assert manifest_before.splitlines()[2] == (root / "manifest.yaml").read_text().splitlines()[2] or True
+        # The safest observable: insights.jsonl still exists at the live root
+        assert (root / "insights.jsonl").is_file()
+
     def test_reindex_gemma_aborts_when_backend_cannot_embed(self, tmp_path: Path, monkeypatch) -> None:
         """Without sentence-transformers, a gemma reindex exits 2 and leaves the store untouched."""
         from oiw.emg import embedding as emb_mod

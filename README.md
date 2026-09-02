@@ -11,7 +11,27 @@
 [![Status: P6 Hands-Free Proof](https://img.shields.io/badge/Status-P6%20Hands--Free%20PROVEN-brightgreen.svg)](DEVELOPMENT_LOG.md)
 [![Tests: 812](https://img.shields.io/badge/Tests-812%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 
-## What this is
+## Try it in 5 minutes
+
+No SAP tenant. No Docker. No credentials.
+
+```bash
+git clone https://github.com/d3vr19/open-integration-workbench.git
+cd open-integration-workbench
+python -m venv .venv && source .venv/bin/activate
+pip install -e apps/cli
+
+oiw init my-first-flow --archetype api-to-erp
+cd my-first-flow
+oiw validate && oiw test && oiw build --target sap-cloud-integration-2026-07
+```
+
+**Already have iFlows?** `oiw import your-iflow.zip` turns an opaque SAP
+bundle into readable, diffable, Git-friendly YAML — recognized steps typed
+and labeled, unknown vendor extensions preserved explicitly, never
+dropped. Full walkthrough: **[docs/quickstart.md](docs/quickstart.md)**.
+
+## Why
 
 OIW treats SAP Cloud Integration (CPI) development as a software-engineering discipline rather than a tenant-bound configuration exercise:
 
