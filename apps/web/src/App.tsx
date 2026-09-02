@@ -13,6 +13,7 @@ import { DeployPanel } from './components/deploy/DeployPanel';
 import { PalettePanel } from './components/canvas/PalettePanel';
 import { FlowCanvas } from './components/canvas/FlowCanvas';
 import { PropertiesPanel } from './components/canvas/PropertiesPanel';
+import { TraceInspector } from './components/canvas/TraceInspector';
 
 let nodeIdCounter = 0;
 function genNodeId(type: string): string {
@@ -42,6 +43,7 @@ function App() {
   const [pendingOps, setPendingOps] = useState<unknown[]>([]);
   const [dirty, setDirty] = useState(false);
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
+  const [showRawTrace, setShowRawTrace] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [resources, setResources] = useState<ResourceSummary[]>([]);
   const [selectedResource, setSelectedResource] = useState<ResourceSummary | null>(null);
@@ -523,17 +525,28 @@ function App() {
                   {simulation.status}
                 </span>
                 <span className="badge badge--mono">{simulation.duration_ms}ms</span>
+                <button
+                  className="trace-inspector__raw-toggle"
+                  onClick={() => setShowRawTrace((v) => !v)}
+                  title="Toggle the raw event list"
+                >
+                  {showRawTrace ? 'step view' : 'raw events'}
+                </button>
               </h3>
-              <div className="trace-list">
-                {simulation.trace.map((t: TraceEntry, i: number) => (
-                  <div key={i} className={`trace-item trace-item--${t.direction}`}>
-                    <span className="trace-item__node">{t.node_id}</span>
-                    <span className="trace-item__direction">{t.direction}</span>
-                    <span className="trace-item__summary">{t.summary}</span>
-                  </div>
-                ))}
-              </div>
-              {simulation.outbound_calls.length > 0 && (
+              {showRawTrace ? (
+                <div className="trace-list">
+                  {simulation.trace.map((t: TraceEntry, i: number) => (
+                    <div key={i} className={`trace-item trace-item--${t.direction}`}>
+                      <span className="trace-item__node">{t.node_id}</span>
+                      <span className="trace-item__direction">{t.direction}</span>
+                      <span className="trace-item__summary">{t.summary}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <TraceInspector simulation={simulation} />
+              )}
+              {showRawTrace && simulation.outbound_calls.length > 0 && (
                 <div className="outbound-calls">
                   <span className="properties__label">Outbound calls</span>
                   {simulation.outbound_calls.map((c, i) => (

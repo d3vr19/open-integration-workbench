@@ -119,13 +119,26 @@ export interface TraceEntry {
   timestamp: number;
   direction: 'enter' | 'exit' | 'error' | 'complete';
   summary: string;
+  body_preview: string | null;
+  headers: Record<string, unknown> | null;
+  properties: Record<string, unknown> | null;
+  duration_ms: number | null;
+  exception_type: string | null;
+}
+
+export interface OutboundCall {
+  target: string;
+  method: string;
+  url: string;
+  body?: string;
+  requestHeaders?: Record<string, unknown>;
 }
 
 export interface SimulationResult {
   status: 'COMPLETED' | 'FAILED' | 'RUNNING';
   duration_ms: number;
   trace: TraceEntry[];
-  outbound_calls: Array<{ target: string; method: string; url: string }>;
+  outbound_calls: OutboundCall[];
   headers: Record<string, unknown>;
   properties: Record<string, unknown>;
 }

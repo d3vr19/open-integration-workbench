@@ -464,3 +464,59 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   assembly (OIW-I002). Parity 3/3 @ 100%. NEXT flywheel turns: Mapping
   (needs script-resource bundling), filter, splitter, ProcessCall
   (subprocess rendering — unlocks direct converter placement).
+- 2026-09-02 (cont. 3) — SESSION CLOSE / HANDOFF — READ FIRST, NEXT SELF:
+  STATE (all on fork main, pushed):
+  * main @ 06a536c+: 6 commits this session (C/D core → P6 live proof →
+    absorption+parity → converter flywheel turn → docs → traction+B1).
+  * EMG store (.oiw/emg, local, gitignored): 600 tenant insights on
+    REAL gemma/768 vectors (reindexed, verified). Retrieval proven at 0.70
+    on paraphrases. A .bak of the pre-reindex store was deleted post-verify.
+  * Traction: docs/quickstart.md (dogfooded, fixed a scaffold schema bug
+    found in the process), README front door, CONTRIBUTING, 3 issue
+    templates (incl. teacher-request), contributor-guide §8 Piece Recipe +
+    11 good-first-issue seeds.
+  * Trace viewer v1 SHIPPED (uncommitted→this commit): engine now
+    snapshots body/headers/properties/duration/exception per step
+    (TraceEntry extended, backward-compatible); simulate API + /ws/trace
+    expose the full payload; web TraceInspector.tsx — per-step chips with
+    pass/fail/duration, click to see In/Out body+headers+props and the
+    outbound request; raw-event list toggle. tsc + vite green.
+  OPEN THREADS (ranked, for next pickup):
+  1. Trace viewer v1.5: canvas node badges wired to the inspector (click a
+     node → its step selected), tenant-MPL comparison view (local trace vs
+     cached calibration rows — parity's face), replay/step-through mode.
+  2. Experiment Engine (B2 — THE existential one): oiw experiment — ddmin
+     variant ladders over the oracle (drop/move/swap/insert rungs), cool-
+     down-paced unattended runs (operator approved), verdict-flip →
+     minimal delta → law emitted to a YAML REGISTRY (tenant-laws.yaml)
+     with rungs as evidence; registry consumed by oiw validate (pre-deploy
+     warnings) + the assembler + future LLM prompts. Regression test:
+     engine must re-derive the converter law from conv1-conv10 corpus.
+  3. Play/Recombination (B3): candidate chains from EMG pieces under laws →
+     sim + oracle screening → novel green chains promote as insights;
+     LLM = hypothesis-generator on stall + shape synthesizer
+     (oracle-gated, propose-only).
+  4. Piece backlog by census: Mapping ×562 (needs script-resource
+     bundling), XmlToJson piece promotion (exporter shape now exists —
+     needs a live run), splitter real-engine implementation,
+     ProcessCall/subprocess rendering (unlocks direct converter placement
+     + Mapping).
+  5. Interpreter gaps found live: "split the batch" didn't map to
+     splitter.general (retrieval conf 0.000, honest); ServiceTask entries
+     in absorbed chains limit injection (OIW-I002 fallback fires) —
+     classify ExternalCall serviceTasks as mid-flow receiver.http in
+     absorb's IR builder.
+  LAWS THAT COST BLOOD (this session's additions — do not relitigate):
+  * Converter must be PRECEDED by an RR (conv1-conv10; assembler inserts
+    a warmup). Variables ride PD as HEADERS (no multi-line payloads);
+    listeners terminate log.message.
+  * POST-create rejects Version (auto-generated). Configurations nav is
+    read-only; values flow via parameters.prop (auto-created on upload).
+  * Main-process ends ALWAYS MessageEndEvent. Terminal receiver.http is
+    refused by the exporter (use RR mid-chain + PD terminator).
+  * oiw emg reindex builds into .reindexing + atomic swap + .bak — the
+    wipe-first order destroyed a 602-insight store mid-run (regression
+    tested).
+  METHOD, ALWAYS: harvest reference bytes → mirror verbatim → unit tests →
+    live oracle single-variable proof → law to registry → parity case →
+    commit. (For B2: automate exactly this.)

@@ -76,26 +76,38 @@ def simulate_sync(project_id: str, flow_id: str, req: SimulateRequest) -> Simula
     return SimulateResponse(
         status=ctx.exchange_status,
         duration_ms=ctx.properties.get("__duration_ms__", 0),
-        trace=[
-            {
-                "node_id": t.node_id,
-                "timestamp": t.timestamp,
-                "direction": t.direction,
-                "summary": t.summary,
-            }
-            for t in ctx.trace
-        ],
+        trace=[_trace_payload(t) for t in ctx.trace],
         outbound_calls=[
             {
                 "target": c["target"],
                 "method": c["method"],
                 "url": c["url"],
+                "body": c.get("body", b"").decode("utf-8", errors="replace")
+                if isinstance(c.get("body"), bytes)
+                else c.get("body"),
+                "requestHeaders": c.get("headers", {}),
             }
             for c in ctx.outbound_calls
         ],
         headers=dict(ctx.headers),
         properties={k: v for k, v in ctx.properties.items() if not k.startswith("__")},
     )
+
+
+def _trace_payload(t: Any) -> dict[str, Any]:
+    """Full trace entry for the FIGAF-style viewer: summaries plus per-step
+    body/headers/properties snapshots, durations, and error typing."""
+    return {
+        "node_id": t.node_id,
+        "timestamp": t.timestamp,
+        "direction": t.direction,
+        "summary": t.summary,
+        "body_preview": t.body_preview,
+        "headers": t.headers,
+        "properties": t.properties,
+        "duration_ms": t.duration_ms,
+        "exception_type": t.exception_type,
+    }
 
 
 # ---------------------------------------------------------------------
@@ -169,6 +181,11 @@ async def simulate_websocket(websocket: WebSocket) -> None:
                     "direction": entry.direction,
                     "summary": entry.summary,
                     "timestamp": entry.timestamp,
+                    "body_preview": entry.body_preview,
+                    "headers": entry.headers,
+                    "properties": entry.properties,
+                    "duration_ms": entry.duration_ms,
+                    "exception_type": entry.exception_type,
                 }
             )
 

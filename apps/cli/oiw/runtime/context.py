@@ -25,6 +25,11 @@ class TraceEntry:
     summary: str
     body_preview: str | None = None
     headers: dict[str, Any] | None = None
+    # FIGAF-style debugging capture (engine loop seam): per-step exchange
+    # snapshots + timing + error typing. Optional so old traces keep loading.
+    properties: dict[str, Any] | None = None
+    duration_ms: int | None = None
+    exception_type: str | None = None
 
 
 class ExchangeStatus:
@@ -81,6 +86,9 @@ class MessageContext:
             summary=summary,
             body_preview=extra.get("body_preview"),
             headers=extra.get("headers"),
+            properties=extra.get("properties"),
+            duration_ms=extra.get("duration_ms"),
+            exception_type=extra.get("exception_type"),
         )
         self.trace.append(entry)
 

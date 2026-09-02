@@ -1035,3 +1035,18 @@ The EMG experience plan (Phases 1–2) executed live:
 **Tests:** CLI 526 (turbo suite updated to the converter law: piece-with-warmup + injection-fallback; smoke mocks include the warmup RR). All suites green. Ruff clean.
 
 **Remaining for the ≥10 parity gate:** the two UNSUPPORTED cases (order-to-s4: XSLT1-only stub; sftp-order-drop: splitter/gather stubs) plus new cases per future shape. The next flywheel turns are exactly this loop applied to: **Mapping ×562** (needs script-resource bundling), **filter**, **splitter**, **ProcessCall** (subprocess rendering — which would also unlock direct converter placements like the tenant uses).
+
+---
+
+### 2026-09-02 (cont. 3) — Session close: traction + gemma + trace viewer v1; handoff recorded
+
+**Shipped this leg (all pushed to fork main):**
+- **Traction sprint (Phase A)**: docs/quickstart.md — the 5-minute no-tenant front door, every command dogfooded against a fresh venv (caught + fixed a scaffold smoke-test schema violation: fresh `oiw init` projects failed `oiw validate`). README front door now leads with the quickstart + the import-your-own-ZIP hook. CONTRIBUTING.md + three issue templates (bug / feature / **teacher-request** — reports feed the learning loop directly). Contributor guide §8: **the Piece Recipe** (the flagship bounded contribution) + `good-first-issues.md` with 11 seeds.
+- **B1 (TF-IDF mind problem closed)**: the 600-flow EMG store reindexed to **gemma/768** — real vectors, verified against the manifest. Live-proven retrieval at conf 0.70 on paraphrase queries. During the reindex the old wipe-first order **destroyed the 602-insight store** (interrupted run) — the re-absorption rebuilt it losslessly from the gitignored corpus, and `oiw emg reindex` was rebuilt to: build into `.reindexing` → completeness gate → **atomic swap** → previous store preserved at `.bak`. Two regression tests cover the swap lifecycle and the incomplete-rebuild refusal.
+- **Trace viewer v1 (Phase T start)**: the engine now records per-step exchange snapshots (bounded body previews, headers, properties, step durations, exception typing — TraceEntry extended backward-compatibly); the simulate API + /ws/trace stream the full payloads; new web **TraceInspector** — per-step chips with pass/fail/duration badges, click to inspect In/Out payloads, headers, properties, and the outbound request/response; raw-event toggle kept. tsc + vite green.
+
+**Honest gaps left open** (recorded in the roadmap handoff): splitter phrasing unmapped in the interpreter (retrieval honestly returns 0.000); absorbed chains still carry unclassified ServiceTask entries (OIW-I002 fallback fires correctly); trace canvas-badges + tenant-MPL comparison are v1.5; B2 (Experiment Engine) and B3 (Play) are designed but unbuilt — the full spec for both is in the handoff.
+
+**Tests:** CLI 528, Server 91, MCP 20, Gateway 43, Seed corpus 132 — all green. Ruff clean. SPA build + tsc clean.
+
+**Next session opens with**: roadmap handoff block (top of the log), then B2 — the Experiment Engine is the existential deliverable: it converts "smart harness + LLM" into "system that learns", mechanically, with evidence-attached laws.

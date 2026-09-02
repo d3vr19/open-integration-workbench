@@ -14,6 +14,25 @@ from ..project import FlowNode, IntegrationFlow
 from .context import ExchangeStatus, MessageContext, TraceEntry
 from .steps.base import get_plugin
 
+# Trace payload preview limit — enough to inspect, never a full-body copy
+# in the trace stream (payload data still lives in the exchange itself).
+_TRACE_PREVIEW_CHARS = 2000
+
+
+def _preview(body: bytes | str | None) -> str | None:
+    """Bounded text preview of an exchange body for trace entries."""
+    if body is None:
+        return None
+    text = body.decode("utf-8", errors="replace") if isinstance(body, bytes) else str(body)
+    if len(text) > _TRACE_PREVIEW_CHARS:
+        return text[:_TRACE_PREVIEW_CHARS] + f"… (+{len(text) - _TRACE_PREVIEW_CHARS} chars)"
+    return text
+
+
+def _public_properties(ctx: MessageContext) -> dict[str, Any]:
+    """Exchange properties without the __-prefixed engine internals."""
+    return {k: v for k, v in ctx.properties.items() if not str(k).startswith("__")}
+
 
 class ExecutionError(Exception):
     """Raised when a flow cannot be executed."""
@@ -165,11 +184,43 @@ def execute_flow(
             break
 
         try:
+            # Trace capture seam (FIGAF-style debugging, spec §9.2 step 4):
+            # snapshot the exchange around every step so the workbench can
+            # show in/out payloads, headers, properties, and durations per
+            # node. Snapshots are bounded (no full-body copies beyond a
+            # preview limit) so tracing stays cheap.
+            ctx.add_trace(
+                node_id,
+                "enter",
+                f"enter {node.type}",
+                body_preview=_preview(ctx.body),
+                headers=dict(ctx.headers),
+                properties=_public_properties(ctx),
+            )
+            step_t0 = time.monotonic()
             ctx = plugin.execute(node, ctx, mocks)
+            step_ms = int((time.monotonic() - step_t0) * 1000)
+            ctx.add_trace(
+                node_id,
+                "exit",
+                f"exit {node.type} ({step_ms}ms)",
+                body_preview=_preview(ctx.body),
+                headers=dict(ctx.headers),
+                properties=_public_properties(ctx),
+                duration_ms=step_ms,
+            )
         except Exception as exc:
             ctx.exchange_status = ExchangeStatus.FAILED
             ctx.exception = exc
-            ctx.add_trace(node_id, "error", f"exception: {exc}")
+            ctx.add_trace(
+                node_id,
+                "error",
+                f"exception: {exc}",
+                body_preview=_preview(ctx.body),
+                headers=dict(ctx.headers),
+                properties=_public_properties(ctx),
+                exception_type=type(exc).__name__,
+            )
             break
 
         if ctx.exchange_status == ExchangeStatus.FAILED:

@@ -1522,3 +1522,183 @@
 .trajectory-viewer__component { font-size: 10px; color: var(--oiw-accent); }
 .trajectory-viewer__corrections { margin: 0; padding-left: 16px; font-size: 10px; color: var(--oiw-warning); display: flex; flex-direction: column; gap: 2px; }
 .trajectory-viewer__error { color: var(--oiw-error); font-size: 10px; }
+
+/* ---------------------------------------------------------------------------
+ * TraceInspector — FIGAF-style interactive trace viewer
+ * ------------------------------------------------------------------------- */
+
+.trace-inspector__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.trace-inspector__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #3a3f4b;
+  border-radius: 12px;
+  background: #23263a;
+  color: #a9b1c3;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.trace-inspector__step:hover {
+  border-color: #6c7aef;
+  color: #e6e9f2;
+}
+
+.trace-inspector__step--active {
+  border-color: #6c7aef;
+  background: #2d3350;
+  color: #e6e9f2;
+}
+
+.trace-inspector__step--error {
+  border-color: #b3413f;
+  color: #ff8f8d;
+}
+
+.trace-inspector__step--error.trace-inspector__step--active {
+  background: #3a2426;
+}
+
+.trace-inspector__step-status {
+  font-size: 11px;
+}
+
+.trace-inspector__step-ms {
+  color: #7c8496;
+  font-size: 10px;
+}
+
+.trace-inspector__raw-toggle {
+  margin-left: auto;
+  background: none;
+  border: 1px solid #3a3f4b;
+  border-radius: 4px;
+  color: #7c8496;
+  font-size: 10px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.trace-inspector__raw-toggle:hover {
+  color: #a9b1c3;
+  border-color: #6c7aef;
+}
+
+.trace-inspector__detail {
+  border: 1px solid #2d3350;
+  border-radius: 8px;
+  padding: 10px;
+  background: #1a1d2b;
+}
+
+.trace-inspector__detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.trace-inspector__node-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: #e6e9f2;
+}
+
+.trace-inspector__error-type {
+  font-size: 11px;
+  color: #ff8f8d;
+  background: #3a2426;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.trace-inspector__io {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.trace-inspector__io-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c8496;
+  margin-bottom: 4px;
+}
+
+.trace-inspector__block {
+  margin-bottom: 8px;
+}
+
+.trace-inspector__block-label {
+  font-size: 10px;
+  color: #7c8496;
+  margin-bottom: 2px;
+}
+
+.trace-inspector__pre {
+  background: #12141f;
+  border: 1px solid #2d3350;
+  border-radius: 6px;
+  padding: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #c3cad9;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+}
+
+.trace-inspector__props {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.trace-inspector__prop-key {
+  font-family: 'JetBrains Mono', monospace;
+  color: #6c7aef;
+  padding: 2px 8px 2px 0;
+  white-space: nowrap;
+}
+
+.trace-inspector__prop-val {
+  color: #a9b1c3;
+  font-family: 'JetBrains Mono', monospace;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trace-inspector__outbound {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.trace-inspector__outbound-method {
+  color: #4fc08d;
+}
+
+.trace-inspector__outbound-url {
+  color: #a9b1c3;
+  word-break: break-all;
+}
+
+.trace-inspector__empty {
+  color: #7c8496;
+  font-size: 12px;
+  padding: 8px;
+}
