@@ -14,6 +14,7 @@ from . import (  # noqa: F401  (registration side-effects)
     log_step,
     mail_receiver,
     odata_receiver,
+    pd_variables,
     router,
     sftp_receiver,
     soap_receiver,
