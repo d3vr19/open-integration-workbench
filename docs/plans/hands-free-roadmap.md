@@ -396,3 +396,71 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   calibrate runs land). Phase A-D vision plan ratified: calibration before
   coverage before autonomy; turbo = piece-assembler, LLM = last-resort
   teacher; teacher-summons rate is the self-improvement headline metric.
+- 2026-09-01 — PHASE C + D SHIPPED (the learning loop closes, LLM-free):
+  - C-1: oracle successes promote real insights — `oiw tenant calibrate`
+    now routes its verdict through learn/loop.record_oracle_run; full
+    success (STARTED + message + all-MPL-COMPLETED) → PROJECT_APPROVED
+    insight + task node in the durable store (provenance
+    source=tenant-oracle, workflow = the flow's actual chain). Verified
+    surviving restart + retrievable at 0.70 on the held-out shape.
+  - C-2: failures auto-file triage candidates — oracle ERROR/TIMEOUT (via
+    calibrate) and parity `mismatched` (via `oiw parity`) write YAML
+    candidates under packages/parity-corpus/candidates/ with
+    suggestedTriage + point-in-time caveat. Never auto-promotes.
+  - C-3: `oiw emg harvest --if-due` — TTL gate (7d default) over
+    census/sidecar state; the crawler is now schedulable.
+  - D-2: piece library = real-engine-proven node types only (endpoints =
+    mock seam). XSLT/splitter/gather are NOT pieces — requirements naming
+    them teacher-escalate (no silent drops; verified TEACHER-REQUESTED
+    no-piece-matches for an XSLT requirement).
+  - D-1: budgets (iterations + wall-clock) enforced; tenant guard is
+    code-level (TurboToolGuard refuses tenant.*/deploy.*/LLM tools before
+    dispatch; native dispatcher is local-tree-only).
+  - D-3: teacher requests persist under .oiw/teacher-requests/;
+    `oiw turbo-stats` publishes the teacher-summons rate.
+  - E2E: `oiw agent --turbo` COMPLETED a create-flow requirement in 1
+    iteration (green smoke test + trajectory); with a C-1-seeded EMG store
+    the mechanics-first loop fired (EMG used=True, expert chain injected
+    verbatim) — the C→D chain works.
+  - Tests: CLI 454 → 513 (+59: 18 loop + 21 turbo + wiring/regression).
+    All suites green; ruff clean.
+- 2026-09-02 — **END GOAL DEMONSTRATED (P6 M1+M2)**: requirement in →
+  turbo pair assembled + green in sim → live tenant deploy → both
+  STARTED → message 200 → MPL COMPLETED on main + listener → body
+  captured. Five new blood laws banked (see p6-demo.yaml): POST-create
+  rejects Version; main-process ends always MessageEndEvent; only the
+  RR serviceTask form passes HTTP messages (terminal receiver.http
+  refused); RR chains end via PD terminator + companion listener;
+  variables.write needs encrypt=true/componentVersion=1.2. One honest
+  teacher-summons outstanding: converter.json-to-xml is live-unproven
+  at message time (STARTs, then 'Member name not found' downstream) —
+  pulled from the piece library until oracle-validated (Phase B
+  breadth candidate #1). Remaining: fresh-parity republish + M3 README
+  flip.
+- 2026-09-02 (cont.) — **EMG EXPERIENCE PLAN P1+P2 SHIPPED (live)**:
+  - P1: parity 2/2 comparable @ 100% (P6 pair + held-out, both reward 1.0
+    with fresh oracle reports; two C-1 auto-promotions of live-proven chains).
+    MPL epoch filter banked (stale rows never poison verdicts again). Turbo
+    hardened to full-chain validation + kebab ids + schema-typed smoke tests.
+  - P2: `oiw tenant absorb` — 72 packages, 600/600 flows parsed + promoted
+    (tenant-catalog provenance, 0.8 discount, customer-content license,
+    gitignored corpus). EMG: 2 → 602 insights. Grammar backlog now resident
+    as real workflows: Mapping ×562, Groovy ×559, XmlToJson ×277, Filter
+    ×157, JsonToXml ×109, Splitter ×34. Retrieval returns real expert
+    chains for novel requirements; turbo still refuses converter pieces
+    until Phase 3 oracle validation (honesty floor > corpus).
+  - NEXT: Phase 3 converter validation (the teacher summons) → merges
+    converters back as pieces + parity cases; then Mapping via the same
+    METHOD chain.
+- 2026-09-02 (cont. 2) — **PHASE 3 COMPLETE — THE FLYWHEEL TURNED A FULL
+  CIRCLE**: the converter teacher-summons was answered by a 10-rung live
+  bisection (conv1-conv10), the law merged back (converter must be preceded
+  by an RR — assembler inserts a warmup; listeners terminate log not
+  variables — PD transports variables as headers), and the SAME requirement
+  that escalated now builds + deploys + runs autonomously: reward 1.0,
+  MPL COMPLETED both artifacts, C-1 auto-promoted the learned chain
+  (insight-a8fca022b835). Also banked: XmlToJson exporter rendering added
+  (was unmapped); EMG injections with non-piece steps fall back to piece
+  assembly (OIW-I002). Parity 3/3 @ 100%. NEXT flywheel turns: Mapping
+  (needs script-resource bundling), filter, splitter, ProcessCall
+  (subprocess rendering — unlocks direct converter placement).

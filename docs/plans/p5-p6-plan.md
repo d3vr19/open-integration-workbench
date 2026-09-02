@@ -85,6 +85,15 @@ We own a real oracle now: upload→deploy→poll in seconds. P5 exploits it.
 - **M2**: transcript + timings captured to docs/plans/p6-demo.yaml; roadmap updated.
 - **M3**: README status flip.
 
+2026-09-02 — **P6 M1+M2 COMPLETE (live)**: natural-language directive →
+turbo-assembled pair (oiw_turbo_fwd + companion PD listener) → both
+STARTED on the tenant → message 200 → MPL COMPLETED on BOTH → listener
+captured the body. Transcript: docs/plans/p6-demo.yaml. The human role:
+the directive + the credentials (env-only). M3 (README flip) pending.
+Five new live laws + one honest teacher-summons (converter piece is
+live-unproven at message time — pulled from the piece library pending
+oracle validation).
+
 ## 3. Sequencing
 
 ```
@@ -139,6 +148,46 @@ same loop from two sides; do them together.
     metric and must trend to zero. LLM is the last-resort teacher, never the
     first mover (operator decision, 2026-08-26).
   Sequencing law: **calibration before coverage before autonomy.**
+  - 2026-09-01 — PHASE C SHIPPED (commit pending): learn/loop.py +
+    learn/harvest_schedule.py + CLI wiring.
+    * C-1 promote_oracle_outcome: full-success oracle runs (STARTED +
+      message + all-MPL-COMPLETED) promote a PROJECT_APPROVED insight +
+      task node into the durable store, provenance source=tenant-oracle,
+      successful_workflow = the flow's actual node chain. Verified
+      restart-surviving + retrievable (0.70 confidence on the held-out
+      shape). Partial failures never promote.
+    * C-2 file_oracle_failure / file_parity_miss: oracle ERROR/TIMEOUT and
+      parity `mismatched` verdicts auto-file triage candidates under
+      packages/parity-corpus/candidates/ with suggestedTriage
+      (exporter-fix | executor-test | triage-required) + the blood-law
+      point-in-time caveat. Wired into `oiw tenant calibrate` and
+      `oiw parity`. Nothing auto-promotes — triage is a separate step.
+    * C-3 harvest_schedule: `oiw emg harvest --if-due [--ttl-days N]` —
+      TTL gate (default 7d) + census.yaml back-compat + sidecar
+      harvest-state.yaml; scheduled crawlers become no-ops when fresh.
+  - 2026-09-01 — PHASE D SHIPPED: agent/turbo.py + agent/turbo_pieces.py +
+    CLI (`oiw agent --turbo [--max-iterations N --wall-clock S]`,
+    `oiw turbo-stats`).
+    * D-2 piece library = real-engine-proven node types only (fidelity !=
+      simulated; endpoints = mock seam). transform.xslt / splitter /
+      gather are NOT pieces (simulated stubs) — requirements naming them
+      teacher-escalate honestly instead of silently dropping.
+    * D-1 budgets: iteration cap + wall-clock cap, both enforced.
+      Tenant guard is CODE-LEVEL: TurboToolGuard refuses tenant.*/deploy.*
+      and LLM tools before any dispatch; the native turbo dispatcher
+      touches only the local project tree + local test engine.
+    * D-3 teacher requests: structured YAML under .oiw/teacher-requests/
+      (kind: no-piece-matches | repair-exhausted | budget-exceeded,
+      unmatchedComponents, diagnostics). `oiw turbo-stats` publishes the
+      teacher-summons rate (summons/turbo-trajectories) — the headline
+      self-improvement metric, must trend to zero.
+    * Verified end-to-end: create-flow requirement → COMPLETED iteration 1
+      with green smoke test + recorded trajectory; XSLT requirement →
+      TEACHER-REQUESTED no-piece-matches (transform.xslt); C-1-seeded EMG
+      store → turbo mechanics-first hit (EMG used=True, expert chain
+      injected verbatim).
+    * Turbo trajectories land in <project>/.oiw/trajectories/ (same
+      recorder as the co-pilot path) — no silent runs.
 ## 6. P5a-M1 execution log (append-only)
 
 - 2026-08-26 — M1 SHIPPED: `oiw tenant calibrate` (apps/cli/oiw/tenant/calibrate.py)
@@ -456,3 +505,19 @@ same loop from two sides; do them together.
      the instrument working, not failures of it.
    * NEXT: fresh oracle runs to replace wedge-era reports; then Phase B
      breadth (Mapping first) inside the measured harness.
+
+- 2026-09-02 — P6 EXECUTION LOG (live, this session):
+  * Bisection matrix (all via calibrate loop, seconds-fast):
+    | Variant | Verdict |
+    |---|---|
+    | bare RR + plain EndEvent | START-FATAL (plain main-process end) |
+    | RR + PD terminator | STARTED; "No consumers" until listener deployed |
+    | RR + PD + companion listener | **STARTED + message 200 + MPL COMPLETED both** |
+    | + converter.json-to-xml (rung 3) | STARTED; message fails 'Member name not found' |
+    | converter addXMLRootElement=false (rung 4) | still fails — converter shape unproven, pulled from pieces |
+    | EndEvent-form receiver (GSTR2A-style) | every message 'Member name not found'; GSTR2A/B/Auth have ZERO MPL rows |
+  * CREATE verb live-proven: POST entity WITHOUT Version (400 if present; auto-generated).
+  * Configurations: nav POST = 501 (read-only); parameters.prop in the bundle auto-creates rows on upload.
+  * Variables truth: encrypt='true', componentVersion='1.2' (false/absent = start ERROR).
+  * Listener truth: sender-only flows carry empty Participant_2 'Receiver' + MessageEndEvent end.
+  * Turbo idempotency bug found+fixed live (flow.create on existing id).

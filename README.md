@@ -8,8 +8,8 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![CI: Validate PR](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml/badge.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 [![Security Scan](https://github.com/hehenaice/open-integration-workbench/actions/workflows/security-scan.yaml/badge.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/security-scan.yaml)
-[![Status: WP-08 Gate Passed](https://img.shields.io/badge/Status-WP--08%20Gate%20PASSED-brightgreen.svg)](DEVELOPMENT_LOG.md)
-[![Tests: 617](https://img.shields.io/badge/Tests-617%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
+[![Status: P6 Hands-Free Proof](https://img.shields.io/badge/Status-P6%20Hands--Free%20PROVEN-brightgreen.svg)](DEVELOPMENT_LOG.md)
+[![Tests: 812](https://img.shields.io/badge/Tests-812%20passing-brightgreen.svg)](https://github.com/hehenaice/open-integration-workbench/actions/workflows/validate-on-pr.yaml)
 
 ## What this is
 
@@ -24,7 +24,7 @@ OIW treats SAP Cloud Integration (CPI) development as a software-engineering dis
 
 ## Current status
 
-Phases 0–3 are substantially complete. WP-08 (Productize the Learning Loop) is in progress — **Track D GATE PASSED** (PR-1 through PR-8 done; UI work now authorized). See [`DEVELOPMENT_LOG.md`](DEVELOPMENT_LOG.md) — the single source of truth for project state, decisions, deviations, and next steps.
+Phases 0–3 are substantially complete. WP-08 (Productize the Learning Loop) is in progress — **Track D GATE PASSED** (PR-1 through PR-8 done; UI work now authorized). **P6 hands-free proof LIVE (2026-09-02)**: a natural-language directive produced a working iFlow pair on the live BTP tenant — turbo-assembled, deployed, STARTED, message 200, MPL COMPLETED on both artifacts. **EMG fed with real experience**: the tenant catalog (600 running flows) is absorbed into the Experience Memory Graph; parity agreement is 100% on fresh oracle cases. **Self-improvement proven**: the first teacher-summons (JSON→XML conversion) was answered by live bisection, merged back as a piece + placement law — the same requirement now builds and runs autonomously (reward 1.0), and the learned chain auto-promotes to the EMG. See [`DEVELOPMENT_LOG.md`](DEVELOPMENT_LOG.md) — the single source of truth for project state, decisions, deviations, and next steps.
 
 ### What's implemented
 

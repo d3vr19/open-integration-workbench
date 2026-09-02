@@ -48,8 +48,8 @@ class TestSecurityAudit:
         corpus = tmp_path / "corpus"
         corpus.mkdir()
         (corpus / "flow.yaml").write_text("apiVersion: oiw.dev/v1alpha1\n")
-        audit_seed_corpus_security(corpus_dir=corpus)
-        report_file = Path(__file__).parent / "audit" / "security-audit-report.yaml"
+        audit_seed_corpus_security(corpus_dir=corpus, report_dir=tmp_path / "audit")
+        report_file = tmp_path / "audit" / "security-audit-report.yaml"
         assert report_file.is_file()
         loaded = yaml.safe_load(report_file.read_text())
         assert "status" in loaded

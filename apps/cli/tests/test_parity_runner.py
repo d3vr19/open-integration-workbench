@@ -179,6 +179,9 @@ def test_cli_parity_command_runs_repo_corpus(tmp_path):
         "parity",
         "--corpus", str(REPO_ROOT / "packages" / "parity-corpus" / "manifest.yaml"),
         "--out", str(out),
+        # Keep the repo tree clean: mismatch candidates go to tmp (C-2
+        # wiring files candidates next to the corpus by default).
+        "--candidates-dir", str(tmp_path / "cands"),
     ])
     assert res.exit_code == 0, res.output
     assert "gate" in res.output
@@ -193,6 +196,7 @@ def test_cli_parity_enforce_gate_exits_nonzero(tmp_path):
         "parity",
         "--corpus", str(REPO_ROOT / "packages" / "parity-corpus" / "manifest.yaml"),
         "--out", str(tmp_path / "p.yaml"),
+        "--candidates-dir", str(tmp_path / "cands"),
         "--enforce-gate",
     ])
     assert res.exit_code == 1  # v0 baseline: gate open until fresh oracle data
