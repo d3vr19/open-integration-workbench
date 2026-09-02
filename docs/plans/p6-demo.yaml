@@ -1,0 +1,72 @@
+# P6 hands-free proof — LIVE TRANSCRIPT (2026-09-02)
+#
+# Requirement in (natural language, human directive) → turbo piece-assembler
+# → local sim green → live tenant deploy (create + update verbs) → runtime
+# STARTED → message exercised HTTP 200 → MPL COMPLETED on BOTH artifacts
+# → companion listener captured the body. Fully machine-authored; the human
+# role was writing the directive and holding the credentials.
+
+requirement: >-
+  Create a new integration flow that receives a JSON request via HTTPS,
+  sets a correlation id in the header, and fetches weather data from
+  https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m.
+  Include an error subprocess that logs failures.
+
+pipeline:
+  - step: turbo piece-assembly (LLM-free, deterministic)
+    tool: "oiw agent --turbo"
+    result:
+      status: COMPLETED
+      iterations: 1
+      flow: oiw_turbo_fwd
+      chain: [sender.http, modifier.content, log.message,
+              receiver.http (Request-Reply), receiver.processdirect]
+      companion: oiw_turbo_fwd-listener (sender.processdirect -> variables.write)
+      localSmokeTest: "1/1 passed (exchange COMPLETED + every node executed)"
+      trajectory: traj-d88d2890007a
+  - step: tenant deploy (main artifact, POST-create then PUT-update)
+    tool: "oiw tenant calibrate --create / (update)"
+    artifact: oiw_turbo_fwd @ AdaequareGST
+    runtime: STARTED
+  - step: tenant deploy (companion listener, POST-create)
+    artifact: oiw_turbo_fwd-listener @ AdaequareGST
+    runtime: STARTED
+  - step: message exercise (runtime host, POST /http/oiw_turbo_fwd)
+    httpStatus: 200
+    mpl:
+      main: COMPLETED (guid AGqXNNUvQSgsnFIps3ajhqS64hnc era; final guid in calib-E2E-FINAL)
+      listener: COMPLETED (~600ms later — PD hop delivered)
+    durableSideEffect: listener variables.write captured the exchange
+
+liveLawsLearned:   # single-variable bisection on the live tenant, this session
+  - law: POST-create rejects Version in payload (tenant auto-generates it)
+  - law: plain cname::EndEvent in the MAIN process is runtime-start FATAL;
+         every main-process end is MessageEndEvent (oiw_pd/open_mateo_test/
+         oiw_pd_hf ground truth + bisection rungs)
+  - law: the only message-proven HTTP-call form on this tenant is the
+         Request-Reply serviceTask; terminal receiver.http is refused by
+         the exporter (EndEvent-form fails messages 'Member name not found';
+         GSTR2A/GSTR2B/Authentication EndEvent-form flows have ZERO MPL rows)
+  - law: RR chains end via a ProcessDirect terminator + companion listener
+         (sender.processdirect + variables.write, oiw_pd-proven topology)
+  - law: variables.write needs encrypt='true' + componentVersion='1.2'
+         (oiw_pd ground truth; 'false'/absent = runtime-start ERROR)
+  - law: sender-only flows still carry the empty Participant_2 'Receiver'
+         stub (oiw_pd ground truth)
+  - finding: converter.json-to-xml STARTs but breaks the downstream HTTP
+         adapter at message time ('Member name not found', bisection rung 3);
+         the CodeJam-fixture converter shape is NOT tenant-proven — pulled
+         from the piece library (teacher-escalates) pending oracle validation
+
+honesty:
+  - the directive's JSON→XML conversion step was NOT shipped: converters are
+    live-unproven at message time (see liveLawsLearned); turbo
+    teacher-escalates that requirement shape instead of shipping a broken
+    chain (tests/agent/test_turbo.py::test_converter_requirement_escalates)
+  - reward 'overall 0.65' on the final calibration reflects mixed MPL
+    history (4 stale FAILED rows from the bisection era on the same
+    artifact); the NEWEST row — the deployed chain's actual verdict — is
+    COMPLETED, main + listener
+
+teacherSummons: 1 (converter piece) — merges back as a piece once the
+  converter shape passes live oracle validation (backlog: Phase B breadth)

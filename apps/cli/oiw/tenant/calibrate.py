@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -33,6 +34,17 @@ import yaml
 from ..compiler.sap_export import build_cpi_bundle, cpi_bundle_identity
 from ..environments import EnvironmentProfile
 from .sap_ci_adapter import SapCiTenantAdapter, SapCiTenantError
+
+
+def _epoch_ms(iso_started_at: str) -> float:
+    """Parse the report's startedAt ISO timestamp to epoch ms."""
+    try:
+        ts = datetime.fromisoformat(iso_started_at)
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        return ts.timestamp() * 1000.0
+    except (ValueError, TypeError):
+        return 0.0
 
 
 def runtime_base_url(tenant_url: str) -> str:
@@ -146,8 +158,15 @@ async def calibrate_artifact(
     display_name: str | None = None,
     message_body: str = "{}",
     timeout_s: int = 60,
+    create: bool = False,
 ) -> CalibrationReport:
-    """Run the full oracle loop for one allowlisted target in `package_id`."""
+    """Run the full oracle loop for one allowlisted target in `package_id`.
+
+    `create=True` (P6 autonomous-creation path): the artifact must NOT
+    exist yet — POST-entity CREATE (adapter.create_artifact), fresh
+    identity (no inheritance), then the same deploy→poll→message→MPL
+    oracle loop. Still allowlist-gated + scratch-package-only.
+    """
     rep = CalibrationReport(package_id=package_id, artifact_id="")
     rep.started_at = datetime.now(tz=UTC).isoformat()
 
@@ -156,58 +175,106 @@ async def calibrate_artifact(
         raise SapCiTenantError(f"calibrate expects exactly one flow, found {len(flows)}")
     flow = yaml.safe_load(flows[0].read_text(encoding="utf-8"))
 
-    # Identity inheritance (download current bundle first)
     symbolic = iflw_name = bundle_name = None
+    ext_configs: list[dict[str, str]] = []
     await adapter.connect(profile)
     try:
-        target = await adapter._resolve_target_artifact(package_id, artifact_id)
-        existing = await adapter.download_artifact(target.id, target.version)
-        symbolic, iflw_name, bundle_name = cpi_bundle_identity(existing)
-        rep.artifact_id = target.id
+        if create:
+            if not artifact_id:
+                raise SapCiTenantError("create mode requires an explicit --artifact id")
+            rep.artifact_id = artifact_id
+            # Fresh identity: the new bundle's SymbolicName is its own id.
+            symbolic = artifact_id
+            iflw_name = None
+            bundle_name = display_name or artifact_id
+            # Path-collision preflight still applies (package-level; paths
+            # are tenant-global — turbo derives unique /<artifact-id> paths
+            # so package-level is the fast sufficient check for scratch).
+            entry0 = flow["spec"]["entrypoints"][0]
+            if entry0.get("type") == "sender.http":
+                from .collisions import collect_package_path_claims, find_collisions
 
-        # Endpoint-collision preflight: paths are tenant-global; deploying a
-        # path bound by ANOTHER flow yields a runtime ERROR that looks
-        # exactly like a content failure (2x live lesson, p5-p6-plan.md §6).
-        entry0 = flow["spec"]["entrypoints"][0]
-        if entry0.get("type") == "sender.http":
-            from .collisions import collect_package_path_claims, find_collisions
+                desired = str((entry0.get("config") or {}).get("path", "/"))
+                claims = await collect_package_path_claims(adapter, package_id)
+                hits = find_collisions(claims, desired, exclude_artifact_id=artifact_id)
+                if hits:
+                    raise SapCiTenantError(
+                        f"endpoint collision: path {desired!r} is already claimed by "
+                        + ", ".join(f"{h.artifact_id} ({h.version})" for h in hits)
+                        + " — pick a different entrypoint path"
+                    )
+            archive, _digest = build_cpi_bundle(
+                flow,
+                symbolic_name=symbolic,
+                iflw_name=iflw_name,
+                display_name=bundle_name,
+                project_root=project_path,
+                configurations_out=ext_configs,
+            )
+            result = await adapter.create_artifact(package_id, artifact_id, bundle_name, archive)
+            rep.uploaded_ok = bool(result.success)
+            if not result.success:
+                rep.error_detail = result.error
+                return rep
+            target_version = result.version or "1.0.0"  # tenant auto-generates
+        else:
+            target = await adapter._resolve_target_artifact(package_id, artifact_id)
+            existing = await adapter.download_artifact(target.id, target.version)
+            symbolic, iflw_name, bundle_name = cpi_bundle_identity(existing)
+            rep.artifact_id = target.id
 
-            desired = str((entry0.get("config") or {}).get("path", "/"))
-            claims = await collect_package_path_claims(adapter, package_id)
-            hits = find_collisions(claims, desired, exclude_artifact_id=target.id)
-            if hits:
-                raise SapCiTenantError(
-                    f"endpoint collision: path {desired!r} is already claimed by "
-                    + ", ".join(f"{h.artifact_id} ({h.version})" for h in hits)
-                    + " — pick a different entrypoint path"
-                )
+            # Endpoint-collision preflight: paths are tenant-global; deploying a
+            # path bound by ANOTHER flow yields a runtime ERROR that looks
+            # exactly like a content failure (2x live lesson, p5-p6-plan.md §6).
+            entry0 = flow["spec"]["entrypoints"][0]
+            if entry0.get("type") == "sender.http":
+                from .collisions import collect_package_path_claims, find_collisions
 
-        # Pre-upload backup (reversibility)
-        bdir = project_path / ".oiw" / "tenant-cache"
-        bdir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%dT%H%M%SZ")
-        (bdir / f"backup-{package_id}-{target.id}-{stamp}.zip").write_bytes(existing)
+                desired = str((entry0.get("config") or {}).get("path", "/"))
+                claims = await collect_package_path_claims(adapter, package_id)
+                hits = find_collisions(claims, desired, exclude_artifact_id=target.id)
+                if hits:
+                    raise SapCiTenantError(
+                        f"endpoint collision: path {desired!r} is already claimed by "
+                        + ", ".join(f"{h.artifact_id} ({h.version})" for h in hits)
+                        + " — pick a different entrypoint path"
+                    )
 
-        archive, _digest = build_cpi_bundle(
-            flow,
-            symbolic_name=symbolic,
-            iflw_name=iflw_name,
-            display_name=display_name or bundle_name or target.id,
-            project_root=project_path,
-        )
-        result = await adapter.upload_package(
-            package_id, archive, "sha256:calibrate", artifact_id=artifact_id
-        )
-        rep.uploaded_ok = bool(result.success)
-        if not result.success:
-            rep.error_detail = result.error
-            return rep
+            # Pre-upload backup (reversibility)
+            bdir = project_path / ".oiw" / "tenant-cache"
+            bdir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%dT%H%M%SZ")
+            (bdir / f"backup-{package_id}-{target.id}-{stamp}.zip").write_bytes(existing)
 
-        deploy_result = await adapter.deploy(package_id, target.version, artifact_id=artifact_id)
+            archive, _digest = build_cpi_bundle(
+                flow,
+                symbolic_name=symbolic,
+                iflw_name=iflw_name,
+                display_name=display_name or bundle_name or target.id,
+                project_root=project_path,
+                configurations_out=ext_configs,
+            )
+            result = await adapter.upload_package(
+                package_id, archive, "sha256:calibrate", artifact_id=artifact_id
+            )
+            rep.uploaded_ok = bool(result.success)
+            if not result.success:
+                rep.error_detail = result.error
+                return rep
+            target_version = target.version
+
+        # Externalized-param note (terminal-HTTP receiver law, 2026-09-02):
+        # the bundle's parameters.prop carries the literal values; the
+        # tenant AUTO-CREATES the artifact Configuration rows from it on
+        # upload (live-proven: oiw_turbo_fwdUrl appeared without any POST).
+        # The Configurations nav is read-only via API (POST=501) — values
+        # flow exclusively through the bundle. No explicit deploy needed.
+
+        deploy_result = await adapter.deploy(package_id, target_version, artifact_id=artifact_id)
         rep.deploy_accepted = bool(deploy_result.success)
 
         status, raw = await _poll_terminal(
-            adapter._client, adapter._basic_auth_header(), target.id, timeout_s=timeout_s
+            adapter._client, adapter._basic_auth_header(), rep.artifact_id, timeout_s=timeout_s
         )
         rep.final_status = status
         if raw == "ERROR":
@@ -245,7 +312,7 @@ async def calibrate_artifact(
             mpl = await adapter._client.get(
                 "/MessageProcessingLogs",
                 params={
-                    "$filter": f"IntegrationFlowName eq '{target.id}'",
+                    "$filter": f"IntegrationFlowName eq '{rep.artifact_id}'",
                     "$orderby": "LogStart desc",
                     "$top": 5,
                     "$format": "json",
@@ -253,12 +320,25 @@ async def calibrate_artifact(
                 headers={**adapter._basic_auth_header(), "Accept": "application/json"},
             )
             if "json" in mpl.headers.get("content-type", ""):
+                # MPL EPOCH FILTER (2026-09-02): only rows from THIS run's
+                # window count. An artifact redeployed many times (bisection
+                # history) carries stale FAILED rows that poison the verdict
+                # — LogStart is /Date(<epoch_ms>)/, older rows are dropped.
+                epoch_ms = _epoch_ms(rep.started_at)
+
+                def _row_logstart_ms(row: dict[str, Any]) -> float | None:
+                    raw = str(row.get("LogStart") or "")
+                    m = re.search(r"\((\d+)\)", raw)
+                    return float(m.group(1)) if m else None
+
                 rep.mpl_rows = [
                     {
                         k: row.get(k)
                         for k in ("MessageGuid", "Status", "CustomStatus", "IntegrationFlowName", "LogStart")
                     }
                     for row in mpl.json().get("d", {}).get("results", [])
+                    # keep rows at/after this run started (1s clock-skew slack)
+                    if (t := _row_logstart_ms(row)) is None or t >= epoch_ms - 1000.0
                 ]
         return rep
     finally:

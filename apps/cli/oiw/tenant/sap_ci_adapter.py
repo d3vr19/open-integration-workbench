@@ -536,6 +536,125 @@ class SapCiTenantAdapter:
             uploaded_at=None,  # SAP doesn't echo a timestamp here
         )
 
+    async def create_artifact(
+        self,
+        package_id: str,
+        artifact_id: str,
+        artifact_name: str,
+        archive: bytes,
+    ) -> UploadResult:
+        """CREATE a new designtime artifact via POST /IntegrationDesigntimeArtifacts.
+
+        Verb semantics (live finding 2026-08-25 + IntegrationContent.edmx):
+        POST entity is CREATE-only — an existing Id gets a misleading 500,
+        so the caller MUST preflight for id collisions (artifact ids are
+        TENANT-GLOBAL, blood law). Payload per the edmx entity: Id, Version,
+        PackageId, Name, ArtifactContent(base64 zip).
+
+        Policy: same allowlist gates as every write — scratch packages
+        only, CSRF token, loud refusal before any network call.
+        """
+        import base64 as _b64
+
+        self._ensure_writable(package_id)
+        self._require_connected()
+        if not archive or len(archive) < 4:
+            return UploadResult(
+                success=False, version=None, error="empty or truncated archive", uploaded_at=None
+            )
+        # Id-collision preflight: never rely on the misleading 500.
+        artifacts = await self.list_artifacts(package_id, top=200)
+        if any(a.id == artifact_id for a in artifacts):
+            return UploadResult(
+                success=False,
+                version=None,
+                error=(
+                    f"artifact '{artifact_id}' already exists in package "
+                    f"'{package_id}' — use upload_package (update) instead"
+                ),
+                uploaded_at=None,
+            )
+        await self._ensure_csrf_token()
+        # LIVE FINDING (2026-09-02): the tenant AUTO-GENERATES Version on
+        # POST-create — sending it is a 400 ("Auto generated version ... must
+        # not be part of input payload"). The edmx lists Version as a key,
+        # but the create verb rejects it in the body.
+        payload = {
+            "Id": artifact_id,
+            "PackageId": package_id,
+            "Name": artifact_name,
+            "ArtifactContent": _b64.b64encode(archive).decode(),
+        }
+        url = "/IntegrationDesigntimeArtifacts"
+        try:
+            resp = await self._client.post(
+                url,
+                json=payload,
+                headers=self._write_headers(
+                    {"Content-Type": "application/json", "Accept": "application/json"}
+                ),
+            )
+        except httpx.HTTPError as exc:
+            raise SapCiTenantError(f"create unreachable at {url}: {exc}") from exc
+        if resp.status_code >= 400:
+            self._raise_for_status(resp, "create_artifact")
+        # Read back the tenant-assigned version (auto-generated on create).
+        artifacts = await self.list_artifacts(package_id, top=200)
+        created_version = next((a.version for a in artifacts if a.id == artifact_id), None)
+        return UploadResult(
+            success=True,
+            version=created_version,
+            error=None,
+            uploaded_at=None,
+        )
+
+    async def deploy_configuration(
+        self,
+        package_id: str,
+        artifact_id: str,
+        param_key: str,
+        param_value: str,
+    ) -> bool:
+        """Deploy one artifact-scoped runtime Configuration row.
+
+        POST to the artifact's Configurations navigation (edmx:
+        IntegrationDesigntimeArtifact → Configurations entity). The
+        runtime resolves {{KEY}} externalized params + ${property.KEY}
+        references from these rows (live-proven dialects: GSTR2A
+        ${property.NewUrl}, testing_oiw {{openMateoURL}}).
+        """
+        self._ensure_writable(package_id)
+        self._require_connected()
+        artifacts = await self.list_artifacts(package_id, top=200)
+        target = next((a for a in artifacts if a.id == artifact_id), None)
+        if target is None:
+            raise SapCiTenantError(
+                f"deploy_configuration: artifact '{artifact_id}' not found in '{package_id}'"
+            )
+        await self._ensure_csrf_token()
+        url = (
+            f"/IntegrationDesigntimeArtifacts(Id='{artifact_id}',Version='{target.version}')"
+            "/Configurations"
+        )
+        payload = {
+            "ParameterKey": param_key,
+            "ParameterValue": param_value,
+            "DataType": "xsd:string",
+        }
+        try:
+            resp = await self._client.post(
+                url,
+                json=payload,
+                headers=self._write_headers(
+                    {"Content-Type": "application/json", "Accept": "application/json"}
+                ),
+            )
+        except httpx.HTTPError as exc:
+            raise SapCiTenantError(f"configuration unreachable at {url}: {exc}") from exc
+        if resp.status_code >= 400:
+            self._raise_for_status(resp, "deploy_configuration")
+        return True
+
     async def deploy(self, package_id: str, version: str, artifact_id: str | None = None) -> DeploymentResult:
         """Deploy (activate): POST /DeployIntegrationDesigntimeArtifact.
 

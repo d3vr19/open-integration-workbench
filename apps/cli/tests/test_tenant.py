@@ -352,6 +352,16 @@ def _write_transport(artifact_id="MyFlow", artifact_version="1.0.0", *, empty_pa
                     }
                 ]
             )
+            # Created artifacts join the package listing (version read-back)
+            if "brand_new_flow" in seen.get("created_ids", []):
+                results.append(
+                    {
+                        "Id": "brand_new_flow",
+                        "Name": "Brand New Flow",
+                        "Version": "1.0.0",
+                        "__metadata": {"media_src": "https://example.invalid/api/v1/y/$value"},
+                    }
+                )
             return httpx.Response(200, json={"d": {"results": results}})
 
         if request.method == "PUT" and "IntegrationDesigntimeArtifacts(Id=" in str(request.url):
@@ -360,6 +370,17 @@ def _write_transport(artifact_id="MyFlow", artifact_version="1.0.0", *, empty_pa
             seen["upload_payload"] = _json.loads(request.content)
             seen["csrf_sent"] = request.headers.get("x-csrf-token")
             return httpx.Response(204)
+
+        if (
+            request.method == "POST"
+            and request.url.path.rstrip("/").endswith("/IntegrationDesigntimeArtifacts")
+        ):
+            import json as _json
+
+            seen["create_payload"] = _json.loads(request.content)
+            seen["create_csrf_sent"] = request.headers.get("x-csrf-token")
+            seen.setdefault("created_ids", []).append(seen["create_payload"]["Id"])
+            return httpx.Response(201, json={"d": {"Id": "brand_new_flow", "Version": "1.0.0"}})
 
         if request.method == "POST" and request.url.path.endswith("/IntegrationRuntimeArtifacts"):
             seen["deploy_payload"] = request.content
@@ -481,6 +502,56 @@ def test_upload_refused_when_package_has_no_artifacts(profile) -> None:
     with pytest.raises(SapCiTenantError, match="update-only"):
         _run(adapter.upload_package("AdequareGST", b"PK\x03\x04zip", "sha256:aa"))
     _run(adapter.disconnect())
+
+
+def test_create_artifact_posts_entity_with_full_payload(profile) -> None:
+    """P6 create verb: POST /IntegrationDesigntimeArtifacts with Id/Version/
+    PackageId/Name/ArtifactContent + CSRF token (edmx-proven shape)."""
+    transport, seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
+
+    import base64 as _b64
+
+    raw = b"PK\x03\x04newbundle"
+    result = _run(
+        adapter.create_artifact("AdequareGST", "brand_new_flow", "Brand New Flow", raw)
+    )
+    assert result.success is True
+    assert result.version == "1.0.0"  # read back from the artifact listing
+    payload = seen.get("create_payload")
+    assert payload is not None, "POST entity never reached the transport"
+    assert payload["Id"] == "brand_new_flow"
+    # LIVE FINDING (2026-09-02): Version must NOT be in the create payload —
+    # the tenant auto-generates it ("must not be part of input payload").
+    assert "Version" not in payload
+    assert payload["PackageId"] == "AdequareGST"
+    assert payload["Name"] == "Brand New Flow"
+    assert _b64.b64decode(payload["ArtifactContent"]) == raw
+    assert seen["create_csrf_sent"] == "test-csrf-token"
+    _run(adapter.disconnect())
+
+
+def test_create_artifact_refuses_existing_id_locally(profile) -> None:
+    """Id-collision preflight: an existing artifact id never reaches POST
+    (the tenant's 500 for POST-on-existing is misleading — refuse first)."""
+    transport, seen = _write_transport()  # package already lists MyFlow
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
+
+    result = _run(adapter.create_artifact("AdequareGST", "MyFlow", "MyFlow", b"PK\x03\x04zip"))
+    assert result.success is False
+    assert "already exists" in (result.error or "")
+    assert "create_payload" not in seen
+    _run(adapter.disconnect())
+
+
+def test_create_artifact_refused_outside_allowlist(profile) -> None:
+    """Same policy gates as every write: allowlist refusal BEFORE network."""
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid", username="u", password="p",
+        writable_packages=["AdequareGST"],
+    )
+    with pytest.raises(SapCiTenantError, match="not on the writable allowlist"):
+        _run(adapter.create_artifact("OtherPackage", "x", "x", b"PK\x03\x04zip"))
 
 
 def test_deploy_triggers_function_import_and_poll_maps_status(profile) -> None:

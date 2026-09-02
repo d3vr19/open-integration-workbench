@@ -260,11 +260,27 @@ def test(
     default=False,
     help="Exit non-zero if the ≥90%/10-case gate is not passed (report-only by default).",
 )
-def parity(corpus_path: Path, out_path: Path, enforce_gate: bool) -> None:
+@click.option(
+    "--candidates-dir",
+    "candidates_dir_opt",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Where mismatch candidates are filed. Default: <corpus>/candidates/.",
+)
+def parity(
+    corpus_path: Path,
+    out_path: Path,
+    enforce_gate: bool,
+    candidates_dir_opt: Path | None,
+) -> None:
     """Run the parity suite: local real-engine verdicts vs cached oracle reports.
 
     Publishes docs/emg/sim-parity.yaml. Honesty instrument — never CI-gated
     by default; oracle data comes from CACHED calibration reports only.
+
+    Phase C-2: every `mismatched` case files a corpus candidate under
+    packages/parity-corpus/candidates/ for triage (exporter fix or
+    executor test — never auto-promoted).
     """
     from .parity import run_parity
 
@@ -287,6 +303,18 @@ def parity(corpus_path: Path, out_path: Path, enforce_gate: bool) -> None:
             f"  {row['verdict']:<22} {row['name']:<28} local={row.get('localStatus', '-')}",
             fg=mark,
         )
+
+    # Phase C-2: failure → corpus automation. Mismatches become triage
+    # candidates; the corpus grows only from observed evidence.
+    mismatches = [row for row in s["cases"] if row["verdict"] == "mismatched"]
+    if mismatches:
+        from .learn.loop import file_parity_miss
+
+        candidates_dir = candidates_dir_opt or (corpus_path.parent / "candidates")
+        for row in mismatches:
+            outcome = file_parity_miss(row, candidates_dir)
+            click.echo(f"  candidate filed: {outcome.candidate_id} → {outcome.candidate_path}")
+
     ratio = f"{a['ratio']:.2%}" if a["ratio"] is not None else "n/a"
     click.echo(
         f"agreement: {a['agreed']}/{a['comparable']} comparable ({ratio}); "
@@ -506,19 +534,103 @@ def _write_junit(results: list[TestResult], path: Path) -> None:
     help="co-pilot: present plan, wait for approval. autonomous: execute without approval.",
 )
 @click.option("--flow", "flow_id", default=None, help="Target flow ID (optional).")
-def agent(requirement: str, project_path: Path, mode: str, flow_id: str | None) -> None:
+@click.option(
+    "--turbo",
+    is_flag=True,
+    default=False,
+    help="Phase D turbo piece-assembler: bounded LLM-free plan→implement→simulate→repair "
+    "loop. Tenant-isolated at code level; escalates via teacher requests.",
+)
+@click.option(
+    "--max-iterations",
+    type=int,
+    default=3,
+    help="Turbo repair-cycle cap (Phase D budgets).",
+)
+@click.option(
+    "--wall-clock",
+    "wall_clock_s",
+    type=float,
+    default=600.0,
+    help="Turbo hard wall-clock cap in seconds.",
+)
+def agent(
+    requirement: str,
+    project_path: Path,
+    mode: str,
+    flow_id: str | None,
+    turbo: bool,
+    max_iterations: int,
+    wall_clock_s: float,
+) -> None:
     """Run the LLM-driven agent pipeline (WP-04).
 
     Interpret a natural-language REQUIREMENT, generate a plan, (optionally)
     approve it, execute it, and record a trajectory.
 
+    Phase D (p5-p6-plan.md §5D): --turbo switches to the piece-assembler
+    loop — no LLM, no tenant (code-level guard), budgets enforced,
+    teacher-request escalation instead of guessing.
+
     Examples:
       oiw agent "Add JSON schema validation to order-to-s4"
       oiw agent --mode autonomous "Fix the receiver timeout"
       oiw agent --project examples/order-to-s4 --flow order-to-s4 "Add validation"
+      oiw agent --turbo --project examples/held-out-order-async "Create a flow that ..."
     """
     import asyncio
     import json as _json
+
+    if turbo:
+        from .agent.turbo import TurboBudget, run_turbo
+
+        # EMG mechanics-first retriever over the durable store, if one
+        # exists (build_emg_store resolves OIW_WORKSPACE/PWD; a fresh
+        # workspace simply has no corpus yet).
+        emg_retriever = None
+        try:
+            from .emg.retrieval import EMGRetriever
+            from .emg.store import build_emg_store
+
+            store = build_emg_store(create_if_missing=False)
+            store.load()
+            emg_retriever = EMGRetriever(
+                store=store._insight_store,
+                task_store=store._task_store,
+                edge_store=store._edge_store,
+                embedder=getattr(store, "_embedder", None),
+            )
+        except Exception as exc:
+            click.echo(f"note: EMG store unavailable, running pieces-only ({exc})")
+
+        result = asyncio.run(
+            run_turbo(
+                requirement,
+                project_path,
+                flow_id=flow_id,
+                budget=TurboBudget(max_iterations=max_iterations, wall_clock_s=wall_clock_s),
+                emg_retriever=emg_retriever,
+            )
+        )
+        click.echo(f"\n=== Turbo Result: {result.status} ===")
+        click.echo(
+            f"Flow: {result.flow_id} | Iterations: {result.iterations_used} | EMG used: {result.emg_used}"
+        )
+        click.echo(f"Trajectory ID: {result.trajectory_id}")
+        for w in result.warnings:
+            click.echo(f"  warn: {w}")
+        for tr in result.test_results:
+            click.echo(f"  tests: passed={tr['passed']} failed={tr['failed']}")
+        if result.teacher_request:
+            click.echo(
+                f"  teacher request: {result.teacher_request.kind} "
+                f"({result.teacher_request.id}) — see .oiw/teacher-requests/"
+            )
+            if result.teacher_request.unmatched_components:
+                click.echo(f"    unmatched pieces: {', '.join(result.teacher_request.unmatched_components)}")
+        if result.status != "COMPLETED":
+            sys.exit(1)
+        return
 
     from .agent.orchestrator import run_agent
 
@@ -644,6 +756,31 @@ def trajectory_export(redacted: bool, output: Path, traj_id: str | None, project
         encoding="utf-8",
     )
     click.echo(f"Exported {target.name} → {output}")
+
+
+@main.command("turbo-stats")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+    help="Project root (where .oiw/ lives).",
+)
+def turbo_stats(project_path: Path) -> None:
+    """Phase D headline metric: teacher-summons rate per turbo run.
+
+    The rate (teacher requests / turbo trajectories) is the self-
+    improvement signal — it MUST trend to zero as the piece library and
+    EMG corpus grow. Trend it across sessions, not single runs.
+    """
+    from .agent.turbo import teacher_summons_rate
+
+    stats = teacher_summons_rate(project_path)
+    rate = stats["teacherSummonsRate"]
+    click.echo(f"turbo runs:          {stats['turboRuns']}")
+    click.echo(f"teacher summons:     {stats['teacherSummons']}")
+    click.echo(f"teacher-summons rate: {rate if rate is not None else 'n/a (no runs yet)'}")
+    click.echo(f"note: {stats['note']}")
 
 
 # ---------------------------------------------------------------------------
@@ -1134,16 +1271,55 @@ def emg() -> None:
     show_default=True,
 )
 @click.option("--max-artifacts", type=int, default=300, show_default=True)
-def emg_harvest(profile: str | None, package_id: str | None, out: Path, max_artifacts: int) -> None:
+@click.option(
+    "--if-due",
+    is_flag=True,
+    default=False,
+    help="Phase C-3: skip the crawl when the pattern book is fresh " "(TTL gate; for scheduled crawlers).",
+)
+@click.option(
+    "--ttl-days",
+    type=float,
+    default=None,
+    help="Override the harvest TTL (days). Default 7.",
+)
+def emg_harvest(
+    profile: str | None,
+    package_id: str | None,
+    out: Path,
+    max_artifacts: int,
+    if_due: bool,
+    ttl_days: float | None,
+) -> None:
     """Crawl tenant packages and distill the CPI shape pattern book.
 
     Read-only GETs. Shapes are NOMINATIONS — exporter coverage requires
     live oracle validation per the standing methodology.
+
+    Phase C-3: with --if-due the command is a no-op until the cached
+    pattern book is older than the TTL, so a cron/systemd/GHA schedule
+    can run it cheaply. The schedule state lives beside the book.
     """
     import asyncio
 
     from .learn.harvest import EXPORTER_COVERED_TYPES, harvest, write_pattern_book
     from .tenant.sap_ci_adapter import build_tenant_adapter
+
+    if if_due:
+        from .learn.harvest_schedule import harvest_due
+
+        schedule = harvest_due(out, ttl_days=ttl_days)
+        if not schedule.is_due():
+            click.echo(
+                f"pattern book fresh (last harvest "
+                f"{schedule.last_harvest_at.isoformat() if schedule.last_harvest_at else 'never'}; "
+                f"ttl={schedule.ttl_days}d) — skipping crawl"
+            )
+            return
+    else:
+        from .learn.harvest_schedule import harvest_due
+
+        schedule = harvest_due(out, ttl_days=ttl_days)
 
     async def _run():
         from .environments import load_profile
@@ -1168,6 +1344,25 @@ def emg_harvest(profile: str | None, package_id: str | None, out: Path, max_arti
         finally:
             await adapter.disconnect()
         path = write_pattern_book(out, shapes, activities, scanned, EXPORTER_COVERED_TYPES)
+
+        # Phase C-3: record the crawl in the schedule sidecar so --if-due
+        # has authoritative freshness state. The schedule was pre-resolved
+        # above (with any --ttl-days override applied).
+        from datetime import UTC
+        from datetime import datetime as _dt
+
+        from .learn.harvest_schedule import HarvestSchedule, save_schedule
+
+        save_schedule(
+            out,
+            HarvestSchedule(
+                last_harvest_at=_dt.now(tz=UTC),
+                artifacts_scanned=scanned,
+                distinct_shapes=len(shapes),
+                ttl_days=schedule.ttl_days,
+            ),
+        )
+
         gaps = [s for s in census_shapes(out) if not s.get("exporterCovered")]
         click.echo(f"pattern book: {path}")
         click.echo(f"  artifacts scanned: {scanned}")
@@ -1579,6 +1774,13 @@ def tenant() -> None:
 @click.option(
     "--out", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Report YAML path."
 )
+@click.option(
+    "--create",
+    is_flag=True,
+    default=False,
+    help="P6 autonomous-creation path: POST-create a NEW artifact "
+    "(must not exist; requires --artifact; still allowlist-gated).",
+)
 def tenant_calibrate(
     project_path: Path,
     profile: str,
@@ -1587,6 +1789,7 @@ def tenant_calibrate(
     display_name: str | None,
     timeout_s: int,
     out: Path | None,
+    create: bool,
 ) -> None:
     """P5a-M1 oracle harness: upload->deploy->poll->[message]->MPL report.
 
@@ -1615,6 +1818,7 @@ def tenant_calibrate(
             artifact_id=artifact_id,
             display_name=display_name,
             timeout_s=timeout_s,
+            create=create,
         )
 
     try:
@@ -1636,6 +1840,31 @@ def tenant_calibrate(
     reward = report_payload.get("reward") if (report_payload := _load_reward(path)) else None
     if reward:
         click.echo(f"  reward:        {reward['overall']} | gates: {reward['all_hard_gates_passed']}")
+
+    # Phase C (p5-p6-plan.md §5C): route the oracle verdict into the
+    # closed learning loop — promote real pieces on full success, file a
+    # corpus candidate on failure. Never in CI (real adapter required).
+    try:
+        from .emg.store import build_emg_store
+        from .learn.loop import record_oracle_run
+
+        repo_root = Path(__file__).resolve().parents[3]
+        store = build_emg_store(create_if_missing=True)
+        store.load()
+        outcome = record_oracle_run(
+            report,
+            project_path,
+            durable_store=store,
+            candidates_dir=repo_root / "packages" / "parity-corpus" / "candidates",
+        )
+        if outcome.promoted:
+            click.echo(f"  learning loop: promoted insight {outcome.insight_id}")
+        elif outcome.candidate_id:
+            click.echo(f"  learning loop: filed candidate {outcome.candidate_id} → {outcome.candidate_path}")
+        else:
+            click.echo(f"  learning loop: {outcome.reason}")
+    except Exception as exc:  # pragma: no cover — loop failures never mask the report
+        click.echo(f"  learning loop: unavailable ({exc})")
 
 
 @tenant.command("ping")
@@ -1908,6 +2137,96 @@ def tenant_pull(
             artifact_version=target.version,
             emg_store_root=emg_store_root,
         )
+
+
+@tenant.command("absorb")
+@click.option(
+    "--profile",
+    default="dev",
+    help="Environment profile (default: dev).",
+)
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("examples/order-to-s4"),
+    help="Project root used for profile resolution (default: examples/order-to-s4).",
+)
+@click.option("--package", "package_id", multiple=True, help="Restrict to these package ids (repeatable).")
+@click.option("--max-artifacts", type=int, default=600, show_default=True)
+@click.option("--per-package-cap", type=int, default=30, show_default=True)
+@click.option(
+    "--store-root",
+    "store_root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="EMG store root (default: workspace .oiw/emg).",
+)
+@click.option(
+    "--corpus-dir",
+    "corpus_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Where redacted artifacts land (default: .oiw/tenant-corpus — gitignored).",
+)
+def tenant_absorb(
+    profile: str,
+    project_path: Path,
+    package_id: tuple[str, ...],
+    max_artifacts: int,
+    per_package_cap: int,
+    store_root: Path | None,
+    corpus_dir: Path | None,
+) -> None:
+    """Phase 2 EMG experience: absorb the tenant catalog into the EMG store.
+
+    Read-only crawl of every visible package: download → import → redact →
+    persist (gitignored customer-content) → promote one PROJECT_APPROVED
+    insight + task node per flow (provenance source=tenant-catalog,
+    seed-discount confidence). Never in CI; safe against prod tenants.
+    """
+    import asyncio
+
+    from .environments import load_profile
+    from .tenant.absorb import absorb_tenant
+    from .tenant.sap_ci_adapter import SapCiTenantError, build_tenant_adapter
+
+    try:
+        load_profile(project_path, profile)
+    except Exception as exc:
+        click.echo(f"error: could not load profile '{profile}': {exc}", err=True)
+        sys.exit(2)
+
+    adapter = build_tenant_adapter()
+    from .tenant.sap_ci_adapter import SapCiTenantAdapter as _Real
+
+    if not isinstance(adapter, _Real):
+        click.echo("error: absorb requires the REAL tenant adapter (set OIW_USE_REAL_TENANT=1)", err=True)
+        raise click.Abort()
+
+    from .emg.store import build_emg_store
+
+    store = build_emg_store(root=store_root, create_if_missing=True)
+    store.load()
+
+    async def _run():
+        return await absorb_tenant(
+            adapter,
+            store,
+            max_artifacts=max_artifacts,
+            per_package_cap=per_package_cap,
+            package_ids=list(package_id) or None,
+            corpus_dir=corpus_dir,
+            progress=lambda key, digest: print(f"  absorbed {key} ({digest})", flush=True),
+        )
+
+    try:
+        stats = asyncio.run(_run())
+    except SapCiTenantError as exc:
+        click.echo(f"FAIL: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"absorption complete: {stats.summary_line()}")
+    click.echo(f"  EMG store: {store.root_path} (insights now: {store.stats()['insights']})")
 
 
 def _persist_tenant_artifact(
