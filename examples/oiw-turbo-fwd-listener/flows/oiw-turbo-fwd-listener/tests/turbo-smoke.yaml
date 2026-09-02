@@ -1,0 +1,18 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  description: Companion PD listener smoke test (auto-generated).
+  name: turbo-smoke-oiw-turbo-fwd-listener
+spec:
+  assertions:
+  - equals: COMPLETED
+    type: exchange.status
+  - node: write-body
+    type: node.executed
+  flow: oiw-turbo-fwd-listener
+  input:
+    bodyInline: '{"ping": true}'
+    entrypoint: pd-in
+    headers:
+      Content-Type: application/json
+  mocks: []

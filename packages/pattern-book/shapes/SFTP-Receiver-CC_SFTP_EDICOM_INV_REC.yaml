@@ -1,0 +1,47 @@
+props:
+  disconnect: '{{MessageFlow_3_disconnect}}'
+  fileName: '{{MessageFlow_3_fileName}}'
+  maximumReconnectAttempts: '{{MessageFlow_3_maximumReconnectAttempts}}'
+  stepwise: '{{MessageFlow_3_stepwise}}'
+  fileExist: '{{MessageFlow_3_fileExist}}'
+  ComponentNS: sap
+  autoCreate: '{{MessageFlow_3_autoCreate}}'
+  privateKeyAlias: '{{MessageFlow_3_privateKeyAlias}}'
+  location_id: '{{MessageFlow_3_location_id}}'
+  Name: CC_SFTP_EDICOM_INV_REC
+  TransportProtocolVersion: 1.13.1
+  flatten: '{{MessageFlow_3_flatten}}'
+  sftpSecEnabled: '{{MessageFlow_3_sftpSecEnabled}}'
+  useTempFile: '{{MessageFlow_3_useTempFile}}'
+  ComponentSWCVName: external
+  path: '{{MessageFlow_3_path}}'
+  proxyPort: '{{MessageFlow_3_proxyPort}}'
+  host: '{{MessageFlow_3_host}}'
+  connectTimeout: '{{MessageFlow_3_connectTimeout}}'
+  fastExistsCheck: '{{MessageFlow_3_fastExistsCheck}}'
+  MessageProtocol: File
+  ComponentSWCVId: 1.13.1
+  direction: Receiver
+  authentication: '{{MessageFlow_3_authentication}}'
+  ComponentType: SFTP
+  fileAppendTimeStamp: '{{MessageFlow_3_fileAppendTimeStamp}}'
+  credential_name: '{{MessageFlow_3_credential_name}}'
+  proxyProtocol: '{{MessageFlow_3_proxyProtocol}}'
+  proxyType: '{{MessageFlow_3_proxyType}}'
+  proxyAlias: '{{MessageFlow_3_proxyAlias}}'
+  componentVersion: '1.13'
+  reconnectDelay: '{{MessageFlow_3_reconnectDelay}}'
+  proxyHost: '{{MessageFlow_3_proxyHost}}'
+  tempFileName: '{{MessageFlow_3_tempFileName}}'
+  allowDeprecatedAlgorithms: '{{MessageFlow_3_allowDeprecatedAlgorithms}}'
+  TransportProtocol: SFTP
+  MessageProtocolVersion: 1.13.1
+  username: '{{MessageFlow_3_username}}'
+shape: SFTP-Receiver-CC_SFTP_EDICOM_INV_REC
+componentType: SFTP
+direction: Receiver
+name: CC_SFTP_EDICOM_INV_REC
+observedIn: 1
+exporterCovered: false
+examples:
+- POtoCIMigration/Emcure_S4_INVOIC.INVOIC02.ZZINVOIC02_INTERTRADE

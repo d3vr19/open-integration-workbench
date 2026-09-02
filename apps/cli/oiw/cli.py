@@ -153,6 +153,13 @@ def validate(project_path: Path, strict: bool, json_output: bool) -> None:
 @click.option(
     "--json", "json_output", is_flag=True, default=False, help="Output structured JSON (WP-05 OW-024)."
 )
+@click.option(
+    "--engine",
+    type=click.Choice(["simulated", "real"]),
+    default="simulated",
+    show_default=True,
+    help="P5a-M2: 'real' refuses simulated-fidelity steps and emits MPL-shaped records.",
+)
 def test(
     project_path: Path,
     all_tests: bool,
@@ -160,6 +167,7 @@ def test(
     test_name: str | None,
     junit_path: Path | None,
     json_output: bool,
+    engine: str,
 ) -> None:
     """Run flow tests.
 
@@ -173,14 +181,14 @@ def test(
 
     results: list[TestResult] = []
     if test_name:
-        results = run_tests(project, flow_id=flow_id, test_name=test_name)
+        results = run_tests(project, flow_id=flow_id, test_name=test_name, engine=engine)
     elif flow_id:
-        results = run_tests(project, flow_id=flow_id)
+        results = run_tests(project, flow_id=flow_id, engine=engine)
     elif all_tests:
-        results = run_tests(project)
+        results = run_tests(project, engine=engine)
     else:
         # default: run all
-        results = run_tests(project)
+        results = run_tests(project, engine=engine)
 
     passed = sum(1 for r in results if r.passed)
     failed = len(results) - passed
@@ -197,6 +205,7 @@ def test(
                     "passed_count": passed,
                     "failed_count": failed,
                     "pass_rate": passed / len(results) if results else 0.0,
+                    "engine": engine,
                     "results": [
                         {
                             "flow_id": r.flow_id,
@@ -204,6 +213,7 @@ def test(
                             "passed": r.passed,
                             "duration_ms": r.duration_ms,
                             "failures": r.failures,
+                            "mpl_records": r.mpl_records,
                         }
                         for r in results
                     ],
@@ -224,6 +234,95 @@ def test(
         _write_junit(results, junit_path)
         click.echo(f"junit: {junit_path}")
     if failed:
+        sys.exit(1)
+
+
+@main.command()
+@click.option(
+    "--corpus",
+    "corpus_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=Path("packages/parity-corpus/manifest.yaml"),
+    show_default=True,
+    help="Parity corpus manifest (P5a-M3).",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("docs/emg/sim-parity.yaml"),
+    show_default=True,
+    help="Where to publish the fidelity report.",
+)
+@click.option(
+    "--enforce-gate",
+    is_flag=True,
+    default=False,
+    help="Exit non-zero if the ≥90%/10-case gate is not passed (report-only by default).",
+)
+@click.option(
+    "--candidates-dir",
+    "candidates_dir_opt",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Where mismatch candidates are filed. Default: <corpus>/candidates/.",
+)
+def parity(
+    corpus_path: Path,
+    out_path: Path,
+    enforce_gate: bool,
+    candidates_dir_opt: Path | None,
+) -> None:
+    """Run the parity suite: local real-engine verdicts vs cached oracle reports.
+
+    Publishes docs/emg/sim-parity.yaml. Honesty instrument — never CI-gated
+    by default; oracle data comes from CACHED calibration reports only.
+
+    Phase C-2: every `mismatched` case files a corpus candidate under
+    packages/parity-corpus/candidates/ for triage (exporter fix or
+    executor test — never auto-promoted).
+    """
+    from .parity import run_parity
+
+    report = run_parity(corpus_path, out_path)
+    s = report["sim_parity"]
+    a = s["agreement"]
+    click.echo(f"parity corpus: {s['corpus']}")
+    for row in s["cases"]:
+        mark = {
+            "agreed": "green",
+            "mismatched": "red",
+            "unsupported": "yellow",
+            "pending-oracle": "cyan",
+            "pending-oracle-message": "cyan",
+            "stale-oracle": "yellow",
+            "no-local-tests": "yellow",
+            "PROJECT-ERROR": "red",
+        }.get(row["verdict"], "white")
+        click.secho(
+            f"  {row['verdict']:<22} {row['name']:<28} local={row.get('localStatus', '-')}",
+            fg=mark,
+        )
+
+    # Phase C-2: failure → corpus automation. Mismatches become triage
+    # candidates; the corpus grows only from observed evidence.
+    mismatches = [row for row in s["cases"] if row["verdict"] == "mismatched"]
+    if mismatches:
+        from .learn.loop import file_parity_miss
+
+        candidates_dir = candidates_dir_opt or (corpus_path.parent / "candidates")
+        for row in mismatches:
+            outcome = file_parity_miss(row, candidates_dir)
+            click.echo(f"  candidate filed: {outcome.candidate_id} → {outcome.candidate_path}")
+
+    ratio = f"{a['ratio']:.2%}" if a["ratio"] is not None else "n/a"
+    click.echo(
+        f"agreement: {a['agreed']}/{a['comparable']} comparable ({ratio}); "
+        f"gate(≥{s['gate']['threshold']:.0%}, ≥{s['gate']['minComparable']} cases): "
+        + ("PASSED" if s["gate"]["passed"] else "NOT PASSED")
+    )
+    click.echo(f"published: {out_path}")
+    if enforce_gate and not s["gate"]["passed"]:
         sys.exit(1)
 
 
@@ -435,19 +534,103 @@ def _write_junit(results: list[TestResult], path: Path) -> None:
     help="co-pilot: present plan, wait for approval. autonomous: execute without approval.",
 )
 @click.option("--flow", "flow_id", default=None, help="Target flow ID (optional).")
-def agent(requirement: str, project_path: Path, mode: str, flow_id: str | None) -> None:
+@click.option(
+    "--turbo",
+    is_flag=True,
+    default=False,
+    help="Phase D turbo piece-assembler: bounded LLM-free plan→implement→simulate→repair "
+    "loop. Tenant-isolated at code level; escalates via teacher requests.",
+)
+@click.option(
+    "--max-iterations",
+    type=int,
+    default=3,
+    help="Turbo repair-cycle cap (Phase D budgets).",
+)
+@click.option(
+    "--wall-clock",
+    "wall_clock_s",
+    type=float,
+    default=600.0,
+    help="Turbo hard wall-clock cap in seconds.",
+)
+def agent(
+    requirement: str,
+    project_path: Path,
+    mode: str,
+    flow_id: str | None,
+    turbo: bool,
+    max_iterations: int,
+    wall_clock_s: float,
+) -> None:
     """Run the LLM-driven agent pipeline (WP-04).
 
     Interpret a natural-language REQUIREMENT, generate a plan, (optionally)
     approve it, execute it, and record a trajectory.
 
+    Phase D (p5-p6-plan.md §5D): --turbo switches to the piece-assembler
+    loop — no LLM, no tenant (code-level guard), budgets enforced,
+    teacher-request escalation instead of guessing.
+
     Examples:
       oiw agent "Add JSON schema validation to order-to-s4"
       oiw agent --mode autonomous "Fix the receiver timeout"
       oiw agent --project examples/order-to-s4 --flow order-to-s4 "Add validation"
+      oiw agent --turbo --project examples/held-out-order-async "Create a flow that ..."
     """
     import asyncio
     import json as _json
+
+    if turbo:
+        from .agent.turbo import TurboBudget, run_turbo
+
+        # EMG mechanics-first retriever over the durable store, if one
+        # exists (build_emg_store resolves OIW_WORKSPACE/PWD; a fresh
+        # workspace simply has no corpus yet).
+        emg_retriever = None
+        try:
+            from .emg.retrieval import EMGRetriever
+            from .emg.store import build_emg_store
+
+            store = build_emg_store(create_if_missing=False)
+            store.load()
+            emg_retriever = EMGRetriever(
+                store=store._insight_store,
+                task_store=store._task_store,
+                edge_store=store._edge_store,
+                embedder=getattr(store, "_embedder", None),
+            )
+        except Exception as exc:
+            click.echo(f"note: EMG store unavailable, running pieces-only ({exc})")
+
+        result = asyncio.run(
+            run_turbo(
+                requirement,
+                project_path,
+                flow_id=flow_id,
+                budget=TurboBudget(max_iterations=max_iterations, wall_clock_s=wall_clock_s),
+                emg_retriever=emg_retriever,
+            )
+        )
+        click.echo(f"\n=== Turbo Result: {result.status} ===")
+        click.echo(
+            f"Flow: {result.flow_id} | Iterations: {result.iterations_used} | EMG used: {result.emg_used}"
+        )
+        click.echo(f"Trajectory ID: {result.trajectory_id}")
+        for w in result.warnings:
+            click.echo(f"  warn: {w}")
+        for tr in result.test_results:
+            click.echo(f"  tests: passed={tr['passed']} failed={tr['failed']}")
+        if result.teacher_request:
+            click.echo(
+                f"  teacher request: {result.teacher_request.kind} "
+                f"({result.teacher_request.id}) — see .oiw/teacher-requests/"
+            )
+            if result.teacher_request.unmatched_components:
+                click.echo(f"    unmatched pieces: {', '.join(result.teacher_request.unmatched_components)}")
+        if result.status != "COMPLETED":
+            sys.exit(1)
+        return
 
     from .agent.orchestrator import run_agent
 
@@ -573,6 +756,31 @@ def trajectory_export(redacted: bool, output: Path, traj_id: str | None, project
         encoding="utf-8",
     )
     click.echo(f"Exported {target.name} → {output}")
+
+
+@main.command("turbo-stats")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+    help="Project root (where .oiw/ lives).",
+)
+def turbo_stats(project_path: Path) -> None:
+    """Phase D headline metric: teacher-summons rate per turbo run.
+
+    The rate (teacher requests / turbo trajectories) is the self-
+    improvement signal — it MUST trend to zero as the piece library and
+    EMG corpus grow. Trend it across sessions, not single runs.
+    """
+    from .agent.turbo import teacher_summons_rate
+
+    stats = teacher_summons_rate(project_path)
+    rate = stats["teacherSummonsRate"]
+    click.echo(f"turbo runs:          {stats['turboRuns']}")
+    click.echo(f"teacher summons:     {stats['teacherSummons']}")
+    click.echo(f"teacher-summons rate: {rate if rate is not None else 'n/a (no runs yet)'}")
+    click.echo(f"note: {stats['note']}")
 
 
 # ---------------------------------------------------------------------------
@@ -718,13 +926,40 @@ def deploy_approve(project_path: Path, profile: str, package_id: str, approver: 
     default=None,
     help="Explicit archive to upload. Default: zip the dist/ build output.",
 )
-def deploy_upload(project_path: Path, profile: str, package_id: str, archive_path: Path | None) -> None:
+@click.option(
+    "--overwrite-drift",
+    is_flag=True,
+    default=False,
+    help="Allow upload when the tenant artifact differs from the local build. Digests recorded in evidence.",
+)
+@click.option(
+    "--display-name",
+    default=None,
+    help="Override the CPI Bundle-Name/display name (breaks circular identity inheritance).",
+)
+@click.option(
+    "--format",
+    "cpi_format",
+    type=click.Choice(["oiw", "cpi"]),
+    default="oiw",
+    help="oiw = zip the dist/ IR bundle; cpi = build a CPI designtime bundle (Phase 4 exporter).",
+)
+def deploy_upload(
+    project_path: Path,
+    profile: str,
+    package_id: str,
+    archive_path: Path | None,
+    overwrite_drift: bool,
+    cpi_format: str,
+    display_name: str | None,
+) -> None:
     """Upload the build artifact to the tenant (transition to UPLOADED).
 
     WP-08 PR-9 seam fixes over the WP-05 prototype:
       - uses build_tenant_adapter() (was: hardcoded mock),
       - uploads REAL archive bytes + sha256 (was: b"mock-build-artifact"),
-      - runs the drift check first and blocks on DRIFT_DETECTED,
+      - runs the drift check first and blocks on DRIFT_DETECTED unless
+        --overwrite-drift is passed explicitly (digests recorded as evidence),
       - enforces the approval TTL from deploymentPolicy.
     """
     import asyncio
@@ -764,6 +999,60 @@ def deploy_upload(project_path: Path, profile: str, package_id: str, archive_pat
         if archive_path:
             archive = archive_path.read_bytes()
             digest = "sha256:" + _hashlib.sha256(archive).hexdigest()
+        elif cpi_format == "cpi":
+            # Phase 4: real CPI designtime bundle (manifest-bearing iFlow
+            # project) generated from flow.yaml — what the tenant API
+            # actually requires (live-proven 2026-08-25).
+            import yaml as _yaml
+
+            from .compiler.sap_export import build_cpi_bundle, cpi_bundle_identity
+            from .tenant import SapCiTenantError
+
+            flows = sorted((project_path / "flows").rglob("flow.yaml"))
+            if len(flows) != 1:
+                click.echo(f"error: --format cpi needs exactly one flow, found {len(flows)}", err=True)
+                raise click.Abort()
+            flow = _yaml.safe_load(flows[0].read_text(encoding="utf-8"))
+            # Inherit the existing artifact's Bundle-SymbolicName + iflw
+            # filename — tenant updates are rejected otherwise (live-proven).
+            symbolic = iflw_name = None
+            try:
+                adapter_probe = build_tenant_adapter(mock_state_dir=project_path / ".oiw" / "mock-tenant")
+                _prof = load_profile(project_path, profile)
+
+                async def _identity():
+                    await adapter_probe.connect(_prof)
+                    try:
+                        target = await adapter_probe._resolve_target_artifact(package_id)
+                        return await adapter_probe.download_artifact(target.id, target.version)
+                    finally:
+                        await adapter_probe.disconnect()
+
+                existing = asyncio.run(_identity())
+                symbolic, iflw_name, bundle_name = cpi_bundle_identity(existing)
+                if display_name:
+                    bundle_name = display_name
+                # Pre-upload backup: every real write is reversible.
+                try:
+                    bdir = project_path / ".oiw" / "tenant-cache"
+                    bdir.mkdir(parents=True, exist_ok=True)
+                    from datetime import datetime as _dt
+
+                    stamp = _dt.now().strftime("%Y%m%dT%H%M%SZ")
+                    (bdir / f"backup-{package_id}-{iflw_name.rsplit('.', 1)[0]}-{stamp}.zip").write_bytes(
+                        existing
+                    )
+                except OSError:
+                    pass
+            except (SapCiTenantError, ValueError, FileNotFoundError) as exc:
+                click.echo(f"note: no existing bundle identity to inherit ({exc}); using defaults")
+            try:
+                archive, digest = build_cpi_bundle(
+                    flow, symbolic_name=symbolic, iflw_name=iflw_name, display_name=bundle_name
+                )
+            except ValueError as exc:
+                click.echo(f"error: CPI export failed: {exc}", err=True)
+                raise click.Abort() from exc
         else:
             build_dir = find_build_dir(project_path)
             archive, digest = zip_build_dir(build_dir)
@@ -776,10 +1065,11 @@ def deploy_upload(project_path: Path, profile: str, package_id: str, archive_pat
     async def _upload():
         await adapter.connect(prof)
         try:
-            # Drift gate: block when tenant content differs and wasn't built by us
+            # Drift gate: block when tenant content differs unless the operator
+            # passed --overwrite-drift (first push into a scratch artifact).
             report = await DriftDetector().detect_drift(digest, adapter, package_id)
-            if report.status == "DRIFT_DETECTED" and not report.safe_to_upload:
-                return ("drift-blocked", None, None)
+            if report.status == "DRIFT_DETECTED" and not report.safe_to_upload and not overwrite_drift:
+                return ("drift-blocked", None, report)
             result = await adapter.upload_package(package_id, archive, digest)
             return (None, result, report)
         finally:
@@ -796,13 +1086,12 @@ def deploy_upload(project_path: Path, profile: str, package_id: str, archive_pat
     if upload is None or not upload.success:
         click.echo(f"Upload failed: {upload.error if upload else 'unknown'}", err=True)
         raise click.Abort()
-    sm.transition(
-        DeploymentEvent(
-            target=DeploymentState.UPLOADED,
-            actor="cli",
-            evidence={"version": upload.version, "digest": digest, "bytes": len(archive)},
-        )
-    )
+    evidence = {"version": upload.version, "digest": digest, "bytes": len(archive)}
+    if overwrite_drift:
+        evidence["overwriteDrift"] = True
+        if _report is not None:
+            evidence["tenantDigestBefore"] = _report.tenant_digest
+    sm.transition(DeploymentEvent(target=DeploymentState.UPLOADED, actor="cli", evidence=evidence))
     click.echo(f"Uploaded {len(archive)} bytes ({digest[:19]}…) as version {upload.version}.")
     click.echo(f"Current state: {sm.current_state.value}")
 
@@ -969,6 +1258,126 @@ def deploy_status(project_path: Path, profile: str, package_id: str) -> None:
 @main.group()
 def emg() -> None:
     """EMG knowledge base management (WP-07)."""
+
+
+@emg.command("harvest")
+@click.option("--profile", default=None, help="Environment profile (e.g. btp). Omit = offline mode.")
+@click.option("--package", "package_id", default=None, help="Limit harvest to one package id.")
+@click.option(
+    "--out",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=Path("packages/pattern-book"),
+    help="Pattern book output directory.",
+    show_default=True,
+)
+@click.option("--max-artifacts", type=int, default=300, show_default=True)
+@click.option(
+    "--if-due",
+    is_flag=True,
+    default=False,
+    help="Phase C-3: skip the crawl when the pattern book is fresh " "(TTL gate; for scheduled crawlers).",
+)
+@click.option(
+    "--ttl-days",
+    type=float,
+    default=None,
+    help="Override the harvest TTL (days). Default 7.",
+)
+def emg_harvest(
+    profile: str | None,
+    package_id: str | None,
+    out: Path,
+    max_artifacts: int,
+    if_due: bool,
+    ttl_days: float | None,
+) -> None:
+    """Crawl tenant packages and distill the CPI shape pattern book.
+
+    Read-only GETs. Shapes are NOMINATIONS — exporter coverage requires
+    live oracle validation per the standing methodology.
+
+    Phase C-3: with --if-due the command is a no-op until the cached
+    pattern book is older than the TTL, so a cron/systemd/GHA schedule
+    can run it cheaply. The schedule state lives beside the book.
+    """
+    import asyncio
+
+    from .learn.harvest import EXPORTER_COVERED_TYPES, harvest, write_pattern_book
+    from .tenant.sap_ci_adapter import build_tenant_adapter
+
+    if if_due:
+        from .learn.harvest_schedule import harvest_due
+
+        schedule = harvest_due(out, ttl_days=ttl_days)
+        if not schedule.is_due():
+            click.echo(
+                f"pattern book fresh (last harvest "
+                f"{schedule.last_harvest_at.isoformat() if schedule.last_harvest_at else 'never'}; "
+                f"ttl={schedule.ttl_days}d) — skipping crawl"
+            )
+            return
+    else:
+        from .learn.harvest_schedule import harvest_due
+
+        schedule = harvest_due(out, ttl_days=ttl_days)
+
+    async def _run():
+        from .environments import load_profile
+
+        if profile:
+            # Any project carrying a btp profile works; the adapter reads
+            # credentials from env regardless.
+            project_hint = Path(__file__).resolve().parents[3] / "examples" / "held-out-order-async"
+            prof = load_profile(project_hint, profile)
+            adapter = build_tenant_adapter(writable_packages=["__none__"])
+            await adapter.connect(prof)
+        else:
+            click.echo("error: --profile is required (harvest reads a live tenant)", err=True)
+            raise click.Abort()
+
+        try:
+            shapes, activities, scanned = await harvest(
+                adapter,
+                max_artifacts=max_artifacts,
+                progress=lambda n, pkg, art: print(f"  [{n}] {pkg}/{art}", flush=True),
+            )
+        finally:
+            await adapter.disconnect()
+        path = write_pattern_book(out, shapes, activities, scanned, EXPORTER_COVERED_TYPES)
+
+        # Phase C-3: record the crawl in the schedule sidecar so --if-due
+        # has authoritative freshness state. The schedule was pre-resolved
+        # above (with any --ttl-days override applied).
+        from datetime import UTC
+        from datetime import datetime as _dt
+
+        from .learn.harvest_schedule import HarvestSchedule, save_schedule
+
+        save_schedule(
+            out,
+            HarvestSchedule(
+                last_harvest_at=_dt.now(tz=UTC),
+                artifacts_scanned=scanned,
+                distinct_shapes=len(shapes),
+                ttl_days=schedule.ttl_days,
+            ),
+        )
+
+        gaps = [s for s in census_shapes(out) if not s.get("exporterCovered")]
+        click.echo(f"pattern book: {path}")
+        click.echo(f"  artifacts scanned: {scanned}")
+        click.echo(f"  distinct shapes:   {len(shapes)}")
+        click.echo(f"  exporter gaps:     {len(gaps)}")
+
+    def census_shapes(out_dir: Path) -> list[dict]:
+        census = out / "census.yaml"
+        if not census.exists():
+            return []
+        import yaml as _yaml
+
+        return _yaml.safe_load(census.read_text(encoding="utf-8")).get("shapes", [])
+
+    asyncio.run(_run())
 
 
 @emg.command("report")
@@ -1344,6 +1753,120 @@ def tenant() -> None:
     """
 
 
+@tenant.command("calibrate")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+    help="Project root (single flow).",
+)
+@click.option("--profile", required=True, help="Environment profile (e.g. btp).")
+@click.option("--package", "package_id", required=True, help="Scratch package id.")
+@click.option(
+    "--artifact",
+    "artifact_id",
+    default=None,
+    help="Allowlisted target when the package pins several artifacts.",
+)
+@click.option("--display-name", default=None, help="Override CPI Bundle-Name.")
+@click.option("--timeout", "timeout_s", type=int, default=60, help="Deploy poll timeout seconds.")
+@click.option(
+    "--out", type=click.Path(dir_okay=False, path_type=Path), default=None, help="Report YAML path."
+)
+@click.option(
+    "--create",
+    is_flag=True,
+    default=False,
+    help="P6 autonomous-creation path: POST-create a NEW artifact "
+    "(must not exist; requires --artifact; still allowlist-gated).",
+)
+def tenant_calibrate(
+    project_path: Path,
+    profile: str,
+    package_id: str,
+    artifact_id: str | None,
+    display_name: str | None,
+    timeout_s: int,
+    out: Path | None,
+    create: bool,
+) -> None:
+    """P5a-M1 oracle harness: upload->deploy->poll->[message]->MPL report.
+
+    Scratch packages only (allowlist + pinning enforced). Never in CI.
+    """
+    import asyncio
+
+    from .environments import load_profile
+    from .tenant.calibrate import calibrate_artifact, write_report
+    from .tenant.sap_ci_adapter import build_tenant_adapter
+
+    prof = load_profile(project_path, profile)
+    adapter = build_tenant_adapter(writable_packages=[package_id])
+    from .tenant.sap_ci_adapter import SapCiTenantAdapter as _Real
+
+    if not isinstance(adapter, _Real):
+        click.echo("error: calibrate requires the REAL tenant adapter (set OIW_USE_REAL_TENANT=1)", err=True)
+        raise click.Abort()
+
+    async def _run():
+        return await calibrate_artifact(
+            project_path,
+            prof,
+            adapter,
+            package_id,
+            artifact_id=artifact_id,
+            display_name=display_name,
+            timeout_s=timeout_s,
+            create=create,
+        )
+
+    try:
+        report = asyncio.run(_run())
+    except Exception as exc:
+        click.echo(f"error: calibration failed: {exc}", err=True)
+        raise click.Abort() from exc
+    path = write_report(report, out)
+    c = report.to_dict()["calibration"]
+    click.echo(f"Calibration report: {path}")
+    click.echo(f"  artifact:      {c['artifactId']}")
+    click.echo(f"  uploaded:      {c['uploadedOk']}")
+    click.echo(f"  deploy accept: {c['deployAccepted']}")
+    click.echo(f"  final status:  {c['finalStatus']}")
+    if c.get("errorDetail"):
+        click.echo(f"  error detail:  {c['errorDetail']}")
+    if c["messageSent"]:
+        click.echo(f"  message HTTP:  {c['httpResponseStatus']} | MPL rows: {len(c['mplRows'])}")
+    reward = report_payload.get("reward") if (report_payload := _load_reward(path)) else None
+    if reward:
+        click.echo(f"  reward:        {reward['overall']} | gates: {reward['all_hard_gates_passed']}")
+
+    # Phase C (p5-p6-plan.md §5C): route the oracle verdict into the
+    # closed learning loop — promote real pieces on full success, file a
+    # corpus candidate on failure. Never in CI (real adapter required).
+    try:
+        from .emg.store import build_emg_store
+        from .learn.loop import record_oracle_run
+
+        repo_root = Path(__file__).resolve().parents[3]
+        store = build_emg_store(create_if_missing=True)
+        store.load()
+        outcome = record_oracle_run(
+            report,
+            project_path,
+            durable_store=store,
+            candidates_dir=repo_root / "packages" / "parity-corpus" / "candidates",
+        )
+        if outcome.promoted:
+            click.echo(f"  learning loop: promoted insight {outcome.insight_id}")
+        elif outcome.candidate_id:
+            click.echo(f"  learning loop: filed candidate {outcome.candidate_id} → {outcome.candidate_path}")
+        else:
+            click.echo(f"  learning loop: {outcome.reason}")
+    except Exception as exc:  # pragma: no cover — loop failures never mask the report
+        click.echo(f"  learning loop: unavailable ({exc})")
+
+
 @tenant.command("ping")
 @click.option(
     "--profile",
@@ -1616,6 +2139,96 @@ def tenant_pull(
         )
 
 
+@tenant.command("absorb")
+@click.option(
+    "--profile",
+    default="dev",
+    help="Environment profile (default: dev).",
+)
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("examples/order-to-s4"),
+    help="Project root used for profile resolution (default: examples/order-to-s4).",
+)
+@click.option("--package", "package_id", multiple=True, help="Restrict to these package ids (repeatable).")
+@click.option("--max-artifacts", type=int, default=600, show_default=True)
+@click.option("--per-package-cap", type=int, default=30, show_default=True)
+@click.option(
+    "--store-root",
+    "store_root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="EMG store root (default: workspace .oiw/emg).",
+)
+@click.option(
+    "--corpus-dir",
+    "corpus_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Where redacted artifacts land (default: .oiw/tenant-corpus — gitignored).",
+)
+def tenant_absorb(
+    profile: str,
+    project_path: Path,
+    package_id: tuple[str, ...],
+    max_artifacts: int,
+    per_package_cap: int,
+    store_root: Path | None,
+    corpus_dir: Path | None,
+) -> None:
+    """Phase 2 EMG experience: absorb the tenant catalog into the EMG store.
+
+    Read-only crawl of every visible package: download → import → redact →
+    persist (gitignored customer-content) → promote one PROJECT_APPROVED
+    insight + task node per flow (provenance source=tenant-catalog,
+    seed-discount confidence). Never in CI; safe against prod tenants.
+    """
+    import asyncio
+
+    from .environments import load_profile
+    from .tenant.absorb import absorb_tenant
+    from .tenant.sap_ci_adapter import SapCiTenantError, build_tenant_adapter
+
+    try:
+        load_profile(project_path, profile)
+    except Exception as exc:
+        click.echo(f"error: could not load profile '{profile}': {exc}", err=True)
+        sys.exit(2)
+
+    adapter = build_tenant_adapter()
+    from .tenant.sap_ci_adapter import SapCiTenantAdapter as _Real
+
+    if not isinstance(adapter, _Real):
+        click.echo("error: absorb requires the REAL tenant adapter (set OIW_USE_REAL_TENANT=1)", err=True)
+        raise click.Abort()
+
+    from .emg.store import build_emg_store
+
+    store = build_emg_store(root=store_root, create_if_missing=True)
+    store.load()
+
+    async def _run():
+        return await absorb_tenant(
+            adapter,
+            store,
+            max_artifacts=max_artifacts,
+            per_package_cap=per_package_cap,
+            package_ids=list(package_id) or None,
+            corpus_dir=corpus_dir,
+            progress=lambda key, digest: print(f"  absorbed {key} ({digest})", flush=True),
+        )
+
+    try:
+        stats = asyncio.run(_run())
+    except SapCiTenantError as exc:
+        click.echo(f"FAIL: {exc}", err=True)
+        sys.exit(1)
+    click.echo(f"absorption complete: {stats.summary_line()}")
+    click.echo(f"  EMG store: {store.root_path} (insights now: {store.stats()['insights']})")
+
+
 def _persist_tenant_artifact(
     zip_path: Path,
     package_id: str,
@@ -1838,3 +2451,12 @@ def _build_ir_from_report(report: Any, package_id: str, artifact_id: str) -> dic
 
 if __name__ == "__main__":
     main()
+
+
+def _load_reward(path: Path) -> dict | None:
+    import yaml
+
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None

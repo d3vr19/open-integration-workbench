@@ -1,0 +1,34 @@
+apiVersion: oiw.dev/v1alpha1
+kind: ParityCorpus
+metadata:
+  name: golden-corpus-v0
+  description: >
+    P5a-M3 golden corpus (p5-p6-plan.md §2). Starts at the example projects;
+    grows ONLY from observed mismatches and fresh `oiw tenant calibrate`
+    runs — never fabricated. Cases without a cached calibration report are
+    listed as pending-oracle so the comparable set is honest about its size.
+spec:
+  defaults:
+    maxOracleAgeHours: 168
+  cases:
+    - name: heldout-order-async-smoke
+      project: examples/held-out-order-async
+      artifactId: oiw-heldout-async
+      calibration: examples/held-out-order-async/.oiw/calibration-oiw-heldout-async.yaml
+      test: smoke
+    - name: oiw-turbo-fwd-smoke
+      project: examples/oiw-turbo-fwd
+      artifactId: oiw_turbo_fwd
+      calibration: examples/oiw-turbo-fwd/.oiw/calibration-oiw_turbo_fwd.yaml
+      test: turbo-smoke-oiw-turbo-fwd
+    - name: oiw-conv-fwd-smoke
+      project: examples/oiw-conv-fwd
+      artifactId: oiw_turbo_fwd
+      calibration: examples/oiw-conv-fwd/.oiw/calibration-oiw_turbo_fwd.yaml
+      test: smoke
+    - name: order-to-s4-happy-path
+      project: examples/order-to-s4
+      test: happy-path
+    - name: sftp-order-drop-happy-path
+      project: examples/sftp-order-drop
+      test: happy-path

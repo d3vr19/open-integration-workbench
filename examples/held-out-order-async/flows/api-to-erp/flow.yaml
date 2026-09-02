@@ -4,7 +4,7 @@ metadata:
   id: api-to-erp
   labels:
     archetype: api-to-erp
-  name: Held Out Order Async — api-to-erp
+  name: "Held Out Order Async \u2014 api-to-erp"
   version: 1
 spec:
   edges:
@@ -12,6 +12,8 @@ spec:
     to: log-receive
   - from: log-receive
     to: receiver-out
+  - from: receiver-out
+    to: pd-terminator
   entrypoints:
   - config:
       methods:
@@ -38,9 +40,14 @@ spec:
     id: log-receive
     type: log.message
   - config:
-      method: POST
+      method: GET
       timeoutSeconds: 30
-      url: https://example.invalid/api
+      url: https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m
     fidelity: simulated
     id: receiver-out
     type: receiver.http
+  - config:
+      address: /oiw_pd
+    fidelity: simulated
+    id: pd-terminator
+    type: receiver.processdirect

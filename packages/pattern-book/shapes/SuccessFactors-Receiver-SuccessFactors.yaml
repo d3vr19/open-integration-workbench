@@ -1,0 +1,49 @@
+props:
+  pagination: '0'
+  ComponentNS: sap
+  resourcePath: EmpCompensation
+  customQueryOptions: ''
+  Name: SuccessFactors
+  TransportProtocolVersion: 1.21.0
+  ComponentSWCVName: external
+  proxyPort: ''
+  receiveTimeOut: '1'
+  sfsfODataReceiverDataCenterUrl: Other
+  alias: SAPSFEC_OAuth
+  contentType: application/atom+xml
+  MessageProtocol: OData V2
+  ComponentSWCVId: 1.21.0
+  direction: Receiver
+  ComponentType: SuccessFactors
+  acceptEncoding: gzip
+  queryOptions: ''
+  proxyType: default
+  paging: snapshot
+  componentVersion: '1.21'
+  urlSuffixSfOData: /odata/v2
+  proxyHost: ''
+  edmxFilePath: edmx/api10_successfactors_com_odata_v2.edmx
+  enableTLSSessionReuse: 'true'
+  odatapagesize: ''
+  authenticationMethod: OAuth2SAMLBearer
+  retryOnFailure: '1'
+  whitelistResponseHeaders: ''
+  enableBatchProcessing: '0'
+  TransportProtocol: HTTP
+  fields: seqNumber,startDate,userId,payGroup,eventReason,event
+  characterEncoding: none
+  whitelistRequestHeaders: ''
+  operation: Upsert(UPSERT)
+  MessageProtocolVersion: 1.21.0
+shape: SuccessFactors-Receiver-SuccessFactors
+componentType: SuccessFactors
+direction: Receiver
+name: SuccessFactors
+observedIn: 7
+exporterCovered: false
+examples:
+- DarwintoSFECTesting/Confirmation_Darwin_SFEC
+- DarwintoSFECTesting/Disciplinary_action_Darwin_SFEC
+- DarwintoSFECTesting/Hiring_Darwin_to_SFEC
+- DarwintoSFECTesting/Hiring_Darwin_to_SFEC_SFTP
+- DarwintoSFECTesting/Probation_Darwin_SFEC_

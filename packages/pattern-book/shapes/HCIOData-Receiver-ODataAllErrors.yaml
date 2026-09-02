@@ -1,0 +1,46 @@
+props:
+  pagination: '0'
+  odataCertAuthPrivateKeyAlias: '{{Private Key Alias}}'
+  ComponentNS: sap
+  resourcePath: MessageProcessingLogs
+  customQueryOptions: ''
+  metadataAllowedURIParams: ''
+  Name: ODataAllErrors
+  TransportProtocolVersion: 1.17.1
+  ComponentSWCVName: external
+  proxyPort: ''
+  receiveTimeOut: '2'
+  alias: '{{CI Credential}}'
+  contentType: application/atom+xml
+  MessageProtocol: OData V2
+  ComponentSWCVId: 1.17.1
+  direction: Receiver
+  scc_location_id: ''
+  metadataAllowedHeaders: ''
+  ComponentType: HCIOData
+  queryOptions: $select=MessageGuid,ApplicationMessageId,ApplicationMessageType,LogStart,LogEnd,Sender,Receiver,IntegrationFlowName,Status,AlternateWebLink,LocalComponentName,IntegrationArtifact,PreviousComponentName,OriginComponentName,CorrelationId,LogLevel,CustomStatus,TransactionId&$filter=Status
+    eq 'FAILED' and LogEnd ge datetime'${property.lastRunTime}' and LogEnd lt datetime'${property.currentTime}'&$orderby=IntegrationFlowName,LogEnd
+  proxyType: default
+  isCSRFEnabled: '{{CSRF Protection}}'
+  componentVersion: '1.17'
+  proxyHost: ''
+  edmxFilePath: edmx/l6387-tmn_hci_ap1_hana_ondemand_com_api_v1.edmx
+  odatapagesize: '400'
+  authenticationMethod: '{{Authentication}}'
+  whitelistResponseHeaders: ''
+  enableBatchProcessing: '0'
+  TransportProtocol: HTTP
+  fields: ''
+  characterEncoding: none
+  whitelistRequestHeaders: ''
+  operation: Query(GET)
+  MessageProtocolVersion: 1.17.1
+shape: HCIOData-Receiver-ODataAllErrors
+componentType: HCIOData
+direction: Receiver
+name: ODataAllErrors
+observedIn: 2
+exporterCovered: false
+examples:
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Error_Messages_to_ANS
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Error_iflows_to_ANS

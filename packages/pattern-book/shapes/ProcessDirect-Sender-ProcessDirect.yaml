@@ -1,0 +1,25 @@
+props:
+  ComponentType: ProcessDirect
+  ComponentNS: sap
+  Vendor: SAP
+  componentVersion: '1.1'
+  Name: ProcessDirect
+  TransportProtocolVersion: 1.1.2
+  ComponentSWCVName: external
+  TransportProtocol: Not Applicable
+  MessageProtocol: Not Applicable
+  MessageProtocolVersion: 1.1.2
+  ComponentSWCVId: 1.1.2
+  direction: Sender
+shape: ProcessDirect-Sender-ProcessDirect
+componentType: ProcessDirect
+direction: Sender
+name: ProcessDirect
+observedIn: 9
+exporterCovered: true
+examples:
+- AdaequareGST/oiw_pd
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Events_to_ANS
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Explicit_Exceptions-Notifications-Events_to_ANS
+- ONTARIOIDOCETSINTERFACES/MARCAN_S4_EPQ_INVOIC.INVOIC02.ZZINVOIC02_BC_ONTARIO_SI
+- ONTARIOIDOCETSINTERFACES/Ontario_S4_EPQ_ORDRSP.ORDERS05_BC

@@ -352,20 +352,56 @@ def _write_transport(artifact_id="MyFlow", artifact_version="1.0.0", *, empty_pa
                     }
                 ]
             )
+            # Created artifacts join the package listing (version read-back)
+            if "brand_new_flow" in seen.get("created_ids", []):
+                results.append(
+                    {
+                        "Id": "brand_new_flow",
+                        "Name": "Brand New Flow",
+                        "Version": "1.0.0",
+                        "__metadata": {"media_src": "https://example.invalid/api/v1/y/$value"},
+                    }
+                )
             return httpx.Response(200, json={"d": {"results": results}})
 
-        if request.method == "PUT" and "/$value" in str(request.url):
-            seen["upload_body"] = request.content
-            seen["content_type"] = request.headers.get("Content-Type")
+        if request.method == "PUT" and "IntegrationDesigntimeArtifacts(Id=" in str(request.url):
+            import json as _json
+
+            seen["upload_payload"] = _json.loads(request.content)
             seen["csrf_sent"] = request.headers.get("x-csrf-token")
             return httpx.Response(204)
+
+        if (
+            request.method == "POST"
+            and request.url.path.rstrip("/").endswith("/IntegrationDesigntimeArtifacts")
+        ):
+            import json as _json
+
+            seen["create_payload"] = _json.loads(request.content)
+            seen["create_csrf_sent"] = request.headers.get("x-csrf-token")
+            seen.setdefault("created_ids", []).append(seen["create_payload"]["Id"])
+            return httpx.Response(201, json={"d": {"Id": "brand_new_flow", "Version": "1.0.0"}})
 
         if request.method == "POST" and request.url.path.endswith("/IntegrationRuntimeArtifacts"):
             seen["deploy_payload"] = request.content
             return httpx.Response(200, json={"d": {"Id": "dep-1", "Status": "IN_PROGRESS"}})
 
-        if request.method == "GET" and "IntegrationRuntimeArtifacts('dep-1')" in str(request.url):
-            return httpx.Response(200, json={"d": {"Id": "dep-1", "Status": "DEPLOYED"}})
+        if request.method == "POST" and "DeployIntegrationDesigntimeArtifact" in str(request.url):
+            assert request.url.params.get("Id") == f"'{artifact_id}'"  # OData v1 quotes params
+            return httpx.Response(202, text="fd04ed7d-149b-45ab-4497-b1b5b983bbeb")
+
+        if request.method == "GET" and request.url.path.endswith("/IntegrationRuntimeArtifacts"):
+            return httpx.Response(
+                200,
+                json={
+                    "d": {
+                        "results": [
+                            {"Id": artifact_id, "Name": artifact_id, "Version": "1.0.0", "Status": "STARTED"}
+                        ]
+                    }
+                },
+                headers={"content-type": "application/json"},
+            )
 
         if request.method == "GET" and "MessageProcessingLogs" in str(request.url):
             return httpx.Response(
@@ -433,12 +469,15 @@ def test_upload_updates_existing_artifact(profile) -> None:
     transport, seen = _write_transport()
     adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
 
-    result = _run(adapter.upload_package("AdequareGST", b"PK\x03\x04fakezipbytes", "sha256:deadbeef"))
+    import base64 as _b64
+
+    raw = b"PK\x03\x04fakezipbytes"
+    result = _run(adapter.upload_package("AdequareGST", raw, "sha256:deadbeef"))
     assert result.success is True
-    assert result.version == "1.0.0"
-    assert seen["method"] == "PUT"
-    assert seen["upload_body"] == b"PK\x03\x04fakezipbytes"
-    assert seen["content_type"] == "application/zip"
+    payload = seen["upload_payload"]
+    assert "Id='MyFlow'" in seen["url"]
+    assert "ArtifactContent" in payload
+    assert _b64.b64decode(payload["ArtifactContent"]) == raw
     assert seen["csrf_sent"] == "test-csrf-token"
     _run(adapter.disconnect())
 
@@ -465,27 +504,70 @@ def test_upload_refused_when_package_has_no_artifacts(profile) -> None:
     _run(adapter.disconnect())
 
 
-def test_deploy_posts_to_runtime_artifacts(profile) -> None:
-    """deploy() POSTs {ArtifactId, ArtifactVersion} and maps the response."""
+def test_create_artifact_posts_entity_with_full_payload(profile) -> None:
+    """P6 create verb: POST /IntegrationDesigntimeArtifacts with Id/Version/
+    PackageId/Name/ArtifactContent + CSRF token (edmx-proven shape)."""
+    transport, seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
+
+    import base64 as _b64
+
+    raw = b"PK\x03\x04newbundle"
+    result = _run(
+        adapter.create_artifact("AdequareGST", "brand_new_flow", "Brand New Flow", raw)
+    )
+    assert result.success is True
+    assert result.version == "1.0.0"  # read back from the artifact listing
+    payload = seen.get("create_payload")
+    assert payload is not None, "POST entity never reached the transport"
+    assert payload["Id"] == "brand_new_flow"
+    # LIVE FINDING (2026-09-02): Version must NOT be in the create payload —
+    # the tenant auto-generates it ("must not be part of input payload").
+    assert "Version" not in payload
+    assert payload["PackageId"] == "AdequareGST"
+    assert payload["Name"] == "Brand New Flow"
+    assert _b64.b64decode(payload["ArtifactContent"]) == raw
+    assert seen["create_csrf_sent"] == "test-csrf-token"
+    _run(adapter.disconnect())
+
+
+def test_create_artifact_refuses_existing_id_locally(profile) -> None:
+    """Id-collision preflight: an existing artifact id never reaches POST
+    (the tenant's 500 for POST-on-existing is misleading — refuse first)."""
+    transport, seen = _write_transport()  # package already lists MyFlow
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
+
+    result = _run(adapter.create_artifact("AdequareGST", "MyFlow", "MyFlow", b"PK\x03\x04zip"))
+    assert result.success is False
+    assert "already exists" in (result.error or "")
+    assert "create_payload" not in seen
+    _run(adapter.disconnect())
+
+
+def test_create_artifact_refused_outside_allowlist(profile) -> None:
+    """Same policy gates as every write: allowlist refusal BEFORE network."""
+    adapter = _RealAdapter(
+        tenant_url="https://example.invalid", username="u", password="p",
+        writable_packages=["AdequareGST"],
+    )
+    with pytest.raises(SapCiTenantError, match="not on the writable allowlist"):
+        _run(adapter.create_artifact("OtherPackage", "x", "x", b"PK\x03\x04zip"))
+
+
+def test_deploy_triggers_function_import_and_poll_maps_status(profile) -> None:
+    """deploy() hits the function import with query params; poll reads the runtime view."""
     transport, seen = _write_transport()
     adapter = _connected_real_adapter(profile, transport, writable_packages=["AdequareGST"])
 
     result = _run(adapter.deploy("AdequareGST", "1.0.0"))
     assert result.success is True
-    assert result.deployment_id == "dep-1"
     assert result.status == "IN_PROGRESS"
-    assert b"MyFlow" in seen["deploy_payload"]
-    _run(adapter.disconnect())
+    assert "DeployIntegrationDesigntimeArtifact" in seen["url"]
+    assert seen["url"].split("?")[1].startswith("Id='MyFlow'&Version=")
 
-
-def test_poll_deployment_maps_terminal_status(profile) -> None:
-    """poll_deployment() reads Status and maps to the DeploymentStatus state."""
-    transport, _seen = _write_transport()
-    adapter = _connected_real_adapter(profile, transport)
-
-    status = _run(adapter.poll_deployment("dep-1"))
-    assert status.state == "DEPLOYED"
-    assert status.deployment_id == "dep-1"
+    status = _run(adapter.poll_deployment(result.deployment_id))
+    assert status.state == "DEPLOYED"  # STARTED mapped to DEPLOYED
+    assert status.message == "STARTED"
     _run(adapter.disconnect())
 
 
@@ -567,3 +649,36 @@ def test_runtime_logs_empty(mock_adapter, profile) -> None:
     _run(mock_adapter.connect(profile))
     logs = _run(mock_adapter.get_runtime_logs("pkg", datetime.now(tz=UTC)))
     assert logs == []
+
+
+def test_artifact_pin_targets_only_the_pinned_artifact(profile) -> None:
+    """PackageId/ArtifactId allowlist pins the update target (PR-9 safety)."""
+    transport, seen = _write_transport(artifact_id="open_mateo_test")
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdaequareGST/open_mateo_test"])
+    assert adapter._pinned_artifact("AdaequareGST") == "open_mateo_test"
+
+    result = _run(adapter.upload_package("AdaequareGST", b"PK\x03\x04zip", "sha256:bb"))
+    assert result.success is True
+    # The POST targeted the PINNED artifact, not the first in the package
+    assert "Id='open_mateo_test'" in seen["url"]
+    _run(adapter.disconnect())
+
+
+def test_artifact_pin_refuses_when_pinned_artifact_missing(profile) -> None:
+    """A missing pinned artifact is an error — never fall back to a sibling."""
+    transport, _seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdaequareGST/does-not-exist"])
+    with pytest.raises(SapCiTenantError, match="pinned artifact 'does-not-exist' not found"):
+        _run(adapter.upload_package("AdaequareGST", b"PK\x03\x04zip", "sha256:cc"))
+    _run(adapter.disconnect())
+
+
+def test_unpinned_writable_package_still_refuses_nothing_new(profile) -> None:
+    """A bare PackageId entry allows the first artifact (documented default)."""
+    transport, seen = _write_transport()
+    adapter = _connected_real_adapter(profile, transport, writable_packages=["AdaequareGST"])
+    assert adapter._pinned_artifact("AdaequareGST") is None
+    result = _run(adapter.upload_package("AdaequareGST", b"PK\x03\x04zip", "sha256:dd"))
+    assert result.success is True
+    assert "Id='MyFlow'" in seen["url"]  # top-of-list artifact
+    _run(adapter.disconnect())

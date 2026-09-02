@@ -1,0 +1,40 @@
+props:
+  cleanupHeaders: '1'
+  ComponentNS: sap
+  SapMessageIdDetermination: Reuse
+  privateKeyAlias: ''
+  Name: IDOC
+  TransportProtocolVersion: 1.8.1
+  ComponentSWCVName: external
+  proxyPort: ''
+  IDocContentType: application/x-sap.idoc
+  CompressMessage: '0'
+  sendHttpResponseCode: '0'
+  MessageProtocol: IDoc SOAP
+  ComponentSWCVId: 1.8.1
+  requestTimeout: '60000'
+  direction: Receiver
+  authentication: Basic
+  ComponentType: IDOC
+  allowChunking: '1'
+  proxyType: sapcc
+  componentVersion: '1.8'
+  proxyHost: ''
+  locationID: EMCNPCC
+  SourceForSapMessageId: ''
+  TransportProtocol: HTTP
+  credentialName: EPQ_BASIC
+  MessageProtocolVersion: 1.8.1
+  KeepConnectionAlive: '1'
+shape: IDOC-Receiver-IDOC
+componentType: IDOC
+direction: Receiver
+name: IDOC
+observedIn: 12
+exporterCovered: false
+examples:
+- GFLSAPReturnOrder/SI_GFL_Return_Order_OB
+- GFLSAPReturnOrderEPQ/SI_GFL_Return_Order_OB_PRD
+- GFLSAPReturnOrderEPQ/SI_GFL_Return_Order_OB_QAS
+- GFLSAPReturnOrderEPQ/SI_GFL_Return_Order_OB_QAS_ManualTest
+- ONTARIOIDOCETSINTERFACES/BC_ONTARIO_SI_EDI850_To_ORDERS05_INBOUND_ASYNC_MARCAN_S4_EPQ

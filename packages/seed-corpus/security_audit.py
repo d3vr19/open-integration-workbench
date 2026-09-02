@@ -22,10 +22,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from license_audit import SECRET_PATTERNS
 
 
-def audit_seed_corpus_security(corpus_dir: Path | str | None = None) -> dict:
+def audit_seed_corpus_security(
+    corpus_dir: Path | str | None = None,
+    report_dir: Path | str | None = None,
+) -> dict:
     """Run security audit on the seed corpus.
 
-    Returns a dict with findings.
+    Returns a dict with findings. `report_dir` overrides where the
+    report YAML is persisted (default: <package>/audit/) — tests use it
+    to keep the repo tree clean.
     """
     corpus_dir = Path(corpus_dir or (Path(__file__).parent / "artifacts"))
     findings: list[dict] = []
@@ -107,16 +112,19 @@ def audit_seed_corpus_security(corpus_dir: Path | str | None = None) -> dict:
         "auditor": "automated-security-audit",
     }
 
-    # Persist report
-    audit_dir = Path(__file__).parent / "audit"
-    audit_dir.mkdir(exist_ok=True)
-    report_file = audit_dir / "security-audit-report.yaml"
-    report_file.write_text(
-        yaml.safe_dump(
-            report, sort_keys=False, default_flow_style=False, allow_unicode=True
-        ),
-        encoding="utf-8",
-    )
+    # Persist report — only for the REAL seed corpus (the committed
+    # audit artifact) or when an explicit report_dir is given. Tests
+    # auditing throwaway tmp corpora never touch the repo tree.
+    if corpus_dir.resolve() == (Path(__file__).parent / "artifacts").resolve() or report_dir is not None:
+        audit_dir = Path(report_dir) if report_dir is not None else Path(__file__).parent / "audit"
+        audit_dir.mkdir(exist_ok=True)
+        report_file = audit_dir / "security-audit-report.yaml"
+        report_file.write_text(
+            yaml.safe_dump(
+                report, sort_keys=False, default_flow_style=False, allow_unicode=True
+            ),
+            encoding="utf-8",
+        )
 
     return report
 

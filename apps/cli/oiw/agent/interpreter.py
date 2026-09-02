@@ -215,6 +215,14 @@ def interpret_requirement_fallback(raw_text: str) -> NormalizedRequirement:
         components.append("sender.http")
     if "receiver" in text or "send to" in text or "forward" in text or "forwards" in text:
         components.append("receiver.http")
+    # Directive names a target URL with fetch/get language ("fetches X from
+    # https://...") — that IS a receiver call even without the word receiver.
+    if (
+        any(kw in text for kw in ["fetch", "call ", "retrieve", "get from", "query"])
+        and ("http://" in text or "https://" in text)
+        and "receiver.http" not in components
+    ):
+        components.append("receiver.http")
     if "timeout" in text:
         components.append("receiver.http")
     # WP-08 PR-8: recognize log.message from error handling / logging context

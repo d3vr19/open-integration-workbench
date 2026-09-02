@@ -1,0 +1,56 @@
+props:
+  disconnect: '{{MessageFlow_1_disconnect}}'
+  fileName: '{{MessageFlow_1_fileName}}'
+  maximumFileSize: '{{MessageFlow_1_maximumFileSize}}'
+  privateKeyAlias: '{{MessageFlow_1_privateKeyAlias}}'
+  location_id: '{{MessageFlow_1_location_id}}'
+  Name: SFTP_SND_GFL_ReturnSalesOrder
+  TransportProtocolVersion: 1.18.0
+  flatten: '{{MessageFlow_1_flatten}}'
+  proxyPort: '{{MessageFlow_1_proxyPort}}'
+  path: '{{MessageFlow_1_path}}'
+  useClusterLock: '{{MessageFlow_1_useClusterLock}}'
+  regex_filter: '{{MessageFlow_1_regex_filter}}'
+  host: '{{MessageFlow_1_host}}'
+  connectTimeout: '{{MessageFlow_1_connectTimeout}}'
+  file_sorting_criteria: '{{MessageFlow_1_file_sorting_criteria}}'
+  maxMessagesPerPoll: '{{MessageFlow_1_maxMessagesPerPoll}}'
+  fastExistsCheck: '{{MessageFlow_1_fastExistsCheck}}'
+  ComponentSWCVId: 1.18.0
+  credential_name: '{{MessageFlow_1_credential_name}}'
+  readLock: '{{MessageFlow_1_readLock}}'
+  componentVersion: '1.18'
+  proxyHost: '{{MessageFlow_1_proxyHost}}'
+  stopOnException: '{{MessageFlow_1_stopOnException}}'
+  scheduleKey: '{{MessageFlow_1_scheduleKey}}'
+  allowDeprecatedAlgorithms: '{{MessageFlow_1_allowDeprecatedAlgorithms}}'
+  TransportProtocol: SFTP
+  MessageProtocolVersion: 1.18.0
+  file_lock_timeout: '{{MessageFlow_1_file_lock_timeout}}'
+  maximumReconnectAttempts: '{{MessageFlow_1_maximumReconnectAttempts}}'
+  stepwise: '{{MessageFlow_1_stepwise}}'
+  ComponentNS: sap
+  recursive: '{{MessageFlow_1_recursive}}'
+  ComponentSWCVName: external
+  noop: '{{MessageFlow_1_noop}}'
+  doneFileName: '{{MessageFlow_1_doneFileName}}'
+  file.move: '{{MessageFlow_1_file.move}}'
+  MessageProtocol: File
+  direction: Sender
+  authentication: '{{MessageFlow_1_authentication}}'
+  file_sorting_direction: '{{MessageFlow_1_file_sorting_direction}}'
+  ComponentType: SFTP
+  proxyProtocol: '{{MessageFlow_1_proxyProtocol}}'
+  idempotentRepository: '{{MessageFlow_1_idempotentRepository}}'
+  proxyType: '{{MessageFlow_1_proxyType}}'
+  proxyAlias: '{{MessageFlow_1_proxyAlias}}'
+  reconnectDelay: '{{MessageFlow_1_reconnectDelay}}'
+  username: '{{MessageFlow_1_username}}'
+shape: SFTP-Sender-SFTP_SND_GFL_ReturnSalesOrder
+componentType: SFTP
+direction: Sender
+name: SFTP_SND_GFL_ReturnSalesOrder
+observedIn: 1
+exporterCovered: false
+examples:
+- GFLSAPReturnOrderEPQ/SI_GFL_Return_Order_OB_PRD

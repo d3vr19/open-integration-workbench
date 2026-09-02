@@ -1,0 +1,77 @@
+sim_parity:
+  generatedAt: '2026-09-02T17:51:49.981621+00:00'
+  corpus: packages/parity-corpus/manifest.yaml
+  engine: real
+  cases:
+  - name: heldout-order-async-smoke
+    project: examples/held-out-order-async
+    artifactId: oiw-heldout-async
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 5.3
+    verdict: agreed
+  - name: oiw-turbo-fwd-smoke
+    project: examples/oiw-turbo-fwd
+    artifactId: oiw_turbo_fwd
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 5.81
+    verdict: agreed
+  - name: oiw-conv-fwd-smoke
+    project: examples/oiw-conv-fwd
+    artifactId: oiw_turbo_fwd
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 0.53
+    verdict: agreed
+  - name: order-to-s4-happy-path
+    project: examples/order-to-s4
+    artifactId: null
+    localPassed: false
+    localStatus: UNSUPPORTED
+    verdict: unsupported
+    details: 'OIW-REAL-UNSUPPORTED: real engine refuses simulated-fidelity step(s):
+      transform (transform.xslt). Implement true logic or run with --engine simulated.'
+  - name: sftp-order-drop-happy-path
+    project: examples/sftp-order-drop
+    artifactId: null
+    localPassed: false
+    localStatus: UNSUPPORTED
+    verdict: unsupported
+    details: 'OIW-REAL-UNSUPPORTED: real engine refuses simulated-fidelity step(s):
+      gather-orders (gather), split-orders (splitter.general). Implement true logic
+      or run with --engine simulated.'
+  agreement:
+    comparable: 3
+    agreed: 3
+    ratio: 1.0
+  gate:
+    threshold: 0.9
+    minComparable: 10
+    passed: false
+  caveats:
+  - "Oracle verdicts are POINT-IN-TIME (blood law, p5-p6-plan.md \xA76): a mismatch\
+    \ against an old report may reflect tenant drift or the deploy-rate wedge, not\
+    \ local infidelity."
+  - Comparable set counts only cases with fresh oracle MESSAGE evidence; pending/stale/unsupported
+    cases are excluded from the ratio but listed.
+  - "Corpus grows from observed mismatches and fresh calibrate runs only \u2014 never\
+    \ fabricated."

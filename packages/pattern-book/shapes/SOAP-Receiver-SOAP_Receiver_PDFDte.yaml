@@ -1,0 +1,55 @@
+props:
+  cleanupHeaders: '1'
+  WsdlUserNameTokenCredentialName: ''
+  privateKeyAlias: ''
+  location_id: ''
+  Name: SOAP_Receiver_PDFDte
+  TransportProtocolVersion: 1.9.0
+  UserNameTokenOption: None
+  proxyPort: ''
+  WSSecurity_SignatureAlgorithm: SHA1
+  recipientX509TokenAssertion: WssX509V3Token10
+  ComponentSWCVId: 1.9.0
+  X509TokenAssertion: WssX509V3Token10
+  allowChunking: '1'
+  soapWsdlPortName: p2:consultaDocumentosPeruSoap
+  componentVersion: '1.9'
+  proxyHost: ''
+  SenderBasicSecurityProfileCompliant: '1'
+  UserNameTokenCredentialName: '{{CREDENCIAL}}'
+  AlgorithmSuiteAssertion: Basic128Rsa15
+  TransportProtocol: HTTP
+  MessageProtocolVersion: 1.9.0
+  WSSecurityType_outbound: SignMessage
+  InitiatorTokenIncludeStrategy_outbound: AlwaysToRecipient
+  SetTimeStamp: '0'
+  ComponentNS: sap
+  ComponentSWCVName: external
+  PublicKeyAliasEncryption_wsdl: ''
+  soapWsdlURL: /wsdl/consultaDocumentosPeru.wsdl
+  CompressMessage: '0'
+  sendHttpResponseCode: '0'
+  soapServiceName: p2:consultaDocumentosPeru
+  MessageProtocol: SOAP 1.x
+  requestTimeout: '60000'
+  direction: Receiver
+  authentication: None
+  PrivateKeyAliasSigning: ''
+  ComponentType: SOAP
+  SenderBasicSecurityProfileCompliant_wsdl: '1'
+  proxyType: default
+  operationName: p2:getDocumentoPDF
+  PrivateKeyAliasSigning_wsdl: ''
+  PublicKeyAliasEncryption: ''
+  WSSecurity_outbound: None
+  RecipientTokenIncludeStrategy: Never
+  credentialName: ''
+  Layout_outbound: Strict
+shape: SOAP-Receiver-SOAP_Receiver_PDFDte
+componentType: SOAP
+direction: Receiver
+name: SOAP_Receiver_PDFDte
+observedIn: 1
+exporterCovered: false
+examples:
+- DIGIFLOWFELPE/ConsultaComprobante_PE_PDF

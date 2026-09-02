@@ -14,7 +14,7 @@
 | Current phase | WP-08 — Productize the Learning Loop (Track D GATE PASSED; UI authorized) |
 | Phase exit criteria | See spec §22 + WP-08 §13 (work-package level) |
 | Last updated | 2026-08-19 |
-| Total tests | 617 (378 CLI + 87 Server + 132 Seed corpus + 20 MCP + 5 deselected pre-existing async failures) |
+| Total tests | 812 (526 CLI + 91 Server + 132 Seed corpus + 20 MCP + 43 Gateway; Phase 3 converter-validation session) |
 | CI checks | 12 required across 3 workflows (validate-pr, agent-eval, e2e) — all green |
 
 ---
@@ -867,3 +867,171 @@ The EMG now demonstrably helps. When a developer writes a requirement that's str
 - **PR-10 / Track E** (OW-032): UI reads persisted store. The server already loads the store on startup (`/api/v1/emg/stats` returns real counts + backend/dim/path). The UI components (`EmgInsightPanel`, `CoPilotPanel`) need to be wired to the durable retriever so the "⚡ EMG hit" badge is truthful.
 - **PR-9 / Track D-004** (OW-031): optional tenant deploy of the held-out package. Requires implementing `upload_package`/`deploy` in `SapCiTenantAdapter` (currently NotImplementedError per WP-08 §C-004).
 - **PR-2 follow-up** (OW-033): install EmbeddingGemma-300m in dev/tenant environments. The TF-IDF proof already passes; Gemma will improve paraphrase detection (0.35 → higher).
+
+---
+
+### 2026-09-01 — Phase C + D shipped: the closed LLM-free learning loop + turbo piece-assembler
+
+Implements Phase A-D vision plan items C and D (ratified 2026-08-26, `docs/plans/p5-p6-plan.md` §5). "Calibration before coverage before autonomy" held: C/D landed AFTER the M2+M3 calibration floor shipped (session 9's governance repair).
+
+**Phase C — closed LLM-free learning loop (`apps/cli/oiw/learn/loop.py` + `harvest_schedule.py`):**
+
+- **C-1 promotion hookup**: `record_oracle_run` (called from `oiw tenant calibrate` after report write) routes the oracle verdict:
+  - Full success (STARTED + message exercised + all MPL COMPLETED) → `promote_oracle_outcome`: PROJECT_APPROVED insight + task node upserted into the durable EMG store. `successful_workflow` = the flow's actual node chain (expert knowledge harvested from reality, not synthesis). Provenance `match_stage=oracle`, `source=tenant-oracle`. Auto-approve follows the seed-corpus precedent — the evidence is stronger than synthesis (the tenant itself accepted, started, and completed the message).
+  - Verified: promoted insight survives process restart and retrieves at 0.70 confidence for the held-out-order-async shape (same TF-IDF backend query).
+- **C-2 failure→corpus automation**: `file_oracle_failure` (oracle ERROR/TIMEOUT/upload-reject/message-fail) and `file_parity_miss` (parity `mismatched` rows, wired into `oiw parity`) write triage candidates under `packages/parity-corpus/candidates/`. Each candidate carries verdict + diagnostic + `suggestedTriage` (exporter-fix | executor-test | triage-required) + the point-in-time blood-law caveat. **Nothing auto-promotes** — triage is a separate human/agent step per the sequencing law.
+- **C-3 harvest schedule**: `oiw emg harvest --if-due [--ttl-days N]` — TTL gate (default 7 days) with census.yaml back-compat + authoritative sidecar `harvest-state.yaml`. Scheduled crawlers (cron/systemd/GHA) become no-ops while the book is fresh. Malformed state degrades to "never harvested" (loud, self-healing).
+
+**Phase D — turbo piece-assembler (`apps/cli/oiw/agent/turbo.py` + `turbo_pieces.py`):**
+
+- **D-2 piece library**: `proven_pieces()` = real-engine-proven node types ONLY (fidelity != simulated; sender./receiver. endpoints are the mock seam, always usable). `assemble_from_requirement` deterministically composes entrypoint → ordered internal pieces → receiver from the interpreter's components. Honest floor: `transform.xslt`/`splitter.general`/`gather` are simulated stubs → NOT pieces → requirements naming them produce `unmatched_components` → teacher escalation (verified: XSLT requirement → TEACHER-REQUESTED no-piece-matches; the first version silently dropped them — fixed, honesty rule). Requirements mentioning "error handling that logs" keyword-classify as fix-flow; the assembler's structural check (sender+receiver both detected) correctly still assembles them.
+- **D-1 budgets + code-level tenant guard**: `TurboBudget` (max_iterations, wall_clock_s, both validated + enforced). `TurboToolGuard` refuses `tenant.*`/`deploy.*`/LLM tools and any off-allowlist tool BEFORE dispatch; the native turbo dispatcher (`flow.create/remove/validate`, `test.create/run`, local tree only) is the only thing behind the guard. Turbo uses the deterministic fallback interpreter — the LLM is NEVER the first mover.
+- **D-3 teacher escalation**: structured `TeacherRequest` YAML under `<project>/.oiw/teacher-requests/` (kind: no-piece-matches | repair-exhausted | budget-exceeded; unmatchedComponents; diagnostics; iterationsUsed). `oiw turbo-stats` publishes the teacher-summons rate (summons / turbo trajectories) — the headline self-improvement metric, must trend to zero as pieces + corpus grow.
+- Repair cycle: deterministic "drop the last internal piece" move — the assembler's repair space is "fewer pieces", not "different pieces"; a genuinely-needed-but-broken piece is teacher territory.
+- Trajectories: every turbo run records a full EngineeringTrajectory via the standard recorder (same path as co-pilot) — no silent runs.
+
+**CLI surface:**
+
+- `oiw agent --turbo [--max-iterations N] [--wall-clock S] [--flow ID]` — the turbo loop
+- `oiw turbo-stats` — teacher-summons rate
+- `oiw emg harvest --if-due [--ttl-days N]` — schedulable crawler
+- `oiw tenant calibrate` — now routes verdicts through the learning loop (promote-or-file), never masks report output on loop errors
+- `oiw parity` — now files candidates for mismatched cases
+
+**End-to-end proofs (local, mock tenant only):**
+
+1. `oiw agent --turbo` on a create-flow requirement (JSON→XML + correlation header + forward): **COMPLETED** in 1 iteration — flow.yaml + auto-generated smoke test (exchange COMPLETED + every node executed) green, trajectory recorded.
+2. XSLT requirement: **TEACHER-REQUESTED** (no-piece-matches, transform.xslt) — no flow written, request persisted.
+3. C→D chain: seeded the EMG store via `record_oracle_run` (C-1), then turbo on a paraphrased requirement → **EMG used=True**, mechanics-first injection of the exact expert chain (sender.http → log.message → receiver.http), green in 1 iteration.
+
+**Tests:** CLI 454 → **513** (+59). New: `tests/learn/test_loop.py` (18), `tests/agent/test_turbo.py` (21), plus CLI wiring covered by existing command tests. All other suites re-verified green (server 91, MCP 20, gateway 43, seed-corpus 132). Ruff clean (also fixed a pre-existing latent B007 in `sap_export.py`).
+
+**Files:**
+
+- NEW `apps/cli/oiw/learn/loop.py` — C-1/C-2 core
+- NEW `apps/cli/oiw/learn/harvest_schedule.py` — C-3
+- NEW `apps/cli/oiw/agent/turbo_pieces.py` — D-2 piece library + assembler
+- NEW `apps/cli/oiw/agent/turbo.py` — D-1/D-3 loop + guard + teacher requests
+- NEW `apps/cli/tests/learn/test_loop.py`, `apps/cli/tests/agent/test_turbo.py`
+- MOD `apps/cli/oiw/cli.py` — `--turbo`, `turbo-stats`, `--if-due`, calibrate/parity loop wiring
+- MOD `apps/cli/oiw/compiler/sap_export.py` — latent B007 lint fix (`b` → `_b`)
+
+**Hard rules kept:** no LLM anywhere in the loop; no tenant access from turbo (code-level); CI never touched (all tests local + mock); candidates never auto-promote; honesty over convenience (unmatched components are reported, never dropped).
+
+**What's next:**
+
+- Fresh oracle runs (operator, live tenant) to feed real verdicts through C-1/C-2 and replace the wedge-era parity reports.
+- Phase B breadth (Mapping first) inside the measured harness — each new grammar shape lands through the METHOD chain + a parity case.
+- Teacher-merge protocol: when a teacher answers a request, the answer must merge back as a new piece + regression case (rate must trend down).
+- P6 end-to-end demo once parity gate has fresh comparable cases.
+
+---
+
+### 2026-09-02 — LIVE AUTONOMOUS-CREATION PROOF (P6 demo): requirement → working iFlow pair on the tenant
+
+**The end goal happened.** A natural-language directive produced two working iFlow artifacts on the live BTP tenant, machine-authored end-to-end: `oiw_turbo_fwd` (HTTPS → correlation header → log → Request-Reply weather fetch → ProcessDirect) + `oiw_turbo_fwd-listener` (PD → variables.write). Runtime STARTED both; message exercise returned **HTTP 200**; **MPL COMPLETED on both artifacts** (~600ms apart — the PD hop delivered); the listener captured the body as a durable side effect. Transcript: `docs/plans/p6-demo.yaml`.
+
+**New capability (adapter):**
+- `create_artifact` — POST-entity CREATE verb (live-proven; see laws). Allowlist-gated, id-collision preflight (tenant-global ids), CSRF, version read-back.
+- `deploy_configuration` — Configurations nav is READ-ONLY via API (POST=501); values flow through `parameters.prop` in the bundle (tenant auto-creates Configuration rows on upload — live-proven).
+
+**Exporter v7 (live-bisection-hardened, all single-variable proofs on `oiw_turbo_fwd`):**
+- POST-create payloads must NOT carry Version (auto-generated; sending it = 400).
+- **Main-process ends are ALWAYS MessageEndEvent** — plain `cname::EndEvent` is runtime-start FATAL (blood law re-proven: oiw_pd PD-listener ends message-typed with no receiver mf).
+- **Terminal `receiver.http` is refused** — the only message-proven HTTP-call form on this tenant is the Request-Reply serviceTask; the EndEvent-form adapter fails messages with 'Member name not found' (GSTR2A/B/Authentication — the EndEvent-form reference flows — have ZERO MPL rows: never ran).
+- `variables.write`: encrypt='true' + componentVersion='1.2' (oiw_pd ground truth; 'false'/absent = start ERROR).
+- Sender-only flows carry the empty `Participant_2 'Receiver'` stub (oiw_pd ground truth) + its DI shape (designer-open gate).
+- `modifier.content` config → real Enricher table rows (fixture-verbatim row XML; constant/property/xpath dialects only — `${...}` expressions raise loudly).
+
+**Assembler (turbo) hardening:**
+- URL + HTTP-verb extraction from directives ("forward to X" → POST; "fetches from X" → GET) — deterministic, no LLM.
+- **Live topology law**: terminal HTTP receivers assemble as mid-flow RR + PD terminator, and turbo emits the **companion listener** (PD sender + variables.write) in the same iteration — proven pair choreography.
+- **converter.json-to-xml pulled from the piece library** (LIVE_UNPROVEN): it STARTs but breaks the downstream HTTP adapter at message time ('Member name not found', bisection rung 3). Requirements naming converters teacher-escalate instead of shipping a broken chain — the honesty floor working as designed.
+- Turbo runs are idempotent (remove-then-create every iteration — re-running a directive refreshes the flow; caught live).
+- New runtime pass-through plugins: `sender.processdirect`, `receiver.processdirect`, `variables.write` (simulated fidelity, endpoints exempt from the real-engine audit).
+
+**CLI:** `oiw tenant calibrate --create` (P6 create path), pins via `OIW_TENANT_WRITABLE_PACKAGES=Pkg/Artifact`.
+
+**Bisection discipline this session (the oracle loop, ~10 live runs):** 5 runtime-start/message failure modes isolated single-variable; every verdict auto-filed through the C-2 loop (candidates trimmed to the final-state two; the diagnostics are in p6-demo.yaml's liveLawsLearned).
+
+**Tests:** CLI 518 passed (+ torpedo tests updated to the topology law: converter escalation, RR+PD assembly, listener pair, idempotent re-runs; url-split tests rewritten around the terminal-HTTP refusal + RR literal-split). All other suites green (server 91, MCP 20, gateway 43, seed-corpus 132). Ruff clean on all touched files.
+
+**Open teacher items (summons rate = 1):**
+- converter.json-to-xml: needs live oracle validation of a tenant-safe shape (suspect: the HTTP adapter's interaction with converted bodies / Content-Type) — Phase B breadth work.
+- MPL mixed-history: record_oracle_run should weigh only rows from the current deploy epoch (filed as a loop refinement).
+
+**Files:**
+- MOD `apps/cli/oiw/tenant/sap_ci_adapter.py` (+create_artifact, +deploy_configuration)
+- MOD `apps/cli/oiw/tenant/calibrate.py` (--create mode; configurations thread)
+- MOD `apps/cli/oiw/compiler/sap_export.py` (v7 laws: MessageEndEvent, terminal-HTTP refusal, Variables truth, Participant_2 stub, modifier rows, parameters.prop)
+- MOD `apps/cli/oiw/agent/turbo_pieces.py` (URL/verb extraction, RR+PD topology, companion listener builder, LIVE_UNPROVEN gate)
+- MOD `apps/cli/oiw/agent/turbo.py` (pair deploy, idempotent runs, listener smoke test)
+- MOD `apps/cli/oiw/agent/interpreter.py` (fetch+URL → receiver detection)
+- NEW `apps/cli/oiw/runtime/steps/pd_variables.py` (PD/Variables pass-throughs)
+- MOD `apps/cli/oiw/cli.py` (calibrate --create flag)
+- MOD tests: url-split (rewritten), v6 shapes (message-typed ends, Participant_2), turbo (converter escalation, pair)
+- NEW `docs/plans/p6-demo.yaml` (transcript + laws)
+
+---
+
+### 2026-09-02 (cont.) — EMG gains experience: parity banked, tenant absorbed (600 flows)
+
+The EMG experience plan (Phases 1–2) executed live:
+
+**P1 — banked the P6 experience as parity truth:**
+- Fresh example projects: `examples/oiw-turbo-fwd` (main pair flow) + `examples/oiw-turbo-fwd-listener` (PD listener), regenerated via turbo — kebab-case ids, full-chain validated. Turbo now runs the COMPLETE `oiw validate` chain (schema + graph + rules — the earlier graph-only check let schema-invalid flows through; found via the examples), sanitizes flow ids to the IR pattern, and its smoke tests carry `input.entrypoint` (FlowTest schema requirement).
+- IR schema: added `receiver.processdirect`, `sender.processdirect`, `variables.write` to the node-type enums (they were exporter grammar without IR membership — another divergence the full-chain validation caught).
+- **MPL epoch filter** (calibrate): only rows from the current run's window count — stale FAILED rows from bisection history no longer poison verdicts. Live-proven: the P6 recalibrations show exactly 1 MPL row (this run) each.
+- Fresh live calibrations: `oiw_turbo_fwd` → **reward 1.0** (message 200, MPL COMPLETED, listener delivered 600ms later) → **C-1 auto-promoted the chain as a live-proven insight**; `oiw-heldout-async` (new artifact, held-out example updated to the RR+PD law with a real target) → **reward 1.0** → **second C-1 promotion**.
+- **sim-parity.yaml: 2/2 comparable, 100% agreement** (was 1 comparable at 0.0). Gate still open (needs ≥10 comparable — the two UNSUPPORTED cases await Phase 3 grammar; each new validated shape adds a case).
+- held-out example fixed to the live topology law (terminal receiver.http → RR mid-chain + PD terminator); its old open_mateo_test calibration case replaced by the fresh oiw-heldout-async artifact.
+
+**P2 — the tenant is absorbed:**
+- NEW `oiw tenant absorb` (apps/cli/oiw/tenant/absorb.py + CLI): read-only crawl of every package → download → full BPMN2 parse (sap_flow_parser — real OIW types WITH configs, not the loose minimal-IR names) → redact → persist under gitignored `.oiw/tenant-corpus/` (license=customer-content, learning-only) → promote one PROJECT_APPROVED insight + task node per flow (`provenance.source=tenant-catalog`, catalog discount 0.8, organization scope). Content-hash ledger for dedup/resume; budgets (max_artifacts, per-package_cap, delay).
+- **LIVE RUN: 72 packages, 600/600 artifacts pulled and parsed, 600 insights + 600 task nodes promoted, 0 failures.** The EMG store went from 2 to 602 insights.
+- Knowledge census now resident: modifier.content ×1277, transform.xslt(Mapping) ×562, script.groovy ×559, sender.http ×502, converter.xml-to-json ×277, filter ×157, converter.json-to-xml ×109, splitter ×34, gather ×19, SFTP/SOAP/OData senders... — the entire Phase B grammar backlog is EMG-resident as REAL tenant workflows.
+- Retrieval proof: novel requirements now retrieve real expert chains (e.g. "filter by plant, convert XML to JSON, forward" → 9-step tenant flow at conf 0.56; "map with XSLT" → 10-step chain at 0.70).
+- Turbo + EMG + honesty floor interaction verified: a converter-naming requirement retrieves expert chains from the corpus but turbo still refuses the converter piece (LIVE_UNPROVEN) → teacher request. The instrument works: **knowledge ≠ permission** — Phase 3 (oracle validation of the converter shape) is what unlocks it.
+
+**Tests:** CLI 526 (+8: absorb suite 5, epoch 3; loop-shape test updated to the topology law). All suites green. Ruff clean.
+
+**Next (Phase 3):** validate the converter shape live — pull 2-3 of the tenant's XmlToJson/JsonToXml flows (109 use json-to-xml!), mirror the step shape byte-faithfully, single-variable oracle proofs on a scratch artifact, then merge `converter.json-to-xml`/`converter.xml-to-json` back into the piece library + regression cases + parity corpus cases. That drops the teacher-summons rate to zero for JSON↔XML directives AND grows the parity comparable set toward the ≥10 gate.
+
+---
+
+### 2026-09-02 (cont. 2) — PHASE 3 COMPLETE: converter validated live; the self-improvement flywheel turned a full circle
+
+**The goal state was reached.** The requirement that teacher-escalated at the start of Phase 3 —
+
+> "Create a flow that receives a JSON order via HTTPS, converts the JSON body to XML, and forwards the XML to https://httpbin.org/post."
+
+— now runs **fully autonomously**: turbo assembled the pair (sender → RR-warmup → converter.json-to-xml → RR-forward → PD + companion listener) in 1 iteration, deployed to the tenant, **STARTED, message 200, MPL COMPLETED, reward 1.0** — and the C-1 loop auto-promoted the newly-learned chain as insight `insight-a8fca022b835`. A requirement that was impossible this morning is now routine: **teacher-summons → live bisection → law learned → piece merged → autonomous builds green.** That is the flywheel working end-to-end.
+
+**The bisection that found the converter law (conv1–conv10, all live, single-variable):**
+
+| rung | chain | verdict |
+|---|---|---|
+| conv1-2 | sender→converter(+log)→RR→PD (GET, dialect 1.1.1) | Member name not found |
+| conv3 | sender→RR→converter→PD | **RR passed** (converter AFTER RR works) |
+| conv4 | sender→converter→RR(POST,sendBody=true)→PD | Member name not found |
+| conv5 | sender→modifier(Content-Type)→RR→PD | **200 GREEN** (header-set innocent) |
+| conv6-7 | Alloga dialect (useNamespaces=false + uri 1.1.2) | Member name not found |
+| conv8 | RR→converter→RR→PD | PD-hop error: variables ride PD as HEADERS — multi-line XML = invalid (CR/LF law) |
+| conv9 | RR→converter→RR→PD + log-terminal listener | **reward 1.0** |
+| conv10 | sender→RR(warmup)→converter→RR(POST)→PD | **reward 1.0 — THE LAW** |
+
+**Laws banked (all live-proven, single-variable):**
+1. **Converter law**: a `converter.json-to-xml` step must be PRECEDED by a Request-Reply. Converting the raw inbound body then calling an HTTP receiver fails at the adapter ('Member name not found'); the same converter fed by an RR response works in every tested position. The tenant's own 107 converter flows corroborate: none places a converter adjacent to a main-process adapter call — they all sit in subprocesses. The assembler now inserts an **RR warmup** before conversion when converting inbound bodies.
+2. **PD variable-transport law**: `variables.write` values ride ProcessDirect as HTTP headers — multi-line payloads (converted XML) carry CR/LF → 'Invalid characters (CR/LF) in header'. Companion listeners terminate with **log.message** instead (proven, conv9/conv10).
+3. **Dialect pairing note**: tenant converters pair useNamespaces=false↔uri 1.1.2 or true↔1.1.1; our exporter emits the Alloga dialect verbatim.
+
+**Merged back (the teacher answer):**
+- `converter.json-to-xml` + `converter.xml-to-json` are **pieces** again (LIVE_UNPROVEN emptied).
+- Assembler enforces the converter law (RR-warmup insertion) + the listener log-terminal law.
+- Exporter: JsonToXml dialect fixed; **XmlToJsonConverter rendering added** (was unmapped — the whole xml-to-json half of the backlog); httpShouldSendBody now method-aware (false for GET, true for POST — tenant forward-flow ground truth).
+- EMG-injection honesty: absorbed chains containing non-piece steps (xslt/subprocess/unclassified RR) now **fall back to piece assembly** instead of shipping unrenderable chains (OIW-I002 warning; found live when a 0.52-confidence tenant insight injected `transform.xslt`).
+- Parity: **3/3 comparable @ 100%** (new case: `examples/oiw-conv-fwd`, the proven conv9 chain, real-engine green).
+
+**Tests:** CLI 526 (turbo suite updated to the converter law: piece-with-warmup + injection-fallback; smoke mocks include the warmup RR). All suites green. Ruff clean.
+
+**Remaining for the ≥10 parity gate:** the two UNSUPPORTED cases (order-to-s4: XSLT1-only stub; sftp-order-drop: splitter/gather stubs) plus new cases per future shape. The next flywheel turns are exactly this loop applied to: **Mapping ×562** (needs script-resource bundling), **filter**, **splitter**, **ProcessCall** (subprocess rendering — which would also unlock direct converter placements like the tenant uses).

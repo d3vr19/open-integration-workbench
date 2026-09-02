@@ -1,0 +1,26 @@
+props:
+  ComponentType: HTTPS
+  maximumBodySize: '{{MessageFlow_1_maximumBodySize}}'
+  ComponentNS: sap
+  componentVersion: '1.5'
+  Name: CC_GSTR1_GET_SENDER
+  TransportProtocolVersion: 1.5.2
+  ComponentSWCVName: external
+  xsrfProtection: '{{MessageFlow_1_xsrfProtection}}'
+  TransportProtocol: HTTPS
+  userRole: '{{MessageFlow_1_userRole}}'
+  senderAuthType: '{{MessageFlow_1_senderAuthType}}'
+  MessageProtocol: None
+  MessageProtocolVersion: 1.5.2
+  ComponentSWCVId: 1.5.2
+  direction: Sender
+  clientCertificates: <row><cell id='clientCertificate.subjectDN'>{{MessageFlow_1_clientCertificate.subjectDN}}</cell><cell
+    id='clientCertificate.issuerDN'>{{MessageFlow_1_clientCertificate.issuerDN}}</cell></row>
+shape: HTTPS-Sender-CC_GSTR1_GET_SENDER
+componentType: HTTPS
+direction: Sender
+name: CC_GSTR1_GET_SENDER
+observedIn: 1
+exporterCovered: true
+examples:
+- AdaequareGST/SI_outbound_gstr1_get

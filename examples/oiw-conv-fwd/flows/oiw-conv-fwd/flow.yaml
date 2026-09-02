@@ -1,0 +1,50 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: oiw-conv-fwd
+  labels: {}
+  name: oiw_turbo_fwd
+  version: 1
+spec:
+  edges:
+  - from: sender-main
+    to: rr-fetch
+  - from: rr-fetch
+    to: step-1-converter-json-to-xml
+  - from: step-1-converter-json-to-xml
+    to: rr-post
+  - from: rr-post
+    to: pd-terminator
+  entrypoints:
+  - config:
+      methods:
+      - POST
+      path: /oiw_turbo_fwd
+    fidelity: simulated
+    id: sender-main
+    type: sender.http
+  extensions: {}
+  nodes:
+  - config:
+      method: GET
+      timeoutSeconds: 30
+      url: https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m
+    fidelity: simulated
+    id: rr-fetch
+    type: receiver.http
+  - config: {}
+    fidelity: compatible-subset
+    id: step-1-converter-json-to-xml
+    type: converter.json-to-xml
+  - config:
+      method: POST
+      timeoutSeconds: 30
+      url: https://httpbin.org/post
+    fidelity: simulated
+    id: rr-post
+    type: receiver.http
+  - config:
+      address: /oiw-conv-fwd_pd
+    fidelity: simulated
+    id: pd-terminator
+    type: receiver.processdirect

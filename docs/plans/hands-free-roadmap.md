@@ -1,5 +1,31 @@
 # Hands-Free Roadmap: Real EMG → Autonomous Artifact → Tenant Upload
 
+> ## ⭐ NORTH STAR — read this first, every session
+>
+> **END GOAL:** a natural-language requirement goes in; an agent autonomously
+> authors an iFlow inside a fast **local simulated world** where the reward is
+> a *functional iFlow*; one human approves; OIW uploads, deploys, and verifies
+> it on the live BTP tenant; the outcome feeds the EMG learning loop so the
+> next requirement starts smarter. No BTP UI for iteration — Git is the source
+> of truth, the tenant is only ever a library we push finished work into.
+>
+> **RESOURCES TO UTILIZE (all proven, all in-repo):**
+> - **Oracle loop** — `oiw tenant calibrate` (upload→deploy→poll→MPL report);
+>   scratch target `AdaequareGST/open_mateo_test`, update-only, allowlist-pinned.
+>   Mind deploy-rate wedging: cool-down between campaigns.
+> - **Operator-provided API specs** (repo root): `IntegrationContent.edmx`
+>   (PUT-entity update, `DeployIntegrationDesigntimeArtifact`, `Configurations`),
+>   `MessageProcessingLogs.edmx`, `LogFiles.edmx`. When an endpoint is needed,
+>   check these FIRST — they already answered PUT-vs-POST and activation.
+> - **Reference export** — `iflows/testing_oiw*.zip`: receiver-as-EndEvent
+>   compiled shape, full property sets, externalized-param pattern.
+> - **Existing machinery** — exporter v3, JVM Groovy sandbox bridge, EMG with
+>   real Gemma-300m embeddings (`OIW_EMBEDDING_STRICT=1`), 9-dim reward,
+>   deployment state machine, trajectory recorder.
+> - **Hard rules** — CI never touches tenant or real models; credentials
+>   env-only; every write reversible (pre-upload backups); honesty over
+>   convenience (loud failures, fidelity labels never overclaimed).
+>
 > **Status:** ACTIVE — governing plan for the d3vr19 fork.
 > **Origin:** Approved 2026-08-25. This document is the anti-drift anchor: every
 > PR must state which phase (and sub-phase) it advances, and deviations must be
@@ -161,11 +187,23 @@ Per WP-06 §7 sketch:
    oiw deploy execute --profile btp --package AdequareGST
    oiw deploy verify --profile btp --package AdequareGST
    ```
-6. [ ] Live smoke results recorded here.
+6. [x] **Live smoke COMPLETE (2026-08-26)** — verbs re-proven against
+   AdaequareGST/open_mateo_test: UPDATE=PUT entity {ArtifactContent},
+   deploy=`DeployIntegrationDesigntimeArtifact` fn import (202), poll via
+   /IntegrationRuntimeArtifacts?$filter=Name eq '<id>'. CLI
+   propose→approve→upload→execute→verify all GREEN mechanically;
+   verify honestly reports SAP runtime verdict (see P4).
 
-### Phase 4 — CPI bundle exporter *(the hidden blocker, 4–5 days)*
+### Phase 4 — CPI bundle exporter *(the hidden blocker)*
 
-Without this, "upload the integration" cannot happen regardless of Phase 3:
+**STATUS (2026-08-26): MVP v2 LIVE** — designer-safe BPMN2 (fixture-fidelity
+props), identity inheritance (`cpi_bundle_identity`), manifest folding,
+`--format cpi` + `--display-name` on deploy upload; pre-upload backups.
+Upload+deploy mechanics fully green; **remaining: runtime-START fidelity**
+(SAP runtime compiler rejects our flow at start; hypotheses H1–H3 queued in
+p5-p6-plan.md §6; bisection via `oiw tenant calibrate`).
+
+Original scope (for reference):
 
 1. IR→designtime-ZIP writer: BPMN2/iflw serialization (inverse of
    `parse_bpmn2_iflw`, reusing `_ACTIVITY_TYPE_MAP` inverted),
@@ -278,3 +316,151 @@ Append-only. Newest first. Format: `(date) phase.step — what happened, evidenc
   TTL enforcement, 9 new MockTransport tests, CLI suite 414 passed.
   Scratch package designated by operator: **AdequareGST**. Live smoke
   pending credentials in env.
+- 2026-08-25 — P3 LIVE SMOKE (partial PASS) + P4 exporter MVP live-proven —
+  against AdaequareGST/open_mateo_test with operator credentials:
+  - VERB DISCOVERIES (all live-proven, sketch was wrong): PUT $value=501;
+    multipart=501; POST entity=CREATE-only (existing id ⇒ misleading 500);
+    **UPDATE = PUT /IntegrationDesigntimeArtifacts(Id,V) {ArtifactContent:b64}**,
+    which rejects Bundle-SymbolicName changes (HTTP 400) — exporter now
+    inherits identity from the downloaded current bundle.
+  - Winning bundle shape (1826 bytes, HTTP 200): minimal MANIFEST.MF with
+    `Bundle-SymbolicName: <id>;singleton:=true`, `.project` without buildSpec,
+    `metainfo.prop` (NOT parameters.prop), our generated .iflw — SAP's parser
+    accepted OIW-generated BPMN2 verbatim.
+  - `oiw deploy upload --format cpi`: propose→approve→upload ALL GREEN via
+    CLI; artifact content replaced on the live tenant.
+  - OPEN: activation. /IntegrationRuntimeArtifacts is a read-only view
+    (GET ok, POST=405). The deploy-activate verb needs discovery (SAP docs
+    or devtools capture of a manual UI deploy). verify() polls that entity
+    once activation lands.
+- 2026-08-25 — P4 v2 exporter (designer-safe) + tenant restore COMPLETE —
+  root cause of the unopenable artifact: display Name is derived from the
+  uploaded bundle, and v1's minimal BPMN2 lacked designer-required
+  structures. v2 mirrors REAL fixture element/property sets per component,
+  emits sequenceFlows at process end (fixture convention), and passes our
+  own parse_bpm2 round-trip. open_mateo_test restored: PUT 200, display
+  name verified back to 'open_mateo_test'. New guards: pre-upload backup
+  to .oiw/tenant-cache/, --display-name override breaks circular
+  identity inheritance, exporter refuses designer-unproven node types.
+- 2026-08-26 — ACTIVATION SOLVED (operator supplied IntegrationContent.edmx) —
+  function import `DeployIntegrationDesigntimeArtifact` (POST, Id/Version as
+  OData query params) returns 202 + tracking UUID; runtime status polls via
+  /IntegrationRuntimeArtifacts?$filter=Name eq '<id>' (Id = artifact id;
+  STARTED→DEPLOYED mapping). Adapter deploy/poll rewritten to proven verbs;
+  CLI execute GREEN live (202); verify honestly reports tenant state.
+- CURRENT HONEST STATE: end-to-end pipeline is fully mechanical
+  propose→approve→upload→execute→verify against the live tenant with zero UI;
+  verify correctly surfaces Status=ERROR from SAP runtime-start on our
+  generated flow (no MPL entries ⇒ fails before first message; suspected
+  Enricher propertyTable/wrapContent detail). Next: iterate bundle fidelity
+  using the new seconds-fast upload→deploy→poll loop until STARTED.
+- 2026-08-26 — P5/P6 detailed plan ratified: docs/plans/p5-p6-plan.md
+  (oracle harness first; parity suite as the honesty gate ≥90%; turbo loop
+  with code-level tenant guard). Operator offered tenant API specs — MPL +
+  Log Files requested NOW, Message Stores at 5c, Security Content deferred.
+- 2026-08-26 (session 3) — P5a bisection matrix CLOSED; blocker relocated.
+  Wedge theory confirmed (bare → STARTED after cool-down); then H-A and all
+  byte-parity variants of the UI-authored reference (full prop parity,
+  bpmndi DI section, combined) ERROR on a healthy tenant while bare sails
+  through ⇒ receiver runtime-start failure is NOT bundle bytes. Suspects:
+  API deploy-path semantics for messageFlow flows, or tenant-side
+  material. Awaiting operator UI-deploy dichotomy test (p5-p6-plan.md §6).
+  open_mateo_test left bare/STARTED.
+- 2026-08-26 (session 5) — EXPORTER v6 + MULTI-ARTIFACT CHOREOGRAPHY LIVE.
+  Request-Reply, ProcessDirect receiver, and Variables steps mirrored from
+  operator reference exports; end-to-end proof on tenant: GET → 200 with
+  live weather JSON, MPL COMPLETED pairs across open_mateo_test AND oiw_pd
+  (ProcessDirect hop). Endpoint-path collisions identified as a distinct
+  failure class (tenant-global namespace). Both scratch artifacts STARTED.
+- 2026-08-26 (session 4) — **P5a RECEIVER MILESTONE: exporter bundles START.**
+  Operator's UI deploy + fresh export unlocked the dichotomy: transplanted
+  UI bytes START via our API path (after avoiding an /oiw endpoint
+  collision). Regression ladder isolated two fatal deltas, both fixed in
+  exporter v4: (1) receiver URL must be SPLIT across
+  httpAddressWithoutQuery / httpAddressQuery; (2) retryInterval must be
+  '5', not the fixture-inherited '10000'. Final `oiw tenant calibrate` with
+  pure exporter output → STARTED on live tenant. Open seam: message-send
+  403 (runtime endpoint auth) before reward wiring.
+- 2026-08-26 (sessions 7-9) — PHASES 0-2 COMPLETE + SFTP grammar live:
+  sharpening guards (collision preflight, designer-open gate), pattern-book
+  harvester (300 artifacts -> 59 shapes -> 50-gap backlog), receiver.sftp +
+  sender.sftp + UserCredentials verb, multi-entrypoint emitter rewrite,
+  participant-name law. Tenant state: writer + poller sibling artifacts
+  STARTED; poll cadence OPEN (next-session probe #1). LLM-free Stage 1
+  (offline-instantiate w/ fallback+label) agreed for Phase 3 kickoff.
+- 2026-08-26 (session 9) — CALIBRATION FLOOR BACKFILLED (P5a-M2 + M3 shipped;
+  governance repair logged in p5-p6-plan.md §5): `oiw test --engine real`
+  with loud stub refusal + MPL-shaped local records; `oiw parity` corpus
+  runner publishing docs/emg/sim-parity.yaml (v0: ratio 0.0 on 1 comparable
+  case vs wedge-era oracle report — honest baseline, gate open until fresh
+  calibrate runs land). Phase A-D vision plan ratified: calibration before
+  coverage before autonomy; turbo = piece-assembler, LLM = last-resort
+  teacher; teacher-summons rate is the self-improvement headline metric.
+- 2026-09-01 — PHASE C + D SHIPPED (the learning loop closes, LLM-free):
+  - C-1: oracle successes promote real insights — `oiw tenant calibrate`
+    now routes its verdict through learn/loop.record_oracle_run; full
+    success (STARTED + message + all-MPL-COMPLETED) → PROJECT_APPROVED
+    insight + task node in the durable store (provenance
+    source=tenant-oracle, workflow = the flow's actual chain). Verified
+    surviving restart + retrievable at 0.70 on the held-out shape.
+  - C-2: failures auto-file triage candidates — oracle ERROR/TIMEOUT (via
+    calibrate) and parity `mismatched` (via `oiw parity`) write YAML
+    candidates under packages/parity-corpus/candidates/ with
+    suggestedTriage + point-in-time caveat. Never auto-promotes.
+  - C-3: `oiw emg harvest --if-due` — TTL gate (7d default) over
+    census/sidecar state; the crawler is now schedulable.
+  - D-2: piece library = real-engine-proven node types only (endpoints =
+    mock seam). XSLT/splitter/gather are NOT pieces — requirements naming
+    them teacher-escalate (no silent drops; verified TEACHER-REQUESTED
+    no-piece-matches for an XSLT requirement).
+  - D-1: budgets (iterations + wall-clock) enforced; tenant guard is
+    code-level (TurboToolGuard refuses tenant.*/deploy.*/LLM tools before
+    dispatch; native dispatcher is local-tree-only).
+  - D-3: teacher requests persist under .oiw/teacher-requests/;
+    `oiw turbo-stats` publishes the teacher-summons rate.
+  - E2E: `oiw agent --turbo` COMPLETED a create-flow requirement in 1
+    iteration (green smoke test + trajectory); with a C-1-seeded EMG store
+    the mechanics-first loop fired (EMG used=True, expert chain injected
+    verbatim) — the C→D chain works.
+  - Tests: CLI 454 → 513 (+59: 18 loop + 21 turbo + wiring/regression).
+    All suites green; ruff clean.
+- 2026-09-02 — **END GOAL DEMONSTRATED (P6 M1+M2)**: requirement in →
+  turbo pair assembled + green in sim → live tenant deploy → both
+  STARTED → message 200 → MPL COMPLETED on main + listener → body
+  captured. Five new blood laws banked (see p6-demo.yaml): POST-create
+  rejects Version; main-process ends always MessageEndEvent; only the
+  RR serviceTask form passes HTTP messages (terminal receiver.http
+  refused); RR chains end via PD terminator + companion listener;
+  variables.write needs encrypt=true/componentVersion=1.2. One honest
+  teacher-summons outstanding: converter.json-to-xml is live-unproven
+  at message time (STARTs, then 'Member name not found' downstream) —
+  pulled from the piece library until oracle-validated (Phase B
+  breadth candidate #1). Remaining: fresh-parity republish + M3 README
+  flip.
+- 2026-09-02 (cont.) — **EMG EXPERIENCE PLAN P1+P2 SHIPPED (live)**:
+  - P1: parity 2/2 comparable @ 100% (P6 pair + held-out, both reward 1.0
+    with fresh oracle reports; two C-1 auto-promotions of live-proven chains).
+    MPL epoch filter banked (stale rows never poison verdicts again). Turbo
+    hardened to full-chain validation + kebab ids + schema-typed smoke tests.
+  - P2: `oiw tenant absorb` — 72 packages, 600/600 flows parsed + promoted
+    (tenant-catalog provenance, 0.8 discount, customer-content license,
+    gitignored corpus). EMG: 2 → 602 insights. Grammar backlog now resident
+    as real workflows: Mapping ×562, Groovy ×559, XmlToJson ×277, Filter
+    ×157, JsonToXml ×109, Splitter ×34. Retrieval returns real expert
+    chains for novel requirements; turbo still refuses converter pieces
+    until Phase 3 oracle validation (honesty floor > corpus).
+  - NEXT: Phase 3 converter validation (the teacher summons) → merges
+    converters back as pieces + parity cases; then Mapping via the same
+    METHOD chain.
+- 2026-09-02 (cont. 2) — **PHASE 3 COMPLETE — THE FLYWHEEL TURNED A FULL
+  CIRCLE**: the converter teacher-summons was answered by a 10-rung live
+  bisection (conv1-conv10), the law merged back (converter must be preceded
+  by an RR — assembler inserts a warmup; listeners terminate log not
+  variables — PD transports variables as headers), and the SAME requirement
+  that escalated now builds + deploys + runs autonomously: reward 1.0,
+  MPL COMPLETED both artifacts, C-1 auto-promoted the learned chain
+  (insight-a8fca022b835). Also banked: XmlToJson exporter rendering added
+  (was unmapped); EMG injections with non-piece steps fall back to piece
+  assembly (OIW-I002). Parity 3/3 @ 100%. NEXT flywheel turns: Mapping
+  (needs script-resource bundling), filter, splitter, ProcessCall
+  (subprocess rendering — unlocks direct converter placement).

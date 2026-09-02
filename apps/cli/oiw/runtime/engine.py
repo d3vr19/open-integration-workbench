@@ -19,6 +19,16 @@ class ExecutionError(Exception):
     """Raised when a flow cannot be executed."""
 
 
+# Marker embedded in real-engine refusals so callers (parity runner, tests)
+# can distinguish "sim cannot even claim this step" from a genuine transform
+# failure (p5-p6-plan.md §6, session 9).
+REAL_UNSUPPORTED_MARKER = "OIW-REAL-UNSUPPORTED"
+
+# Endpoint families stay mockable in real mode: their local behavior is the
+# world-dynamics seam (P5b), not a silent stub of transform logic.
+_ENDPOINT_PREFIXES = ("sender.", "receiver.")
+
+
 # A trace callback receives each TraceEntry as it's produced.
 # Spec §9.2 step 8: "Capture structured trace and stream via WebSocket to UI."
 TraceCallback = Callable[[TraceEntry, MessageContext], None]
@@ -74,6 +84,7 @@ def execute_flow(
     resources: dict[str, bytes] | None = None,
     mocks: dict[str, dict[str, Any]] | None = None,
     trace_callback: TraceCallback | None = None,
+    engine: str = "simulated",
 ) -> MessageContext:
     """Execute a flow against the given input. Returns the final MessageContext.
 
@@ -84,6 +95,11 @@ def execute_flow(
     Spec §9.2 step 8: capture structured trace and stream via WebSocket to UI.
 
     Args:
+        engine: "simulated" (default) executes plugins as-is; "real"
+            (P5a-M2) additionally refuses — loudly, via exchange FAILED +
+            REAL_UNSUPPORTED_MARKER — any executed NON-endpoint step whose
+            plugin declares fidelity="simulated". Silent stubs must never
+            pollute parity measurement (§0 honesty rule).
         trace_callback: If provided, called with each TraceEntry as it's
             produced (before the entry is appended to ctx.trace). This
             enables real-time streaming to WebSocket clients.
@@ -187,7 +203,34 @@ def execute_flow(
                     visited |= siblings_to_skip  # mark as visited so they won't re-run
 
     if ctx.exchange_status != ExchangeStatus.FAILED:
-        ctx.exchange_status = ExchangeStatus.COMPLETED
+        # Real-engine fidelity audit (P5a-M2): only executed nodes are
+        # audited, endpoints are exempt (mock seam). A stub that executed
+        # silently would corrupt parity measurement — refuse instead.
+        offenders: list[str] = []
+        if engine == "real":
+            # Audit every DECLARED node (plan order), not just executed ones:
+            # the tenant compiles the whole bundle — an unreachable stub is
+            # still a lie waiting for a different input.
+            for node_id in plan.order:
+                node = node_map.get(node_id)
+                if node is None or node.type.startswith(_ENDPOINT_PREFIXES):
+                    continue
+                plugin = get_plugin(node.type)
+                if plugin is None:
+                    continue
+                if plugin.compatibility().get("fidelity") == "simulated":
+                    offenders.append(f"{node_id} ({node.type})")
+        if offenders:
+            detail = (
+                f"{REAL_UNSUPPORTED_MARKER}: real engine refuses simulated-fidelity "
+                f"step(s): {', '.join(sorted(offenders))}. Implement true logic "
+                "or run with --engine simulated."
+            )
+            ctx.exchange_status = ExchangeStatus.FAILED
+            ctx.exception = ExecutionError(detail)
+            ctx.add_trace("__engine__", "error", detail)
+        else:
+            ctx.exchange_status = ExchangeStatus.COMPLETED
 
     ctx.properties["__duration_ms__"] = int((time.monotonic() - start_time) * 1000)
 

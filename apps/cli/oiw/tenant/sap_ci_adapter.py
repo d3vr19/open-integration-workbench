@@ -182,8 +182,11 @@ class SapCiTenantAdapter:
     def _resolve_writable_packages_from_env(self) -> None:
         """Merge the explicit allowlist with OIW_TENANT_WRITABLE_PACKAGES.
 
-        Comma-separated package ids. Explicit constructor entries win
-        (deduped, order-preserving). An empty result means read-only.
+        Entries are either `PackageId` (any artifact in the package may be
+        updated) or `PackageId/ArtifactId` (ONLY that artifact may be
+        updated — the safe default for shared scratch packages). Explicit
+        constructor entries win (deduped, order-preserving). An empty
+        result means read-only.
         """
         env_raw = os.environ.get("OIW_TENANT_WRITABLE_PACKAGES", "")
         env_pkgs = [p.strip() for p in env_raw.split(",") if p.strip()]
@@ -192,6 +195,18 @@ class SapCiTenantAdapter:
             if p and p not in merged:
                 merged.append(p)
         self._writable = merged
+
+    def _package_is_writable(self, package_id: str) -> bool:
+        return any(e == package_id or e.startswith(f"{package_id}/") for e in self._writable)
+
+    def _pinned_artifact(self, package_id: str) -> str | None:
+        """The single artifact id this package's writes are pinned to, if any."""
+        pins = [
+            e.split("/", 1)[1]
+            for e in self._writable
+            if e.startswith(f"{package_id}/") and len(e) > len(package_id) + 1
+        ]
+        return pins[0] if pins else None
 
     async def connect(self, profile: EnvironmentProfile) -> None:
         """Validate credentials by hitting the OData service root."""
@@ -231,6 +246,41 @@ class SapCiTenantAdapter:
                 f"tenant returned HTTP {resp.status_code} on service root: " f"{resp.text[:200]}"
             )
         self._connected = True
+
+    async def deploy_user_credential(
+        self, name: str, user: str, password: str, kind: str = "default"
+    ) -> bool:
+        """Create/update User Credentials security material (Security Content API).
+
+        LIVE VERB (documented Security Content OData API):
+        POST /UserCredentials {Name, Kind, User, Password}. Required for
+        SFTP receivers with user_password auth — the flow references the
+        material by credentialName; the secret never touches the bundle.
+        Idempotent in practice: re-POST with the same Name updates it.
+        """
+        self._require_connected()
+        await self._ensure_csrf_token()
+        payload = {
+            "Name": name,
+            "Kind": kind,
+            "Description": f"OIW-managed credential ({name})",
+            "User": user,
+            "Password": password,
+        }
+        try:
+            resp = await self._client.post(
+                "/UserCredentials",
+                json=payload,
+                headers=self._write_headers(
+                    {"Content-Type": "application/json", "Accept": "application/json"}
+                ),
+            )
+        except httpx.HTTPError as exc:
+            raise SapCiTenantError(f"user credential unreachable: {exc}") from exc
+        if resp.status_code >= 400:
+            # 409-ish updates may need PUT; surface clearly either way.
+            self._raise_for_status(resp, "deploy_user_credential")
+        return True
 
     async def disconnect(self) -> None:
         if self._client is not None and self._owns_client:
@@ -308,16 +358,29 @@ class SapCiTenantAdapter:
     # ------------------------------------------------------------------
 
     async def get_artifact_version(self, package_id: str) -> ArtifactVersion | None:
-        """Return the latest artifact version in a package, or None if empty."""
-        artifacts = await self.list_artifacts(package_id, top=1)
+        """Return the latest artifact version in a package, or None if empty.
+
+        Honors an artifact pin (`PackageId/ArtifactId` allowlist entry) so
+        drift detection compares against the SAME artifact the write path
+        targets — never a different sibling in a shared package.
+        """
+        artifacts = await self.list_artifacts(package_id, top=100)
         if not artifacts:
             return None
+        pin = self._pinned_artifact(package_id)
+        if pin:
+            artifacts = [a for a in artifacts if a.id == pin]
+            if not artifacts:
+                return None
         a = artifacts[0]
         return ArtifactVersion(version=a.version, deployed_at=None, deployed_by=None, digest=None)
 
     async def get_artifact_digest(self, package_id: str) -> str | None:
-        """Compute sha256 of the latest artifact ZIP for drift detection."""
-        artifacts = await self.list_artifacts(package_id, top=1)
+        """Compute sha256 of the target artifact ZIP for drift detection."""
+        artifacts = await self.list_artifacts(package_id, top=100)
+        pin = self._pinned_artifact(package_id)
+        if pin:
+            artifacts = [a for a in artifacts if a.id == pin]
         if not artifacts:
             return None
         a = artifacts[0]
@@ -334,11 +397,12 @@ class SapCiTenantAdapter:
             raise SapCiTenantError(
                 "write refused: no writable packages configured. Set "
                 "OIW_TENANT_WRITABLE_PACKAGES (or writable_packages=) to the "
-                "human-created scratch package id(s). Per WP-08 §D-004 the "
+                "human-created scratch package id(s) — optionally pinned to a "
+                "single artifact as PackageId/ArtifactId. Per WP-08 §D-004 the "
                 "tenant is a library, not a scratchpad — OIW only ever "
                 "updates artifacts inside packages you explicitly allow."
             )
-        if package_id not in self._writable:
+        if not self._package_is_writable(package_id):
             raise SapCiTenantError(
                 f"write refused: package '{package_id}' is not on the writable "
                 f"allowlist {self._writable}. Only pre-created scratch "
@@ -372,45 +436,93 @@ class SapCiTenantAdapter:
             headers["x-csrf-token"] = self._csrf_token
         return headers
 
-    async def _resolve_target_artifact(self, package_id: str) -> TenantArtifactSummary:
+    async def _resolve_target_artifact(
+        self, package_id: str, artifact_id: str | None = None
+    ) -> TenantArtifactSummary:
         """Find the EXISTING designtime artifact to update in a package.
 
         Update-only policy (T0-003): we never create artifacts. If the
         package has none, fail with remediation instead of guessing.
+
+        When the allowlist pins artifacts (`PackageId/ArtifactId`), ONLY
+        pinned artifacts are valid targets — a shared scratch package must
+        never see its other (real) artifacts overwritten. With multiple
+        pins, `artifact_id` selects among them; it must itself be pinned.
         """
-        artifacts = await self.list_artifacts(package_id, top=1)
+        pins = [
+            e.split("/", 1)[1]
+            for e in self._writable
+            if e.startswith(f"{package_id}/") and len(e) > len(package_id) + 1
+        ]
+        if artifact_id is not None:
+            if artifact_id not in pins:
+                raise SapCiTenantError(
+                    f"artifact '{artifact_id}' is not in the writable allowlist "
+                    f"for package '{package_id}' — add "
+                    f"'{package_id}/{artifact_id}' to OIW_TENANT_WRITABLE_PACKAGES"
+                )
+            pin = artifact_id
+        elif len(pins) > 1:
+            raise SapCiTenantError(
+                f"package '{package_id}' has multiple allowlisted artifacts "
+                f"({', '.join(sorted(pins))}) — select one explicitly"
+            )
+        elif pins:
+            pin = pins[0]
+        else:
+            pin = None
+        artifacts = await self.list_artifacts(package_id, top=100)
         if not artifacts:
             raise SapCiTenantError(
                 f"package '{package_id}' has no designtime artifacts to update. "
                 f"Per T0-003 this adapter is update-only: create the artifact "
                 f"once in the tenant UI (any placeholder iFlow), then re-run."
             )
+        if pin:
+            for a in artifacts:
+                if a.id == pin:
+                    return a
+            raise SapCiTenantError(
+                f"pinned artifact '{pin}' not found in package '{package_id}'. "
+                f"Refusing to fall back to another artifact — the allowlist "
+                f"entry '{package_id}/{pin}' names exactly one update target."
+            )
         return artifacts[0]
 
-    async def upload_package(self, package_id: str, archive: bytes, digest: str) -> UploadResult:
+    async def upload_package(
+        self, package_id: str, archive: bytes, digest: str, artifact_id: str | None = None
+    ) -> UploadResult:
         """Update an existing artifact's designtime content with `archive`.
 
-        PUT /IntegrationDesigntimeArtifacts(Id='{id}',Version='{version}')/$value
-        The archive must be a CPI designtime bundle. Empty archives are
-        rejected locally before anything touches the tenant.
+        LIVE-PROVEN VERB (2026-08-25, AdaequareGST/open_mateo_test):
+        UPDATE = PUT /IntegrationDesigntimeArtifacts(Id='{id}',Version='{v}')
+        with JSON {ArtifactContent: <base64 zip>}. POST is CREATE-only
+        (rejects existing ids with a misleading 500); PUT on $value is
+        501; multipart is 501. The bundle's Bundle-SymbolicName must match
+        the existing artifact — callers inherit identity via
+        sap_export.cpi_bundle_identity.
+
+        Policy refusals come FIRST — an out-of-allowlist write must fail
+        even if the adapter isn't connected.
         """
-        # Policy refusals come FIRST — an out-of-allowlist write must fail
-        # even if the adapter isn't connected (no network needed to say no).
+        import base64 as _b64
+
         self._ensure_writable(package_id)
         self._require_connected()
         if not archive or len(archive) < 4:
             return UploadResult(
                 success=False, version=None, error="empty or truncated archive", uploaded_at=None
             )
-        target = await self._resolve_target_artifact(package_id)
+        target = await self._resolve_target_artifact(package_id, artifact_id)
         await self._ensure_csrf_token()
-        url = f"/IntegrationDesigntimeArtifacts(Id='{target.id}',Version='{target.version}')/$value"
+        payload = {"ArtifactContent": _b64.b64encode(archive).decode()}
+        url = f"/IntegrationDesigntimeArtifacts(Id='{target.id}',Version='{target.version}')"
         try:
             resp = await self._client.put(
                 url,
-                content=archive,
+                json=payload,
                 headers=self._write_headers(
-                    {"Content-Type": "application/zip", "Accept": "application/json"}
+                    {"Content-Type": "application/json", "Accept": "application/json"}
                 ),
             )
         except httpx.HTTPError as exc:
@@ -424,75 +536,189 @@ class SapCiTenantAdapter:
             uploaded_at=None,  # SAP doesn't echo a timestamp here
         )
 
-    async def deploy(self, package_id: str, version: str) -> DeploymentResult:
-        """Deploy (activate) the artifact: POST /IntegrationRuntimeArtifacts.
+    async def create_artifact(
+        self,
+        package_id: str,
+        artifact_id: str,
+        artifact_name: str,
+        archive: bytes,
+    ) -> UploadResult:
+        """CREATE a new designtime artifact via POST /IntegrationDesigntimeArtifacts.
 
-        Response shape varies across CPI releases; we read defensively
-        (Id/id, Status/status) and treat 2xx without a body as accepted.
+        Verb semantics (live finding 2026-08-25 + IntegrationContent.edmx):
+        POST entity is CREATE-only — an existing Id gets a misleading 500,
+        so the caller MUST preflight for id collisions (artifact ids are
+        TENANT-GLOBAL, blood law). Payload per the edmx entity: Id, Version,
+        PackageId, Name, ArtifactContent(base64 zip).
+
+        Policy: same allowlist gates as every write — scratch packages
+        only, CSRF token, loud refusal before any network call.
+        """
+        import base64 as _b64
+
+        self._ensure_writable(package_id)
+        self._require_connected()
+        if not archive or len(archive) < 4:
+            return UploadResult(
+                success=False, version=None, error="empty or truncated archive", uploaded_at=None
+            )
+        # Id-collision preflight: never rely on the misleading 500.
+        artifacts = await self.list_artifacts(package_id, top=200)
+        if any(a.id == artifact_id for a in artifacts):
+            return UploadResult(
+                success=False,
+                version=None,
+                error=(
+                    f"artifact '{artifact_id}' already exists in package "
+                    f"'{package_id}' — use upload_package (update) instead"
+                ),
+                uploaded_at=None,
+            )
+        await self._ensure_csrf_token()
+        # LIVE FINDING (2026-09-02): the tenant AUTO-GENERATES Version on
+        # POST-create — sending it is a 400 ("Auto generated version ... must
+        # not be part of input payload"). The edmx lists Version as a key,
+        # but the create verb rejects it in the body.
+        payload = {
+            "Id": artifact_id,
+            "PackageId": package_id,
+            "Name": artifact_name,
+            "ArtifactContent": _b64.b64encode(archive).decode(),
+        }
+        url = "/IntegrationDesigntimeArtifacts"
+        try:
+            resp = await self._client.post(
+                url,
+                json=payload,
+                headers=self._write_headers(
+                    {"Content-Type": "application/json", "Accept": "application/json"}
+                ),
+            )
+        except httpx.HTTPError as exc:
+            raise SapCiTenantError(f"create unreachable at {url}: {exc}") from exc
+        if resp.status_code >= 400:
+            self._raise_for_status(resp, "create_artifact")
+        # Read back the tenant-assigned version (auto-generated on create).
+        artifacts = await self.list_artifacts(package_id, top=200)
+        created_version = next((a.version for a in artifacts if a.id == artifact_id), None)
+        return UploadResult(
+            success=True,
+            version=created_version,
+            error=None,
+            uploaded_at=None,
+        )
+
+    async def deploy_configuration(
+        self,
+        package_id: str,
+        artifact_id: str,
+        param_key: str,
+        param_value: str,
+    ) -> bool:
+        """Deploy one artifact-scoped runtime Configuration row.
+
+        POST to the artifact's Configurations navigation (edmx:
+        IntegrationDesigntimeArtifact → Configurations entity). The
+        runtime resolves {{KEY}} externalized params + ${property.KEY}
+        references from these rows (live-proven dialects: GSTR2A
+        ${property.NewUrl}, testing_oiw {{openMateoURL}}).
         """
         self._ensure_writable(package_id)
         self._require_connected()
-        target = await self._resolve_target_artifact(package_id)
+        artifacts = await self.list_artifacts(package_id, top=200)
+        target = next((a for a in artifacts if a.id == artifact_id), None)
+        if target is None:
+            raise SapCiTenantError(
+                f"deploy_configuration: artifact '{artifact_id}' not found in '{package_id}'"
+            )
         await self._ensure_csrf_token()
-        payload = {"ArtifactId": target.id, "ArtifactVersion": version}
+        url = (
+            f"/IntegrationDesigntimeArtifacts(Id='{artifact_id}',Version='{target.version}')"
+            "/Configurations"
+        )
+        payload = {
+            "ParameterKey": param_key,
+            "ParameterValue": param_value,
+            "DataType": "xsd:string",
+        }
         try:
             resp = await self._client.post(
-                "/IntegrationRuntimeArtifacts",
+                url,
                 json=payload,
-                headers=self._write_headers({"Accept": "application/json"}),
+                headers=self._write_headers(
+                    {"Content-Type": "application/json", "Accept": "application/json"}
+                ),
             )
         except httpx.HTTPError as exc:
-            raise SapCiTenantError(f"deploy unreachable: {exc}") from exc
+            raise SapCiTenantError(f"configuration unreachable at {url}: {exc}") from exc
+        if resp.status_code >= 400:
+            self._raise_for_status(resp, "deploy_configuration")
+        return True
+
+    async def deploy(self, package_id: str, version: str, artifact_id: str | None = None) -> DeploymentResult:
+        """Deploy (activate): POST /DeployIntegrationDesigntimeArtifact.
+
+        LIVE-PROVEN (2026-08-26, from the tenant's own
+        IntegrationContent.edmx function imports): OData v1 function
+        import taking Id/Version as QUERY parameters; returns HTTP 202
+        with an opaque tracking UUID. Activation progress polls via
+        GET /IntegrationRuntimeArtifacts?$filter=Name eq '<id>' (the
+        collection Id IS the artifact id).
+        """
+        self._ensure_writable(package_id)
+        self._require_connected()
+        target = await self._resolve_target_artifact(package_id, artifact_id)
+        await self._ensure_csrf_token()
+        url = f"/DeployIntegrationDesigntimeArtifact?Id='{target.id}'&Version='{version}'"
+        try:
+            resp = await self._client.post(url, headers=self._write_headers({"Accept": "application/json"}))
+        except httpx.HTTPError as exc:
+            raise SapCiTenantError(f"deploy unreachable at {url}: {exc}") from exc
         if resp.status_code >= 400:
             self._raise_for_status(resp, "deploy")
-        data: dict = {}
-        try:
-            body = resp.json()
-            data = (
-                body.get("d", {})
-                if isinstance(body, dict) and "d" in body
-                else (body if isinstance(body, dict) else {})
-            )
-        except Exception:
-            data = {}
-        deployment_id = data.get("Id") or data.get("id") or ""
-        status_raw = str(data.get("Status") or data.get("status") or "IN_PROGRESS").upper()
-        state = (
-            "DEPLOYED"
-            if status_raw in ("DEPLOYED", "STARTED", "SUCCESS")
-            else ("FAILED" if status_raw in ("FAILED", "ERROR") else "IN_PROGRESS")
-        )
+        # 202 + opaque tracking UUID; poll key is the artifact id.
         return DeploymentResult(
-            success=state != "FAILED",
-            deployment_id=str(deployment_id),
-            status=state,  # type: ignore[arg-type]
-            error=None if state != "FAILED" else str(data.get("Message") or "deploy failed"),
+            success=True,
+            deployment_id=target.id,
+            status="IN_PROGRESS",
+            error=None,
         )
 
-    async def poll_deployment(self, deployment_id: str) -> DeploymentStatus:
-        """GET /IntegrationRuntimeArtifacts('{deployment_id}') for status."""
-        self._require_connected()
+    async def _runtime_status(self, artifact_id: str) -> tuple[str, str | None]:
+        """Read the runtime view for one artifact → (state, raw_status)."""
         resp = await self._client.get(
-            f"/IntegrationRuntimeArtifacts('{deployment_id}')",
+            "/IntegrationRuntimeArtifacts",
+            params={
+                "$filter": f"Name eq '{artifact_id}'",
+                "$orderby": "DeployedOn desc",
+                "$top": 1,
+                "$format": "json",
+            },
             headers={**self._basic_auth_header(), "Accept": "application/json"},
         )
         self._raise_for_status(resp, "poll_deployment")
-        try:
-            body = resp.json()
-            data = (
-                body.get("d", {})
-                if isinstance(body, dict) and "d" in body
-                else (body if isinstance(body, dict) else {})
-            )
-        except Exception:
-            data = {}
-        status_raw = str(data.get("Status") or data.get("status") or "IN_PROGRESS").upper()
+        results = (
+            resp.json().get("d", {}).get("results", [])
+            if "json" in resp.headers.get("content-type", "")
+            else []
+        )
+        if not results:
+            return "NOT_DEPLOYED", None
+        raw = str(results[0].get("Status") or "").upper()
         state = (
             "DEPLOYED"
-            if status_raw in ("DEPLOYED", "STARTED", "SUCCESS")
-            else ("FAILED" if status_raw in ("FAILED", "ERROR") else "IN_PROGRESS")
+            if raw in ("STARTED", "DEPLOYED", "SUCCESS")
+            else "FAILED"
+            if raw == "ERROR"
+            else "IN_PROGRESS"
         )
-        return DeploymentStatus(state=state, deployment_id=deployment_id, message=None, logs=[])
+        return state, raw
+
+    async def poll_deployment(self, deployment_id: str) -> DeploymentStatus:
+        """Poll runtime status for an artifact id (see deploy())."""
+        self._require_connected()
+        state, raw = await self._runtime_status(deployment_id)
+        return DeploymentStatus(state=state, deployment_id=deployment_id, message=raw, logs=[])
 
     async def get_runtime_logs(self, package_id: str, since: object) -> list[LogEntry]:
         """Read MessageProcessingLogs (best-effort mapping into LogEntry).

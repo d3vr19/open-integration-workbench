@@ -1,0 +1,54 @@
+props:
+  disconnect: '0'
+  fileName: '*.*'
+  maximumReconnectAttempts: '3'
+  stepwise: '0'
+  ComponentNS: sap
+  privateKeyAlias: epq_sftp
+  location_id: EMCNPCC
+  recursive: '0'
+  Name: EMCURE_SAP
+  TransportProtocolVersion: 1.14.0
+  flatten: '0'
+  proxyPort: '8080'
+  path: ../../INTERFACE/DEBLECX/OUTBOUND
+  ComponentSWCVName: external
+  noop: move
+  useClusterLock: '0'
+  doneFileName: ${file:name}.done
+  file.move: /Outbound/History
+  host: epqsftp:22
+  connectTimeout: '10000'
+  file_sorting_criteria: sort_by_none
+  maxMessagesPerPoll: '20'
+  fastExistsCheck: '0'
+  ComponentSWCVId: 1.14.0
+  MessageProtocol: File
+  direction: Sender
+  authentication: public_key
+  file_sorting_direction: sort_direction_asc
+  ComponentType: SFTP
+  credential_name: ''
+  proxyProtocol: socks5
+  readLock: none
+  idempotentRepository: database
+  proxyType: sapcc
+  proxyAlias: ''
+  componentVersion: '1.14'
+  reconnectDelay: '1000'
+  proxyHost: ''
+  scheduleKey: <row><cell>dayValue</cell><cell></cell></row><row><cell>monthValue</cell><cell></cell></row><row><cell>yearValue</cell><cell></cell></row><row><cell>dateType</cell><cell>DAILY</cell></row><row><cell>secondValue</cell><cell>0</cell></row><row><cell>minutesValue</cell><cell></cell></row><row><cell>hourValue</cell><cell></cell></row><row><cell>toInterval</cell><cell>24</cell></row><row><cell>fromInterval</cell><cell>0</cell></row><row><cell>OnEveryMinute</cell><cell>1</cell></row><row><cell>timeType</cell><cell>TIME_INTERVAL</cell></row><row><cell>timeZone</cell><cell>(
+    UTC 5:30 ) India Standard Time(IST)</cell></row><row><cell>throwExceptionOnExpiry</cell><cell>true</cell></row><row><cell>second</cell><cell>0/10</cell></row><row><cell>minute</cell><cell>*</cell></row><row><cell>hour</cell><cell>0-24</cell></row><row><cell>day_of_month</cell><cell>?</cell></row><row><cell>month</cell><cell>*</cell></row><row><cell>dayOfWeek</cell><cell>*</cell></row><row><cell>year</cell><cell>*</cell></row><row><cell>startAt</cell><cell></cell></row><row><cell>endAt</cell><cell></cell></row><row><cell>attributeBehaviour</cell><cell>isScheduleOnDayRequired,isScheduleRecurRequired</cell></row><row><cell>triggerType</cell><cell>cron</cell></row><row><cell>noOfSchedules</cell><cell>1</cell></row><row><cell>schedule1</cell><cell>0+0/1+0-23+?+*+*+*&amp;trigger.timeZone=IST</cell></row>
+  allowDeprecatedAlgorithms: '0'
+  TransportProtocol: SFTP
+  MessageProtocolVersion: 1.14.0
+  file_lock_timeout: '15'
+  username: CIBCQA
+shape: SFTP-Sender-EMCURE_SAP
+componentType: SFTP
+direction: Sender
+name: EMCURE_SAP
+observedIn: 1
+exporterCovered: false
+examples:
+- PratikETSTEST/EMCURE_SFTP_TO_SAP_SFTP_TEST

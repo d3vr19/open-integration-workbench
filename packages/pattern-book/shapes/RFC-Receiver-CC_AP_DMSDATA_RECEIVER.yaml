@@ -1,0 +1,23 @@
+props:
+  ComponentType: RFC
+  ComponentNS: sap
+  destination: '{{MessageFlow_3_destination}}'
+  componentVersion: '1.2'
+  Name: CC_AP_DMSDATA_RECEIVER
+  TransportProtocolVersion: 1.2.1
+  ComponentSWCVName: external
+  transactioncommit: '{{MessageFlow_3_transactioncommit}}'
+  newConnection: '{{MessageFlow_3_newConnection}}'
+  TransportProtocol: RFC
+  MessageProtocol: Synchronous RFC
+  MessageProtocolVersion: 1.2.1
+  ComponentSWCVId: 1.2.1
+  direction: Receiver
+shape: RFC-Receiver-CC_AP_DMSDATA_RECEIVER
+componentType: RFC
+direction: Receiver
+name: CC_AP_DMSDATA_RECEIVER
+observedIn: 1
+exporterCovered: false
+examples:
+- POtoCIMigration/BC_AMPLELOGIC_SI_AL_DMSDATA_OS_4RES_ECC

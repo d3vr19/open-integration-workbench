@@ -1,0 +1,28 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  description: Deterministic turbo smoke test (auto-generated).
+  name: turbo-smoke-oiw-turbo-fwd
+spec:
+  assertions:
+  - equals: COMPLETED
+    type: exchange.status
+  - node: step-1-modifier-content
+    type: node.executed
+  - node: step-2-log-message
+    type: node.executed
+  - node: receiver-out
+    type: node.executed
+  - node: pd-terminator
+    type: node.executed
+  flow: oiw-turbo-fwd
+  input:
+    bodyInline: '{}'
+    entrypoint: sender-main
+    headers:
+      Content-Type: application/json
+  mocks:
+  - respond:
+      body: ''
+      status: 200
+    target: receiver-out

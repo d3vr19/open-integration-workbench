@@ -1,0 +1,47 @@
+props:
+  WSSecurityType: VerifyMessage
+  PublicKeyAliasResponseEncryption: ''
+  ComponentNS: sap
+  maximumAttachmentSize: '100'
+  Name: SOAP_Sender_ConsultaEstadoDte
+  TransportProtocolVersion: 1.9.0
+  ComponentSWCVName: external
+  useWSAddressing: '0'
+  soapWsdlURL: /wsdl/ConsultaEstado.wsdl
+  soapOptions: cxfRobust
+  CheckTimeStamp: '0'
+  soapServiceName: p2:Service1
+  WSSecurity_SignatureAlgorithm_Inbound: SHA1
+  SigningOrder: SignBeforeEncryption
+  MessageProtocol: SOAP 1.x
+  ComponentSWCVId: 1.9.0
+  direction: Sender
+  clientCertificates: ''
+  X509TokenAssertion: WssX509V3Token10
+  ComponentType: SOAP
+  maximumBodySize: '40'
+  soapWsdlPortName: p2:Service1Soap12
+  componentVersion: '1.7'
+  messageExchangePattern: RequestReply
+  WSSecurity: None
+  PrivateKeyAliasResponseSigning: ''
+  SaveIncomingSignedMessage: '0'
+  SenderBasicSecurityProfileCompliant: '1'
+  RecipientTokenIncludeStrategy: Never
+  AlgorithmSuiteAssertion: Basic128Rsa15
+  serviceDefinition: WSDL
+  TransportProtocol: HTTP
+  userRole: '{{UserRole}}'
+  InitiatorTokenIncludeStrategy: AlwaysToRecipient
+  senderAuthType: RoleBased
+  MessageProtocolVersion: 1.9.0
+shape: SOAP-Sender-SOAP_Sender_ConsultaEstadoDte
+componentType: SOAP
+direction: Sender
+name: SOAP_Sender_ConsultaEstadoDte
+observedIn: 3
+exporterCovered: false
+examples:
+- DBNetFELCL/ConsultaEstadoDte
+- DIGIFLOWFELPE/ConsultaEstadoDte_PE_ACTUA
+- DIGIFLOWFELPE/ConsultaEstadoDte_PE_GUIA

@@ -1,0 +1,74 @@
+{
+  "current": "DEPLOYED",
+  "history": [
+    {
+      "from_state": "DRAFT",
+      "to_state": "VALIDATED",
+      "timestamp": "2026-08-26T00:50:49.999060+00:00",
+      "actor": "cli",
+      "evidence": {
+        "package_id": "AdaequareGST"
+      }
+    },
+    {
+      "from_state": "VALIDATED",
+      "to_state": "TESTED",
+      "timestamp": "2026-08-26T00:50:49.999579+00:00",
+      "actor": "cli",
+      "evidence": {
+        "package_id": "AdaequareGST"
+      }
+    },
+    {
+      "from_state": "TESTED",
+      "to_state": "BUILT",
+      "timestamp": "2026-08-26T00:50:49.999730+00:00",
+      "actor": "cli",
+      "evidence": {
+        "package_id": "AdaequareGST"
+      }
+    },
+    {
+      "from_state": "BUILT",
+      "to_state": "PROPOSED",
+      "timestamp": "2026-08-26T00:50:50.007176+00:00",
+      "actor": "cli",
+      "evidence": {
+        "package_id": "AdaequareGST"
+      }
+    },
+    {
+      "from_state": "PROPOSED",
+      "to_state": "APPROVED",
+      "timestamp": "2026-08-26T00:50:50.114848+00:00",
+      "actor": "d3vr19",
+      "evidence": {
+        "approver": "d3vr19"
+      }
+    },
+    {
+      "from_state": "APPROVED",
+      "to_state": "UPLOADED",
+      "timestamp": "2026-08-26T00:50:53.664297+00:00",
+      "actor": "cli",
+      "evidence": {
+        "version": "1.0.0",
+        "digest": "de8d9c4a67739c879ddeafc16ec6407a8a74865dbaa404fc25bd7313369fe0c2",
+        "bytes": 2520,
+        "overwriteDrift": true,
+        "tenantDigestBefore": "sha256:32a1f6245bc50275433719db24ceda6569a9f99a6cfe58eb1dd31da26d98c891"
+      }
+    },
+    {
+      "from_state": "UPLOADED",
+      "to_state": "DEPLOYED",
+      "timestamp": "2026-08-26T00:50:55.715644+00:00",
+      "actor": "cli",
+      "evidence": {
+        "deployment_id": "open_mateo_test"
+      }
+    }
+  ],
+  "package_id": "AdaequareGST",
+  "profile_name": "btp"
+}

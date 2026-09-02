@@ -1,0 +1,53 @@
+props:
+  server: smtp-mail.outlook.com
+  bcc: ''
+  attachments: ''
+  auth: loginPlain
+  subject: 'SAP CPI Monitoring: Artifact Execution Summary'
+  encrypt.smime.aes.keysize: '128'
+  ComponentNS: com.sap.it.ide.mail.ui.namespace2
+  keep_attachments: '1'
+  body: ${in.body}
+  ssl: starttls_mandatory
+  timeout: '30000'
+  Name: Mail
+  TransportProtocolVersion: '1.0'
+  ComponentSWCVName: com.sap.it.ide.mail.ui.archive2
+  proxyPort: '8080'
+  encrypt.smime.des.keysize: '128'
+  content_type: text/html
+  locationId: ''
+  encrypt.smime.algorithm: aes
+  signature.smime.table: ''
+  from: komal.kumari@emcure.com
+  MessageProtocol: None
+  ComponentSWCVId: com.sap.it.ide.mail.ui.archive2
+  direction: Receiver
+  cc: ''
+  attachmentTransferEncoding: auto
+  encrypt.smime.aes.gcm.keysize: '128'
+  ComponentType: Mail
+  proxyProtocol: socks5
+  content_encoding: UTF-8
+  proxyType: none
+  proxyAlias: ''
+  componentVersion: '1.12'
+  proxyHost: ''
+  signature.smime.clearText: '1'
+  encrypt.type: none
+  TransportProtocol: SMTP
+  tokenCredential: ''
+  to: komal.kumari@emcure.com,pratik.shewale@emcure.com
+  encrypt.smime.keys: ''
+  user: Komal_Gmail
+  MessageProtocolVersion: '1.0'
+shape: Mail-Receiver-Mail
+componentType: Mail
+direction: Receiver
+name: Mail
+observedIn: 3
+exporterCovered: false
+examples:
+- DPWORLD/POST_ASN
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Error_iflows_to_ANS
+- IntegrationSuiteAlertingFrameworkusingAlertNotificationService/Send_Cloud_Integration_Expiring_Certificates_to_ANS

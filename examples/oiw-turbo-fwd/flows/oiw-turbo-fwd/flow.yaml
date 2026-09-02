@@ -1,0 +1,53 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: oiw-turbo-fwd
+  labels:
+    archetype: turbo-assembled
+  name: oiw-turbo-fwd
+  version: 1
+spec:
+  edges:
+  - from: sender-main
+    to: step-1-modifier-content
+  - from: step-1-modifier-content
+    to: step-2-log-message
+  - from: step-2-log-message
+    to: receiver-out
+  - from: receiver-out
+    to: pd-terminator
+  entrypoints:
+  - config:
+      methods:
+      - POST
+      path: /oiw-turbo-fwd
+    fidelity: simulated
+    id: sender-main
+    type: sender.http
+  extensions: {}
+  nodes:
+  - config:
+      headers:
+      - name: X-Correlation-Id
+        value: oiw-autogen
+    fidelity: compatible-subset
+    id: step-1-modifier-content
+    type: modifier.content
+  - config:
+      level: INFO
+      message: processing message
+    fidelity: compatible-subset
+    id: step-2-log-message
+    type: log.message
+  - config:
+      method: GET
+      timeoutSeconds: 30
+      url: https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m
+    fidelity: simulated
+    id: receiver-out
+    type: receiver.http
+  - config:
+      address: /oiw-turbo-fwd_pd
+    fidelity: simulated
+    id: pd-terminator
+    type: receiver.processdirect

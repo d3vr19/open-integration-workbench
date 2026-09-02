@@ -1,0 +1,25 @@
+props:
+  ComponentType: HTTPS
+  maximumBodySize: '{{MessageFlow_1_maximumBodySize}}'
+  ComponentNS: sap
+  componentVersion: '1.5'
+  Name: CC_AP_DMSDATA_SENDER_REST
+  TransportProtocolVersion: 1.5.0
+  ComponentSWCVName: external
+  xsrfProtection: '{{MessageFlow_1_xsrfProtection}}'
+  TransportProtocol: HTTPS
+  userRole: '{{MessageFlow_1_userRole}}'
+  senderAuthType: '{{MessageFlow_1_senderAuthType}}'
+  MessageProtocol: None
+  MessageProtocolVersion: 1.5.0
+  ComponentSWCVId: 1.5.0
+  direction: Sender
+  clientCertificates: ''
+shape: HTTPS-Sender-CC_AP_DMSDATA_SENDER_REST
+componentType: HTTPS
+direction: Sender
+name: CC_AP_DMSDATA_SENDER_REST
+observedIn: 1
+exporterCovered: true
+examples:
+- POtoCIMigration/BC_AMPLELOGIC_SI_AL_DMSDATA_OS_4RES_ECC
