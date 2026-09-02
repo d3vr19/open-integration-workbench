@@ -34,6 +34,7 @@ _OIW_TO_ACTIVITY = {
     "log.message": "Enricher",  # CPI logs via Content Modifier; Logger unproven
     "script.groovy": "Script",
     "converter.json-to-xml": "JsonToXmlConverter",
+    "converter.xml-to-json": "XmlToJsonConverter",
     "variables.write": "Variables",
 }
 
@@ -82,6 +83,10 @@ _RECEIVER_PROPS = [
     ("ComponentNS", "sap"),
     ("privateKeyAlias", ""),
     ("httpMethod", "{method}"),
+    # Send the body on writes, not on reads (tenant ground truth: the
+    # Alloga/Distribucion forward flows POST converted payloads with
+    # shouldSendBody=true; GET weather fetches run false).
+    ("httpShouldSendBody", "{sendbody}"),
     ("apiprovider_location_id", ""),
     ("allowedResponseHeaders", "*"),
     ("Name", "HTTP"),
@@ -105,7 +110,6 @@ _RECEIVER_PROPS = [
     ("MessageProtocol", "None"),
     ("direction", "Receiver"),
     ("ComponentType", "HTTP"),
-    ("httpShouldSendBody", "false"),
     ("throwExceptionOnFailure", "true"),
     ("proxyType", "default"),
     ("componentVersion", "1.20"),
@@ -113,6 +117,10 @@ _RECEIVER_PROPS = [
     ("proxyHost", ""),
     ("providerUrl", ""),
     ("retryOnConnectionFailure", "false"),
+    # RR-form ground truth (open_mateo_test weather chain, message-200):
+    # system = the receiver NODE ID (member semantics work in the RR form —
+    # the GSTR2A static-'Receiver' dialect belongs to the never-ran
+    # EndEvent form on this tenant).
     ("system", "{system}"),
     ("authenticationMethod", "None"),
     ("locationID", "MBP"),
@@ -128,6 +136,7 @@ _RECEIVER_PROPS = [
     ("MessageProtocolVersion", "1.20.2"),
     ("providerRelativeUrl", ""),
     ("httpAddressWithoutQuery", "{url}"),
+    ("allowedRequestHeaders", ""),
 ]
 
 # ProcessDirect receiver messageFlow — mirrored verbatim from a UI-authored
@@ -339,6 +348,49 @@ def _fill(template: list[tuple[str, str]], **kwargs: str) -> list[tuple[str, str
     return [(k, v.format(**kwargs)) for k, v in template]
 
 
+def _modifier_rows(rows: list[dict]) -> str:
+    """Serialize modifier.content headers/properties into CPI table XML.
+
+    Mirrors the real-sap fixture row format VERBATIM (reference:
+    packages/test-fixtures/real-sap/sap-codejam-request-employee-dependants).
+    Only fixture-PROVEN types are emitted: constant | property | xpath.
+    A literal value → constant. A property reference ('property.NAME',
+    no ${} — the fixture dialect) → property. An xpath ('/...') → xpath.
+    ${...} expressions are NOT a proven dialect — live 2026-09-02:
+    a constant ${header.X} row produces 'Member name not found' at
+    runtime; the assembler never emits them and unknown shapes raise.
+    `_props` XML-escapes the value, producing the &lt;row&gt;… form.
+    """
+    out: list[str] = []
+    for r in rows:
+        action = "Create" if r.get("action", "set") == "set" else "Delete"
+        value = str(r.get("value", ""))
+        name = str(r.get("name", ""))
+        rtype = str(r.get("type", "")).lower()
+        if not rtype:
+            if value.startswith("property.") and len(value) > len("property."):
+                rtype = "property"  # fixture dialect: bare property.NAME reference
+                value = value[len("property.") :]
+            elif value.startswith("/") and not value.startswith("//"):
+                rtype = "xpath"
+            else:
+                rtype = "constant"
+        if rtype not in ("constant", "property", "xpath"):
+            raise ValueError(
+                f"modifier row {name!r}: type {rtype!r} is not a proven CPI "
+                "Enricher dialect (constant|property|xpath)"
+            )
+        out.append(
+            f"<row><cell id='Action'>{escape(action)}</cell>"
+            f"<cell id='Type'>{escape(rtype)}</cell>"
+            f"<cell id='Value'>{escape(value)}</cell>"
+            f"<cell id='Default'></cell>"
+            f"<cell id='Name'>{escape(name)}</cell>"
+            f"<cell id='Datatype'></cell></row>"
+        )
+    return "".join(out)
+
+
 def _resolve_script_name(node: dict, project_root: Path | None) -> str:
     """Bundle-relative script file name for a script.groovy node.
 
@@ -427,6 +479,7 @@ def export_flow_to_iflw(
     flow: dict,
     display_name: str | None = None,
     project_root: Path | None = None,
+    externalized_params_out: list[dict[str, str]] | None = None,
 ) -> str:
     """Export one OIW IntegrationFlow dict to designer-safe .iflw text.
 
@@ -434,6 +487,10 @@ def export_flow_to_iflw(
     (HTTPS writer + SFTP poller can coexist in ONE artifact — proven
     pattern from DPWORLD_SFTP_QAS reference). `project_root` is required
     when the flow contains script.groovy nodes.
+
+    `externalized_params_out`: when provided, receives the {{KEY}} →
+    literal mappings for externalized terminal-HTTP receiver URLs, so
+    the caller can write parameters.prop defaults + deploy Configurations.
     """
     spec = flow["spec"]
     flow_id = flow.get("metadata", {}).get("id", "flow")
@@ -456,11 +513,9 @@ def export_flow_to_iflw(
     L.append(_props(_COLLAB_PROPS))
 
     # --- sender participants (one per entrypoint) ---
-    for bi, b in enumerate(branches, start=1):
+    for bi, _b in enumerate(branches, start=1):
         pid = "Participant_1" if bi == 1 else f"Participant_E{bi}"
-        L.append(
-            f'        <bpmn2:participant id="{pid}" ifl:type="EndpointSender" name="Sender">'
-        )
+        L.append(f'        <bpmn2:participant id="{pid}" ifl:type="EndpointSender" name="Sender">')
         L.append(
             _props(
                 [("enableBasicAuthentication", "false"), ("ifl:type", "EndpointSender")],
@@ -471,6 +526,10 @@ def export_flow_to_iflw(
 
     # --- receiver participants + their messageFlows ---
     receiver_mfs: list[str] = []
+    # Terminal-HTTP receivers externalize URL+query as {{KEY}} params
+    # (live law 2026-09-02); the literals land in parameters.prop + the
+    # caller deploys matching Configurations rows for the runtime.
+    externalized_params: list[dict[str, str]] = []
     seen_receiver_participants: set[str] = set()
 
     def _receiver_participant(r: dict) -> None:
@@ -489,6 +548,7 @@ def export_flow_to_iflw(
         _receiver_participant(r)
         cfg_r = r.get("config") or {}
         gid_i = gid[r["id"]]
+        pid_r = f'Participant_{escape(r["id"])}'
         chain = b_nodes[bi]
         is_terminal = chain and r["id"] == chain[-1]["id"]
         if not is_terminal and r["type"] != "receiver.http":
@@ -496,7 +556,18 @@ def export_flow_to_iflw(
                 f"mid-flow '{r['type']}' has no request-reply rendering — only "
                 "receiver.http continues the flow with a response"
             )
-        mf_source = f"EndEvent_{bi}" if is_terminal else f"ServiceTask_{gid_i}"
+        # LIVE LAW (2026-09-02, single-variable bisection on oiw_turbo_fwd):
+        # the ONLY message-proven HTTP-call form on this tenant is the
+        # Request-Reply serviceTask (open_mateo_test chain + transplant +
+        # RR+PD variant all green; EndEvent-form flows GSTR2A/B/Auth have
+        # ZERO MPL rows — never ran). Terminal receiver.http therefore
+        # renders RR; the branch must then end message-typed (plain
+        # cname::EndEvent in the main process is START-FATAL) — the
+        # assembler appends a ProcessDirect terminator for that (proven
+        # pair topology, session 5 + bisect-5).
+        mf_source = (
+            f"EndEvent_{bi}" if is_terminal and r["type"] != "receiver.http" else f"ServiceTask_{gid_i}"
+        )
         mf_id = f"MessageFlow_R{gid_i}"
         if r["type"] == "receiver.processdirect":
             address = str(cfg_r.get("address", "")).strip()
@@ -507,7 +578,7 @@ def export_flow_to_iflw(
                 )
             receiver_mfs.append(
                 f'        <bpmn2:messageFlow id="{mf_id}" name="ProcessDirect" '
-                f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
+                f'sourceRef="{mf_source}" targetRef="{pid_r}">\n'
                 + _props(_fill(_PROCESSDIRECT_RECEIVER_PROPS, address=escape(address)))
                 + "\n        </bpmn2:messageFlow>"
             )
@@ -525,7 +596,7 @@ def export_flow_to_iflw(
             directory = str(cfg_r.get("directory", "/"))
             receiver_mfs.append(
                 f'        <bpmn2:messageFlow id="{mf_id}" name="SFTP" '
-                f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
+                f'sourceRef="{mf_source}" targetRef="{pid_r}">\n'
                 + _props(
                     _fill(
                         _SFTP_RECEIVER_PROPS,
@@ -546,22 +617,25 @@ def export_flow_to_iflw(
             )
         else:
             # HTTP — runtime-start REQUIRES the URL split (live-bisected);
-            # externalized {{params}} NOT required.
+            # RR form carries LITERAL url+query (open_mateo_test ground
+            # truth, message-200).
             from urllib.parse import urlsplit
 
             parts = urlsplit(str(cfg_r.get("url", "")))
-            url_base = f"{parts.scheme}://{parts.netloc}{parts.path}" if parts.scheme else parts.geturl()
+            url_val = f"{parts.scheme}://{parts.netloc}{parts.path}" if parts.scheme else parts.geturl()
+            query_val = parts.query
             receiver_mfs.append(
                 f'        <bpmn2:messageFlow id="{mf_id}" name="HTTP" '
-                f'sourceRef="{mf_source}" targetRef="Participant_{escape(r["id"])}">\n'
+                f'sourceRef="{mf_source}" targetRef="{pid_r}">\n'
                 + _props(
                     _fill(
                         _RECEIVER_PROPS,
                         method=str(cfg_r.get("method", "GET")),
+                        sendbody="false" if str(cfg_r.get("method", "GET")).upper() == "GET" else "true",
                         timeout=str(int(cfg_r.get("timeoutSeconds", 30) * 1000)),
                         system=escape(r["id"]),
-                        url=url_base,
-                        query=parts.query,
+                        url=url_val,
+                        query=query_val,
                     )
                 )
                 + "\n        </bpmn2:messageFlow>"
@@ -642,6 +716,13 @@ def export_flow_to_iflw(
     )
     for mf in receiver_mfs:
         L.append(mf)
+    # A flow without any receiver participant still carries the EMPTY
+    # Participant_2 ('Receiver') — oiw_pd ground truth (the PD-listener
+    # shape: sender-only flows keep the receiver participant stub).
+    if not seen_receiver_participants:
+        L.append('        <bpmn2:participant id="Participant_2" ifl:type="EndpointRecevier" name="Receiver">')
+        L.append(_props([("ifl:type", "EndpointRecevier")], indent="            "))
+        L.append("        </bpmn2:participant>")
     L.append("    </bpmn2:collaboration>")
 
     # ---------------- process: one branch per entrypoint -----------------
@@ -682,9 +763,17 @@ def export_flow_to_iflw(
             cfg = node.get("config") or {}
             is_last = li == len(chain) - 1
             terminal_receiver = is_last and ntype.startswith("receiver.")
-
+            if terminal_receiver and ntype == "receiver.http":
+                raise ValueError(
+                    "terminal receiver.http is not an exportable shape: the RR "
+                    "serviceTask form needs a message-typed branch end (plain "
+                    "cname::EndEvent is start-fatal; live law 2026-09-02). "
+                    "Append a receiver.processdirect terminator (piece "
+                    "assembler does this automatically) or place the HTTP "
+                    "receiver mid-flow."
+                )
             if terminal_receiver:
-                break  # rendered as EndEvent below
+                break  # terminal receivers render as the message-typed EndEvent
 
             incoming = f"SequenceFlow_{seq_counter}"
             outgoing = f"SequenceFlow_{seq_counter + 1}"
@@ -723,26 +812,49 @@ def export_flow_to_iflw(
             extra: list[tuple[str, str]]
             if activity == "Enricher":
                 msg = str(cfg.get("message", "")) if ntype == "log.message" else ""
+                # modifier.content config → real table rows (fixture format,
+                # real-sap/codejam reference). An empty-config modifier with
+                # empty tables is an unproven runtime-start shape (H2) —
+                # tables are populated whenever the IR carries rows.
+                prop_rows = _modifier_rows(cfg.get("properties", []) or [])
+                header_rows = _modifier_rows(cfg.get("headers", []) or [])
+                body = cfg.get("body")
+                body_type = (
+                    "constant"
+                    if ntype == "log.message"
+                    else ("constant" if body is not None else "expression")
+                )
                 extra = [
-                    ("bodyType", "constant" if ntype == "log.message" else "expression"),
-                    ("propertyTable", ""),
-                    ("headerTable", ""),
-                    ("wrapContent", msg),
+                    ("bodyType", body_type),
+                    ("propertyTable", prop_rows),
+                    ("headerTable", header_rows),
+                    (
+                        "wrapContent",
+                        msg if ntype == "log.message" else (str(body) if body is not None else ""),
+                    ),
                     ("componentVersion", "1.5"),
                     ("activityType", "Enricher"),
                     ("cmdVariantUri", "ctype::FlowstepVariant/cname::Enricher/version::1.5.1"),
                 ]
             elif activity == "JsonToXmlConverter":
+                # TENANT GROUND TRUTH (2026-09-02, absorbed running flows).
+                # DIALECT PAIRING observed on this tenant — never mix:
+                #   POST_Del_Alloga_QAS:  useNamespaces=false + uri 1.1.2
+                #   postAuthenticate:     useNamespaces=true  + uri 1.1.1
+                # Our earlier true+empty-namespaceMapping AND false+1.1.1
+                # mixes both failed at the downstream HTTP adapter
+                # ('Member name not found', live bisection rungs conv1-4).
+                # The exporter emits the Alloga dialect verbatim.
                 extra = [
                     ("additionalRootElementName", "root"),
                     ("jsonNamespaceMapping", ""),
-                    ("useNamespaces", "true"),
+                    ("useNamespaces", "false"),
                     ("addXMLRootElement", "true"),
                     ("additionalRootElementNamespace", ""),
                     ("jsonNamespaceSeparator", ":"),
                     ("componentVersion", "1.1"),
                     ("activityType", "JsonToXmlConverter"),
-                    ("cmdVariantUri", "ctype::FlowstepVariant/cname::JsonToXmlConverter/version::1.1.1"),
+                    ("cmdVariantUri", "ctype::FlowstepVariant/cname::JsonToXmlConverter/version::1.1.2"),
                 ]
             elif activity == "Script":
                 resource = _resolve_script_name(node, project_root)
@@ -755,6 +867,22 @@ def export_flow_to_iflw(
                     ("subActivityType", "GroovyScript"),
                     ("script", escape(resource)),
                 ]
+            elif activity == "XmlToJsonConverter":
+                # TENANT GROUND TRUTH (2026-09-02, live-absorbed running
+                # flows: postAuthenticate/putDistribucion — literal shapes).
+                extra = [
+                    ("xmlJsonUseStreaming", "false"),
+                    ("xmlJsonSuppressRootElement", "true"),
+                    ("xmlJsonPathTable", ""),
+                    ("jsonOutputEncoding", ""),
+                    ("jsonNamespaceMapping", ""),
+                    ("xmlJsonConvertAllElements", "specific"),
+                    ("componentVersion", "1.0"),
+                    ("activityType", "XmlToJsonConverter"),
+                    ("cmdVariantUri", "ctype::FlowstepVariant/cname::XmlToJsonConverter/version::1.0.6"),
+                    ("useNamespaces", "true"),
+                    ("jsonNamespaceSeparator", ":"),
+                ]
             elif activity == "Variables":
                 name_v = escape(str(cfg.get("name", "")))
                 if not name_v:
@@ -763,13 +891,17 @@ def export_flow_to_iflw(
                 vtype = escape(str(cfg.get("valueType", "expression")))
                 scope = escape(str(cfg.get("scope", "global")))
                 row = f"<row><cell>{name_v}</cell><cell></cell><cell>{vtype}</cell><cell>{value}</cell><cell>{scope}</cell></row>"
+                # oiw_pd ground truth: encrypt='true', componentVersion='1.2'
+                # (my 'false' + missing componentVersion = runtime-start ERROR,
+                # live 2026-09-02).
                 extra = [
                     ("visibility", str(cfg.get("visibility", "local"))),
-                    ("encrypt", str(cfg.get("encrypt", "false")).lower()),
+                    ("encrypt", "true"),
                     ("expire", str(cfg.get("expire", "90"))),
                     ("variable", row),
                     ("activityType", "Variables"),
                     ("cmdVariantUri", "ctype::FlowstepVariant/cname::Variables/version::1.2.0"),
+                    ("componentVersion", "1.2"),
                 ]
             else:
                 raise ValueError(f"unhandled activity {activity}")
@@ -781,12 +913,13 @@ def export_flow_to_iflw(
             L.append(f"            <bpmn2:outgoing>{outgoing}</bpmn2:outgoing>")
             L.append(f"        </bpmn2:{tag}>")
 
-        # Branch end event: message-typed when the branch terminates in a
-        # receiver adapter (its messageFlow hangs off this end); otherwise
-        # a plain end event (no messageEventDefinition).
+        # Branch end event: ALWAYS message-typed in the main process
+        # (BLOOD LAW, re-proven live 2026-09-02: a plain cname::EndEvent
+        # in the main process is runtime-start FATAL — oiw_pd's PD-listener
+        # ends MessageEndEvent with NO receiver mf on it; plain ends exist
+        # only inside subprocesses).
         end_id = f"EndEvent_{bi}"
-        last = chain[-1] if chain else None
-        msg_typed = bool(last and last["type"].startswith("receiver."))
+        msg_typed = True
         incoming = f"SequenceFlow_{seq_counter}"
         seq_counter += 1
         L.append(f'        <bpmn2:endEvent id="{end_id}" name="End">')
@@ -808,6 +941,7 @@ def export_flow_to_iflw(
         L.append("        </bpmn2:endEvent>")
 
         # sequenceFlows for this branch (declared at process end, fixture convention)
+        last = chain[-1] if chain else None
         elem_ids = [start_id]
         for node in chain:
             if node is last and last is not None and last["type"].startswith("receiver."):
@@ -823,6 +957,8 @@ def export_flow_to_iflw(
     L.append("    </bpmn2:process>")
     L.append(_diagram_section(flow, branches, gid, name))
     L.append("</bpmn2:definitions>")
+    if externalized_params_out is not None:
+        externalized_params_out.extend(externalized_params)
     return "\n".join(L)
 
 
@@ -893,6 +1029,13 @@ def _diagram_section(flow: dict, branches: list[dict], gid: dict[str, int], flow
             gi = gid[n["id"]]
             src = end_id if n is chain[-1] else f"ServiceTask_{gi}"
             edges.append((f"MessageFlow_R{gi}", src, f'Participant_{n["id"]}'))
+
+    # Sender-only flows still carry the empty Participant_2 ('Receiver')
+    # stub (oiw_pd ground truth) — it needs a DI shape for designer-open.
+    has_receiver = any(n["type"].startswith("receiver.") for b in branches for n in b["nodes"])
+    if not has_receiver:
+        max_off = 430 * (len(branches) - 1)
+        shapes.append(("Participant_2", 615 + max_off, 69, 100, 140))
 
     out = ['    <bpmndi:BPMNDiagram id="BPMNDiagram_1" name="Default Collaboration Diagram">']
     out.append('        <bpmndi:BPMNPlane bpmnElement="Collaboration_1" id="BPMNPlane_1">')
@@ -995,6 +1138,7 @@ def build_cpi_bundle(
     display_name: str | None = None,
     import_headers: str | None = None,
     project_root: Path | None = None,
+    configurations_out: list[dict[str, str]] | None = None,
 ) -> tuple[bytes, str]:
     """Build the designtime ZIP for one flow. Returns (bytes, sha256hex).
 
@@ -1004,13 +1148,22 @@ def build_cpi_bundle(
 
     `project_root`: required when the flow contains script.groovy nodes;
     their sources are emitted under src/main/resources/script/.
+
+    `configurations_out`: when provided, receives [{key, value}] rows for
+    externalized terminal-HTTP receiver params — the caller deploys them
+    as artifact Configurations so the runtime resolves {{KEY}} refs.
     """
     flow_id = flow.get("metadata", {}).get("id", "flow")
     name = display_name or flow_id
     symbolic = symbolic_name or flow_id.replace("-", "_").replace(".", "_")
     iflw_file = Path(iflw_name or f"{flow_id}.iflw").name
-    iflw = export_flow_to_iflw(flow, display_name=name, project_root=project_root)
+    ext_params: list[dict[str, str]] = []
+    iflw = export_flow_to_iflw(
+        flow, display_name=name, project_root=project_root, externalized_params_out=ext_params
+    )
     scripts = collect_flow_scripts(flow, project_root)
+    if configurations_out is not None:
+        configurations_out.extend(ext_params)
 
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -1032,9 +1185,62 @@ def build_cpi_bundle(
                 + [_fold_manifest_line(line) for line in (import_headers or "").splitlines() if line.strip()]
             )
             + "\n",
-            "metainfo.prop": "",
+            "metainfo.prop": (
+                "#Store metainfo properties\n" "#Tue Sep 01 20:41:54 UTC 2026\n" "description=\n\n"
+            ),  # live-proven shape (open_mateo_test transplant, 2026-09-02):
+            # an empty metainfo.prop passed upload+START on SOME runs but the
+            # RR bundle needed the real one; mirror the tenant's own format.
             f"src/main/resources/scenarioflows/integrationflow/{iflw_file}": iflw,
         }
+        # Externalized {{KEY}} params (terminal-HTTP receiver law): the
+        # bundle ships parameters.prop defaults + .propdef references, so
+        # the designer shows the externalized parameter AND the runtime
+        # has values even before Configurations rows are deployed.
+        # Format mirrored VERBATIM from the testing_oiw reference
+        # (parameters.prop Java-dialect with escaped '='; .propdef with
+        # param_references binding each key to the receiver attrs).
+        if ext_params:
+            prop_lines = []
+            for p in ext_params:
+                # Java-properties dialect: '=' inside values is escaped
+                # (testing_oiw reference: latitude\=52.52&...)
+                prop_lines.append(f"{p['key']}={p['value'].replace('=', chr(92) + '=')}")
+            entries["src/main/resources/parameters.prop"] = "\n".join(prop_lines) + "\n"
+
+            by_attr: dict[str, str] = {}
+            for p in ext_params:
+                if p["key"].endswith("Url"):
+                    by_attr["httpAddressWithoutQuery"] = p["key"]
+                elif p["key"].endswith("Query"):
+                    by_attr["httpAddressQuery"] = p["key"]
+            param_xml = ['<?xml version="1.0" encoding="UTF-8" standalone="no"?><parameters>']
+            for p in ext_params:
+                param_xml.append(
+                    "<parameter>\n    <key/>\n"
+                    f"    <name>{escape(p['key'])}</name>\n"
+                    "    <type>xsd:string</type>\n"
+                    "    <isRequired>false</isRequired>\n"
+                    "    <constraint/>\n    <description/>\n    <additionalMetadata/>\n"
+                    "  </parameter>"
+                )
+            refs = ["<param_references>"]
+            for attr, label in (("httpAddressQuery", "Query"), ("httpAddressWithoutQuery", "Address")):
+                if attr in by_attr:
+                    refs.append(
+                        '<reference attribute_category="Receiver1" '
+                        'attribute_id="ctype::AdapterVariant/cname::HTTP/tp::HTTP/mp::None/'
+                        "direction::Receiver/version::1.20.2/attrId::"
+                        + attr
+                        + '" attribute_uilabel="'
+                        + label
+                        + '" param_key="'
+                        + escape(by_attr[attr])
+                        + '"/>'
+                    )
+            refs.append("</param_references>")
+            param_xml.append("".join(refs))
+            param_xml.append("</parameters>")
+            entries["src/main/resources/parameters.propdef"] = "\n".join(param_xml)
         entries.update(scripts)
         for ename in sorted(entries):
             info = zipfile.ZipInfo(ename, date_time=(1980, 1, 1, 0, 0, 0))

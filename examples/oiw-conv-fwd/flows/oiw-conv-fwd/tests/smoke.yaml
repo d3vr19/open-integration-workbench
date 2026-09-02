@@ -1,0 +1,30 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  description: RR weather fetch -> JSON->XML converter -> RR forward -> PD terminator.
+  name: smoke
+spec:
+  assertions:
+  - equals: COMPLETED
+    type: exchange.status
+  - node: step-1-converter-json-to-xml
+    type: node.executed
+  - node: rr-fetch
+    type: node.executed
+  - node: rr-post
+    type: node.executed
+  flow: oiw-conv-fwd
+  input:
+    bodyInline: '{}'
+    entrypoint: sender-main
+    headers:
+      Content-Type: application/json
+  mocks:
+  - respond:
+      body: '{"w": 16.4}'
+      status: 200
+    target: rr-fetch
+  - respond:
+      body: ''
+      status: 200
+    target: rr-post

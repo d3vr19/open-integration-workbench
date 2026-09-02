@@ -1,0 +1,16 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationProject
+metadata:
+  created: '1970-01-01T00:00:00Z'
+  description: 'Integration project: Prj'
+  id: prj
+  name: Prj
+spec:
+  emg:
+    confidentialityScope: project-private
+    enabled: false
+  minimumCompilerVersion: 0.1.0
+  package: package/package.yaml
+  secretProvider: local-keyring
+  targetProfiles:
+  - sap-cloud-integration-2026-07

@@ -383,7 +383,9 @@ def test_multi_entrypoint_writer_plus_poller(tmp_path):
     assert pp["noop"] == "delete"
     assert pp["file.move"] == ".archive"
 
-    # plain end event for the poller branch (no messageEventDefinition)
+    # ALL main-process ends are message-typed (blood law re-proven live
+    # 2026-09-02: open_mateo_test + oiw_pd_hf + oiw_pd all carry
+    # MessageEndEvent on every branch; plain ends exist only in subprocesses).
     end2 = root.find(".//b:endEvent[@id='EndEvent_2']", NS)
     assert end2 is not None
-    assert end2.find("b:messageEventDefinition", NS) is None
+    assert end2.find("b:messageEventDefinition", NS) is not None
