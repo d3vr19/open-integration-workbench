@@ -1,27 +1,11 @@
 /**
- * OIW API client — thin wrapper around fetch.
- * Spec ref: §21.1 (REST Endpoints).
- *
- * In production this will be generated from packages/api-spec/openapi.yaml
- * (tracked as OW-015). For now, hand-written.
+ * OIW API client.
+ * Generated types derived from packages/api-spec/openapi.yaml (OW-015 / WP-09 A-002)
+ * backed by the typed client in ./api/client.ts.
  */
 
-const API_BASE = '/api/v1';
-
-async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail));
-  }
-  return res.json();
-}
+import { fetchJSON, defaultApiClient } from './api/client';
+export * from './api/client';
 
 export interface ProjectSummary {
   id: string;
@@ -170,60 +154,40 @@ export interface StructuredDiff {
 }
 
 export const api = {
-  health: () => fetchJSON<{ status: string; version: string }>('/health'),
-  listProjects: () => fetchJSON<ProjectSummary[]>('/projects'),
-  getProject: (id: string) =>
-    fetchJSON<unknown>(`/projects/${id}`),
-  listFlows: (projectId: string) =>
-    fetchJSON<FlowSummary[]>(`/projects/${projectId}/flows`),
+  health: () => defaultApiClient.health(),
+  listProjects: () => defaultApiClient.listProjects() as unknown as Promise<ProjectSummary[]>,
+  getProject: (id: string) => defaultApiClient.getProject(id) as unknown as Promise<unknown>,
+  listFlows: (projectId: string) => defaultApiClient.listFlows(projectId) as unknown as Promise<FlowSummary[]>,
   getFlow: (projectId: string, flowId: string) =>
-    fetchJSON<IntegrationFlow>(`/projects/${projectId}/flows/${flowId}`),
+    defaultApiClient.getFlow(projectId, flowId) as unknown as Promise<IntegrationFlow>,
   patchFlow: (projectId: string, flowId: string, operations: unknown[], baseRevision?: string) =>
-    fetchJSON<{ applied: number; new_revision: string | null; flow_id: string }>(
-      `/projects/${projectId}/flows/${flowId}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ operations, base_revision: baseRevision }),
-      },
-    ),
+    defaultApiClient.patchFlow(projectId, flowId, operations, baseRevision),
   validate: (projectId: string, strict = false) =>
-    fetchJSON<ValidationResult>(`/projects/${projectId}/validate`, {
-      method: 'POST',
-      body: JSON.stringify({ strict }),
-    }),
+    defaultApiClient.validate(projectId, strict) as unknown as Promise<ValidationResult>,
   runTests: (projectId: string, flowId?: string) =>
-    fetchJSON<TestResult[]>(`/projects/${projectId}/tests:run`, {
-      method: 'POST',
-      body: JSON.stringify({ flow_id: flowId }),
-    }),
+    defaultApiClient.runTests(projectId, flowId) as unknown as Promise<TestResult[]>,
   build: (projectId: string, targetProfile: string) =>
-    fetchJSON<BuildResult>(`/projects/${projectId}/builds`, {
-      method: 'POST',
-      body: JSON.stringify({ target_profile: targetProfile }),
-    }),
+    defaultApiClient.build(projectId, targetProfile) as unknown as Promise<BuildResult>,
   gitStatus: (projectId: string) =>
-    fetchJSON<GitStatus>(`/projects/${projectId}/git/status`),
-  simulate: (projectId: string, flowId: string, req: {
-    body_inline?: string;
-    body_file?: string;
-    headers?: Record<string, string>;
-    mocks?: Array<{ target: string; respond: { status: number; body?: string } }>;
-  }) =>
-    fetchJSON<SimulationResult>(`/projects/${projectId}/flows/${flowId}/simulate`, {
-      method: 'POST',
-      body: JSON.stringify(req),
-    }),
+    defaultApiClient.gitStatus(projectId) as unknown as Promise<GitStatus>,
+  simulate: (
+    projectId: string,
+    flowId: string,
+    req: {
+      body_inline?: string;
+      body_file?: string;
+      headers?: Record<string, string>;
+      mocks?: Array<{ target: string; respond: { status: number; body?: string } }>;
+    }
+  ) => defaultApiClient.simulate(projectId, flowId, req) as unknown as Promise<SimulationResult>,
   listResources: (projectId: string) =>
-    fetchJSON<ResourceSummary[]>(`/projects/${projectId}/resources`),
+    defaultApiClient.listResources(projectId) as unknown as Promise<ResourceSummary[]>,
   getResource: (projectId: string, resourcePath: string) =>
-    fetchJSON<ResourceContent>(`/projects/${projectId}/resources/${resourcePath}`),
+    defaultApiClient.getResource(projectId, resourcePath) as unknown as Promise<ResourceContent>,
   writeResource: (projectId: string, resourcePath: string, content: string) =>
-    fetchJSON<ResourceContent>(`/projects/${projectId}/resources/${resourcePath}`, {
-      method: 'PUT',
-      body: JSON.stringify({ content }),
-    }),
+    defaultApiClient.writeResource(projectId, resourcePath, content) as unknown as Promise<ResourceContent>,
   getDiff: (projectId: string, rev = 'HEAD~1') =>
-    fetchJSON<StructuredDiff>(`/projects/${projectId}/diff?rev=${encodeURIComponent(rev)}`),
+    defaultApiClient.getDiff(projectId, rev) as unknown as Promise<StructuredDiff>,
 
   // -----------------------------------------------------------------
   // Agent endpoints (WP-04 Task 7 + Task 9).

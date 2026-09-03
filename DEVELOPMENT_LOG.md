@@ -1086,3 +1086,31 @@ The EMG experience plan (Phases 1–2) executed live:
   - `npm run lint` clean (oxlint).
   - `npm run build` clean (vite build).
   - `npx playwright test` 4/4 passing (copilot + emg-insights).
+
+---
+
+### 2026-09-03 (cont. 2) — WP-09 PR-2 / Task A-002: Generated TypeScript API client (OW-015)
+
+**Branch:** `feature/wp09-a-002`  
+**Scope:** `apps/web/package.json`, `apps/web/src/api/gen/schema.d.ts`, `apps/web/src/api/client.ts`, `apps/web/src/api.ts`, `apps/web/README.md`.
+
+**Delivered:**
+- **Code generation tooling**:
+  - Added `openapi-typescript` devDependency to `apps/web`.
+  - Added `api:gen` script to `package.json`: `openapi-typescript ../../packages/api-spec/openapi.yaml -o ./src/api/gen/schema.d.ts`.
+  - Generated `src/api/gen/schema.d.ts` (1094 lines, paths + components from OpenAPI 3.1 spec).
+- **Typed client wrapper (`src/api/client.ts`)**:
+  - Implemented typed `ApiClient` consuming generated `paths` and `components['schemas']`.
+  - Exported `fetchJSON` helper and schema types.
+- **Stable boundary re-exports (`src/api.ts`)**:
+  - Refactored `src/api.ts` to delegate to `ApiClient`.
+  - Preserved exact public surface and function signatures (`api.listProjects()`, `api.getFlow()`, `api.patchFlow()`, `api.validate()`, etc.) so that all component consumers (`App.tsx`, `FlowCanvas.tsx`, `CoPilotPanel.tsx`, `EmgInsightPanel.tsx`, etc.) require zero churn.
+  - Retained agent and EMG endpoints (`api.plan`, `api.implement`, `api.emgStats`, `api.emgInsights`, `api.emgInsightDetail`).
+- **Documentation**:
+  - Updated `apps/web/README.md` stack table (API client marked generated/implemented) and documented `npm run api:gen`.
+- **Verification:**
+  - `npm run api:gen` executes cleanly and regenerates types in ~60ms.
+  - `npx tsc -p tsconfig.app.json --noEmit` clean.
+  - `npm run lint` clean (oxlint).
+  - `npm run build` clean (vite build).
+  - `npx playwright test` 4/4 passing with 0 test edits.

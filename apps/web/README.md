@@ -21,6 +21,9 @@
   honesty chips; ⚡ badge reflects server-truth retrieval.
 - **Playwright E2E tests in CI** (OW-026): `copilot.spec.ts` (2 tests) +
   `emg-insights.spec.ts` (2 tests) running in GitHub Actions via `.github/workflows/e2e.yaml`.
+- **Generated API client** (OW-015 / WP-09 Task A-002): TypeScript schema generated from
+  `packages/api-spec/openapi.yaml` into `src/api/gen/schema.d.ts`, wrapped by typed `ApiClient`
+  in `src/api/client.ts` with stable boundary re-exports in `src/api.ts`.
 
 ## Stack
 
@@ -33,15 +36,16 @@
 | Styling | Tailwind CSS 4 | ✓ |
 | Build tool | Vite 8 (`vite ^8.2.0`) | ✓ |
 | WebSocket | (via fetch + WebSocket API) | ✓ |
-| API client | Hand-written (OW-015: generate from OpenAPI) | Partial |
+| API client | Generated from OpenAPI via `openapi-typescript` + typed wrapper (OW-015) | ✓ |
 
 ## Run
 
 ```bash
 cd apps/web
 npm install
-npm run dev    # http://localhost:5173 (proxies /api to localhost:8000)
-npm run build  # production build to dist/
+npm run dev      # http://localhost:5173 (proxies /api to localhost:8000)
+npm run build    # production build to dist/
+npm run api:gen  # regenerate src/api/gen/schema.d.ts from packages/api-spec/openapi.yaml
 ```
 
 ## Not yet implemented
@@ -49,7 +53,6 @@ npm run build  # production build to dist/
 - Undo/redo (command pattern)
 - Collaborative editing (presence)
 - Full SPA decomposition (FlowCanvas/PropertiesPanel/PalettePanel extraction — OW-029)
-- Generated TypeScript API client from OpenAPI (OW-015)
 - Real semantic diff in PatchPreviewDialog (OW-028 — currently derives from step results)
 
 Spec ref: §6.1 (Front End), §10 (Visual Designer).
