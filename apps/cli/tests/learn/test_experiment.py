@@ -23,12 +23,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT / "apps" / "cli"))
 
 from oiw.experiment.engine import (  # noqa: E402
     VERDICT_GREEN,
     VERDICT_RED,
+    VERDICT_SKIPPED,
     LawCandidate,
     Rung,
     derive_laws,
@@ -46,7 +49,7 @@ from oiw.experiment.runner import (  # noqa: E402
     ExperimentRunner,
     verdict_from_calibration,
 )
-from oiw.project import IntegrationFlow, _load_flow  # noqa: E402
+from oiw.project import FlowEdge, IntegrationFlow, _load_flow  # noqa: E402
 
 CONV_EXAMPLE = REPO_ROOT / "examples" / "oiw-conv-fwd"
 
@@ -485,3 +488,171 @@ class TestRecordPersistence:
         assert loaded.baseline_verdict == VERDICT_GREEN
         assert loaded.rungs[0].verdict == VERDICT_RED
         assert loaded.rungs[0].evidence == {"targetType": "receiver.http"}
+
+
+class TestPredicateDerivation:
+    """Laws must carry machine-checkable predicates when evidence pins one."""
+
+    def _conv_record(self) -> tuple:
+        base = _load_flow(
+            CONV_EXAMPLE / "flows" / "oiw-conv-fwd",
+            CONV_EXAMPLE / "flows" / "oiw-conv-fwd" / "flow.yaml",
+        )
+        record = generate_ladder(base, hypothesis="conv corpus", kinds=("move",))
+        record.baseline_verdict = VERDICT_GREEN
+        record.status = "complete"
+        conv_node = "step-1-converter-json-to-xml"
+        for r in record.rungs:
+            if r.target == conv_node:
+                to = int(r.detail["toPosition"])
+                r.verdict = VERDICT_RED if to == 0 else VERDICT_GREEN
+                r.evidence = {"targetType": "converter.json-to-xml"}
+            else:
+                r.verdict = VERDICT_SKIPPED
+        return record, base
+
+    def test_move_flip_emits_position_predicate(self) -> None:
+        record, _ = self._conv_record()
+        laws = derive_laws(record)
+        predicated = [law for law in laws if law.predicate]
+        assert predicated, "green-corroborated move flips must carry predicates"
+        pred = predicated[0].predicate
+        assert pred["type"] == "requires-position-after"
+        assert pred["node"] == "converter.json-to-xml"
+        assert 0 in pred["redPositions"]
+        assert all(p > 0 for p in pred["greenPositions"])
+
+    def test_uncorroborated_flip_has_no_predicate(self) -> None:
+        record, _ = self._conv_record()
+        # strip green corroboration: every move rung red
+        for r in record.rungs:
+            if r.kind == "move":
+                r.verdict = VERDICT_RED
+        laws = derive_laws(record)
+        assert all(law.predicate is None for law in laws)
+
+
+class TestLawValidateConsumer:
+    """OIW-W013: ratified laws warn at validate time; candidates never do."""
+
+    def _base(self) -> IntegrationFlow:
+        return _load_flow(
+            CONV_EXAMPLE / "flows" / "oiw-conv-fwd",
+            CONV_EXAMPLE / "flows" / "oiw-conv-fwd" / "flow.yaml",
+        )
+
+    def _law(self, status: str, pred: dict | None) -> LawRecord:
+        return LawRecord(
+            law_id="law-conv-test",
+            statement="converter must sit after an RR",
+            scope="converter.json-to-xml",
+            kind="move",
+            origin="exp-test",
+            status=status,
+            predicate=pred,
+        )
+
+    def test_violating_placement_warns(self) -> None:
+        from oiw.validators.law_checks import check_flow_laws
+
+        # build a VIOLATING flow: converter directly after sender (pos 0)
+        base = self._base()
+        conv = next(n for n in base.nodes if n.type == "converter.json-to-xml")
+        # swap edges: sender -> converter (no RR between)
+        base.edges = [
+            FlowEdge(from_="sender-main", to=conv.id),
+            FlowEdge(from_=conv.id, to="rr-post"),
+            FlowEdge(from_="rr-post", to="pd-terminator"),
+        ]
+        pred = {
+            "type": "requires-position-after",
+            "node": "converter.json-to-xml",
+            "redPositions": [0],
+            "greenPositions": [1, 2],
+        }
+        warnings = check_flow_laws(base, [self._law("ratified", pred)])
+        assert any("OIW-W013" in w and "law-conv-test" in w for w in warnings)
+
+    def test_compliant_placement_no_warning(self) -> None:
+        from oiw.validators.law_checks import check_flow_laws
+
+        base = self._base()  # conv sits at position 1 (after RR warmup)
+        pred = {
+            "type": "requires-position-after",
+            "node": "converter.json-to-xml",
+            "redPositions": [0],
+            "greenPositions": [1, 2],
+        }
+        assert check_flow_laws(base, [self._law("ratified", pred)]) == []
+
+    def test_candidate_laws_not_enforced(self) -> None:
+        from oiw.validators.law_checks import check_flow_laws
+
+        base = self._base()
+        conv = next(n for n in base.nodes if n.type == "converter.json-to-xml")
+        base.edges = [
+            FlowEdge(from_="sender-main", to=conv.id),
+            FlowEdge(from_=conv.id, to="rr-post"),
+            FlowEdge(from_="rr-post", to="pd-terminator"),
+        ]
+        pred = {
+            "type": "requires-position-after",
+            "node": "converter.json-to-xml",
+            "redPositions": [0],
+            "greenPositions": [1, 2],
+        }
+        assert check_flow_laws(base, [self._law("candidate", pred)]) == []
+
+    def test_missing_registry_silent(self, tmp_path: Path) -> None:
+        from oiw.validators.law_checks import run_law_validators
+
+        assert run_law_validators([self._base()], tmp_path / "nope" / "laws.yaml") == []
+
+    def test_position_helpers_match_engine_order(self) -> None:
+        from oiw.validators.graph_positions import body_order, position_of
+
+        base = self._base()
+        order = body_order(base)
+        assert position_of(base, "converter.json-to-xml") == order.index(
+            "step-1-converter-json-to-xml"
+        )
+
+
+class TestAssemblerRegistryConsumption:
+    """The assembler UNIONS ratified registry laws with its hardcoded set."""
+
+    def test_new_ratified_scope_extends_warmup(self, tmp_path, monkeypatch) -> None:
+        from oiw.agent.turbo_pieces import registry_placement_laws
+
+        reg_dir = tmp_path / ".oiw"
+        reg_dir.mkdir()
+        pred = {
+            "type": "requires-position-after",
+            "node": "encoder.base64",
+            "redPositions": [0],
+            "greenPositions": [1],
+        }
+        law = {
+            "lawId": "law-e2e-test",
+            "statement": "encoder must sit after an RR",
+            "scope": "encoder.base64",
+            "kind": "move",
+            "origin": "exp-test",
+            "evidence": {},
+            "confidence": 1.0,
+            "status": "ratified",
+            "source": "engine",
+            "predicate": pred,
+        }
+        (reg_dir / "tenant-laws.yaml").write_text(
+            yaml.safe_dump({"laws": [law]}), encoding="utf-8"
+        )
+        monkeypatch.setenv("OIW_WORKSPACE", str(tmp_path))
+        scopes = registry_placement_laws()
+        assert "encoder.base64" in scopes
+
+    def test_absent_registry_returns_empty(self, tmp_path, monkeypatch) -> None:
+        from oiw.agent.turbo_pieces import registry_placement_laws
+
+        monkeypatch.setenv("OIW_WORKSPACE", str(tmp_path))
+        assert registry_placement_laws() == set()

@@ -106,6 +106,17 @@ def validate(project_path: Path, strict: bool, json_output: bool) -> None:
     errors.extend(rule_errors)
     warnings.extend(rule_warnings)
 
+    # 4. Tenant-law registry checks (B2 consumer wiring — OIW-W013).
+    # Ratified live-proven placement laws warn BEFORE any tenant deploy.
+    # Registry resolves like the EMG store (OIW_WORKSPACE or PWD); missing
+    # registry = no warnings (fresh workspaces stay clean).
+    try:
+        from .validators.law_checks import run_law_validators
+
+        warnings.extend(run_law_validators(project.flows))
+    except Exception:  # pragma: no cover — law checks never break validate
+        pass
+
     if strict:
         errors.extend(warnings)
         warnings = []
@@ -1132,6 +1143,44 @@ def experiment_laws(
             sort_keys=False,
         )
         click.echo(f"candidates also written: {cpath}")
+
+
+@experiment.command("ratify")
+@click.argument("law_id")
+@click.option(
+    "--registry",
+    "registry_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Law registry path (default <OIW_WORKSPACE>/.oiw/tenant-laws.yaml).",
+)
+@click.option("--retire", is_flag=True, default=False, help="Retire the law instead of ratifying.")
+def experiment_ratify(law_id: str, registry_path: Path | None, retire: bool) -> None:
+    """Operator review: flip a law candidate to ratified (or --retire).
+
+    Ratified laws are ENFORCED: `oiw validate` warns OIW-W013 on
+    violating placements, and the turbo assembler honors placement
+    predicates. Nothing auto-ratifies — this command is the human gate.
+    """
+    from .experiment.registry import (
+        STATUS_RATIFIED,
+        STATUS_RETIRED,
+        load_registry,
+    )
+
+    reg = load_registry(registry_path)
+    law = reg.get(law_id)
+    if law is None:
+        click.echo(f"error: law {law_id!r} not found in {reg.path}", err=True)
+        sys.exit(2)
+    law.status = STATUS_RETIRED if retire else STATUS_RATIFIED
+    reg.save()
+    state = "retired" if retire else "ratified"
+    click.echo(f"law {law_id}: {state}")
+    click.echo(f"  {law.statement}")
+    click.echo(f"  scope={law.scope} confidence={law.confidence}")
+    if not retire:
+        click.echo("  now enforced: oiw validate (OIW-W013) + assembler placement")
 
 
 @experiment.command("registry")

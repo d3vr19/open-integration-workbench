@@ -108,6 +108,38 @@ _LIVE_UNPROVEN: set[str] = set()  # converter.json-to-xml validated 2026-09-02 (
 # They need another step (or an RR response) between them and the adapter.
 _NO_DIRECT_HTTP_NEIGHBOR = {"converter.json-to-xml", "converter.xml-to-json"}
 
+
+def registry_placement_laws() -> set[str]:
+    """Ratified `requires-position-after` law scopes from the tenant-law
+    registry (B2 consumer wiring). These UNION with the hardcoded set —
+    a newly ratified engine law changes assembler behavior with no code
+    edit. Fresh/absent registry → empty set (hardcoded floor remains).
+    """
+    import os
+    from pathlib import Path
+
+    try:
+        import yaml
+
+        from ..experiment.registry import STATUS_RATIFIED
+        from ..validators.graph_positions import position_of  # noqa: F401 — shared semantics
+
+        ws = os.environ.get("OIW_WORKSPACE") or str(Path.cwd())
+        path = Path(ws) / ".oiw" / "tenant-laws.yaml"
+        if not path.exists():
+            return set()
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        scopes: set[str] = set()
+        for law in data.get("laws") or []:
+            if law.get("status") != STATUS_RATIFIED:
+                continue
+            pred = law.get("predicate") or {}
+            if pred.get("type") == "requires-position-after":
+                scopes.add(str(pred.get("node") or law.get("scope")))
+        return scopes
+    except Exception:
+        return set()  # registry problems never break assembly
+
 _COMPONENT_TO_PIECE: dict[str, str] = {
     "sender.http": "sender.http",
     "sender.https": "sender.http",
@@ -325,7 +357,9 @@ def assemble_from_requirement(
     # converts the INBOUND body, the assembler inserts an RR warmup
     # (harmless GET) before the converter so the converter runs on an
     # RR-generated exchange.
-    has_converter = any(p.node_type in _NO_DIRECT_HTTP_NEIGHBOR for p in chain)
+    has_converter = any(
+        p.node_type in (_NO_DIRECT_HTTP_NEIGHBOR | registry_placement_laws()) for p in chain
+    )
     has_preceding_rr = any(p.node_type == "receiver.http" for p in chain)
     if has_converter and not has_preceding_rr and recv_type == "receiver.http":
         chain.insert(
@@ -500,4 +534,5 @@ __all__ = [
     "extract_receiver_method",
     "extract_target_url",
     "proven_pieces",
+    "registry_placement_laws",
 ]

@@ -410,7 +410,9 @@ def generate_ladder(
 class LawCandidate:
     """A minimal green→red delta isolated by the ladder.
 
-    `law` is the human/LLM-readable statement; `evidence` cites rungs:
+    `law` is the human/LLM-readable statement; `predicate` is the
+    machine-checkable form consumed by validators/law_checks.py (see
+    LawRecord.predicate for the shapes). `evidence` cites rungs:
     the green rung (or baseline) vs the red rung that differs by exactly
     the one mutation.
     """
@@ -422,6 +424,7 @@ class LawCandidate:
     green_rungs: list[str] = field(default_factory=list)
     red_rungs: list[str] = field(default_factory=list)
     confidence: float = 0.0  # fraction of corroborating rungs
+    predicate: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -434,6 +437,7 @@ class LawCandidate:
                 "redRungs": self.red_rungs,
             },
             "confidence": self.confidence,
+            "predicate": self.predicate,
         }
 
 
@@ -488,9 +492,46 @@ def derive_laws(record: ExperimentRecord) -> list[LawCandidate]:
                 green_rungs=[record.experiment_id] if not corroborating_green else corroborating_green[:1],
                 red_rungs=[r.rung_id],
                 confidence=1.0 if corroborating_green else 0.5,
+                predicate=_predicate_for(r, record, corroborating_green),
             )
         )
     return candidates
+
+
+def _predicate_for(
+    rung: Rung,
+    record: ExperimentRecord,
+    corroborating_green: list[str],
+) -> dict[str, Any] | None:
+    """Machine-checkable law form, when the evidence pins one.
+
+    MOVE rungs with a green corroboration pin a placement law precisely:
+    the red position(s) vs the green position(s) of the SAME target. If
+    every green position is > every red position, the step must sit
+    AFTER some predecessor; the immediate green predecessor common to
+    the green rungs becomes the required predecessor. The engine types
+    the predecessor from the baseline chain (targetType evidence).
+    """
+    if rung.kind != "move" or not corroborating_green:
+        return None
+    green_by_id = {r.rung_id: r for r in record.rungs if r.verdict == VERDICT_GREEN}
+    red_positions = [int(rung.detail.get("toPosition", -1))]
+    green_positions = [
+        int(green_by_id[rid].detail.get("toPosition", -1))
+        for rid in corroborating_green
+        if rid in green_by_id
+    ]
+    if not green_positions or min(green_positions) <= max(red_positions):
+        return None  # not a clean before/after split — advisory only
+    ev_type = (rung.evidence or {}).get("targetType")
+    if not ev_type:
+        return None
+    return {
+        "type": "requires-position-after",
+        "node": ev_type,
+        "redPositions": sorted(set(red_positions)),
+        "greenPositions": sorted(set(green_positions)),
+    }
 
 
 def _scope_for(rung: Rung) -> str:

@@ -63,6 +63,15 @@ class LawRecord:
     status: str = STATUS_CANDIDATE
     recorded_at: str = field(default_factory=_now_iso)
     source: str = "engine"  # engine | manual
+    # Machine-checkable form (consumed by validators/law_checks.py):
+    #   {"type": "requires-predecessor", "node": "<scope>",
+    #    "predecessor": "<node type or category>"}
+    #   {"type": "forbids-position", "node": "<scope>",
+    #    "position": 0, "reason": "..."}
+    #   {"type": "forbids-sibling", "node": "<scope>",
+    #    "sibling": "<node type>"}
+    # Laws without a predicate are advisory-only (statement text).
+    predicate: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -76,6 +85,7 @@ class LawRecord:
             "status": self.status,
             "recordedAt": self.recorded_at,
             "source": self.source,
+            "predicate": self.predicate,
         }
 
     @classmethod
@@ -91,6 +101,7 @@ class LawRecord:
             status=d.get("status") or STATUS_CANDIDATE,
             recorded_at=d.get("recordedAt") or "",
             source=d.get("source") or "engine",
+            predicate=d.get("predicate") or None,
         )
 
 
@@ -114,6 +125,7 @@ def candidate_to_record(
         confidence=candidate.confidence,
         status=status,
         source="engine",
+        predicate=candidate.predicate,
     )
 
 

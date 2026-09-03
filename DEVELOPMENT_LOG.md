@@ -1205,3 +1205,23 @@ The EMG experience plan (Phases 1–2) executed live:
 **Process note:** collateral fix — `examples/oiw-conv-fwd/.oiw/calibration-oiw_turbo_fwd.yaml` (parity-manifest-referenced oracle report) was accidentally deleted during dry-run cleanup and restored from git immediately; parity suite re-verified green after restore.
 
 **Tests:** CLI 528 → 554 (+26). All other suites untouched and green (server 91 verified; MCP/gateway/seed-corpus unaffected by this change surface). Ruff clean on all touched files.
+
+---
+
+### 2026-09-03 — B2 consumer wiring: laws now ENFORCE (validate OIW-W013 + assembler + ratify gate)
+
+**The registry has teeth.** A law's journey is now complete: ladder → oracle → candidate → **operator ratify** → enforced in `oiw validate` AND honored by the turbo assembler — no code edits between a ratified law and changed behavior.
+
+**Shipped:**
+
+- **Predicates on laws** (`engine._predicate_for`): a move-flip with green corroboration emits `{"type": "requires-position-after", "node", "redPositions", "greenPositions"}` — machine-checkable alongside the human statement. Uncorroborated flips stay advisory-only (no predicate). `LawRecord`/`LawCandidate`/`candidate_to_record` carry `predicate` through persistence.
+- **`validators/law_checks.py` + `validators/graph_positions.py`** — OIW-W013 pre-deploy warnings. `graph_positions` shares the engine's execution-order semantics (ONE definition of "position" — a law derived at position N warns at position N). Ratified laws only: candidates never enforce (nothing auto-ratifies). Missing registry → silent (validate never hard-depends on experiment state; wrapped in a never-break guard).
+- **`oiw validate` stage 4** — law warnings appended; registry resolves like the EMG store (`OIW_WORKSPACE`/PWD — not project-local, matching where `experiment ratify` writes).
+- **Assembler consumption** (`turbo_pieces.registry_placement_laws()`): ratified `requires-position-after` scopes UNION with the hardcoded `_NO_DIRECT_HTTP_NEIGHBOR` floor — a newly ratified engine law changes RR-warmup insertion with zero code changes. Absent/broken registry → empty set, hardcoded floor remains.
+- **`oiw experiment ratify LAW [--retire]`** — the human gate. Ratify flips status → enforced; retire takes a law out of enforcement. Nothing in the engine auto-ratifies.
+
+**Live-proof (local simulation of the full chain):** conv corpus → candidate (conf 1.0, predicate) → `ratify` → a hand-built violating flow (converter at body position 0) validates with `OIW-W013: law ...: 'converter.json-to-xml' sits at body position 0, which is live-proven RED (positions [0]); proven green from 2` while the compliant `examples/oiw-conv-fwd` stays clean. The round-trip: derived-from-tenant → enforced-in-studio.
+
+**Tests:** CLI 563 (+9: predicates 2, law-check consumers 5, assembler-registry union 2). All suites green. Ruff clean. No tenant touched; no CI changes.
+
+**Next:** first LIVE campaign on a scratch artifact (operator + cool-down budget) to emit a law end-to-end from a real tenant; then parity cases toward the ≥10 gate — each campaign's green baseline adds a case.
