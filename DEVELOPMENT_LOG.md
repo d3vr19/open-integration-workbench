@@ -1165,3 +1165,25 @@ The EMG experience plan (Phases 1–2) executed live:
   - `npm run build` clean (vite build).
   - `npx playwright test` 5/5 passing (copilot, emg-insights, and trace-simulation).
 
+---
+
+### 2026-09-03 (cont. 5) — WP-09 PR-5 / Track C: E2E Hardening & Journey Suite (Task C-001)
+
+**Branch:** `feature/wp09-c-001-journeys`  
+**Scope:** `apps/web/e2e/workbench-journeys.spec.ts`, `apps/web/README.md`.
+
+**Delivered:**
+- **Journey Suite Expansion (C-001)**:
+  - Added `e2e/workbench-journeys.spec.ts` covering Critical Journeys #4, #6, and #7.
+  - Journey #4 / #6: Validates and runs tests against flow `order-to-s4`, asserting on truthful PASS/FAIL status badge, error lists, and test timing metrics.
+  - Journey #7: Tests opening the Monaco Resource Editor for `normalizeOrder.groovy`, verifying file metadata and language badge, and closing back to the Flow Canvas.
+- **Suite Status:**
+  - Expanded Playwright suite to 7 automated journeys across 4 spec files (`copilot.spec.ts`, `emg-insights.spec.ts`, `trace-simulation.spec.ts`, `workbench-journeys.spec.ts`).
+  - All tests execute strictly against fixture copy `/tmp/oiw-ui-workspace/order-to-s4`, adhering to Rule 1 & Rule 2.
+- **Verification:**
+  - `npx tsc -p tsconfig.app.json --noEmit` clean.
+  - `npm run lint` clean.
+  - `npm run build` clean.
+  - `npx playwright test` 7/7 passing in ~7.5s.
+
+

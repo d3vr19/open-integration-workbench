@@ -19,8 +19,11 @@
   `POST /agents:implement`. Trajectory indicator shows recording status.
 - **Truthful EMG panel** (OW-032 / WP-08 PR-10): displays persisted store counts + backend
   honesty chips; ⚡ badge reflects server-truth retrieval.
-- **Playwright E2E tests in CI** (OW-026): `copilot.spec.ts` (2 tests) +
-  `emg-insights.spec.ts` (2 tests) running in GitHub Actions via `.github/workflows/e2e.yaml`.
+- **Playwright E2E tests in CI** (OW-026 / WP-09 Task C-001): 7 automated user journeys
+  across 4 spec files: `copilot.spec.ts` (suggest-and-apply, reject plan), `emg-insights.spec.ts`
+  (store stats, truthful retrieval badge), `trace-simulation.spec.ts` (simulation execution,
+  transport controls, canvas badge inspection), and `workbench-journeys.spec.ts` (validation &
+  test runner, Monaco resource editor navigation). Running in CI via `.github/workflows/e2e.yaml`.
 - **Generated API client** (OW-015 / WP-09 Task A-002): TypeScript schema generated from
   `packages/api-spec/openapi.yaml` into `src/api/gen/schema.d.ts`, wrapped by typed `ApiClient`
   in `src/api/client.ts` with stable boundary re-exports in `src/api.ts`.
