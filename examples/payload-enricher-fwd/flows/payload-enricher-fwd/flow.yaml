@@ -1,0 +1,61 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: payload-enricher-fwd
+  labels:
+    archetype: api-to-event
+  name: Payload Enricher Forwarder Flow
+  version: 1
+spec:
+  entrypoints:
+  - id: sender-http
+    type: sender.http
+    config:
+      path: /payload_enricher
+      methods:
+      - POST
+    fidelity: simulated
+  nodes:
+  - id: prep-request
+    type: modifier.content
+    config:
+      headers:
+      - name: X-Trace-ID
+        value: TRACE-001
+    fidelity: compatible-subset
+  - id: rr-enrich
+    type: receiver.http
+    config:
+      method: POST
+      timeoutSeconds: 30
+      url: https://httpbin.org/post
+    fidelity: simulated
+  - id: encode-payload
+    type: encoder.base64
+    config:
+      operation: encode
+    fidelity: compatible-subset
+  - id: pd-terminator
+    type: receiver.processdirect
+    config:
+      address: /payload_enricher_pd
+    fidelity: simulated
+  edges:
+  - from: sender-http
+    to: prep-request
+  - from: prep-request
+    to: rr-enrich
+  - from: rr-enrich
+    to: encode-payload
+  - from: encode-payload
+    to: pd-terminator
+  errorHandling:
+    defaultExceptionSubprocess:
+      steps:
+      - id: error-log
+        type: log.message
+        config:
+          level: ERROR
+          message: Payload enrichment failed
+        fidelity: compatible-subset
+  extensions: {}

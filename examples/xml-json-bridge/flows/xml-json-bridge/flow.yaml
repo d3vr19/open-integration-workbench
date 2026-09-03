@@ -1,0 +1,61 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: xml-json-bridge
+  labels:
+    archetype: api-to-event
+  name: XML to JSON Bridge Flow
+  version: 1
+spec:
+  entrypoints:
+  - id: sender-http
+    type: sender.http
+    config:
+      path: /xml_json_bridge
+      methods:
+      - POST
+    fidelity: simulated
+  nodes:
+  - id: warmup-step
+    type: modifier.content
+    config:
+      properties:
+      - name: bridge_mode
+        value: active
+    fidelity: compatible-subset
+  - id: xml-to-json-conv
+    type: converter.xml-to-json
+    config:
+      rootElement: Order
+    fidelity: compatible-subset
+  - id: rr-post
+    type: receiver.http
+    config:
+      method: POST
+      timeoutSeconds: 30
+      url: https://httpbin.org/post
+    fidelity: simulated
+  - id: pd-terminator
+    type: receiver.processdirect
+    config:
+      address: /xml_json_bridge_pd
+    fidelity: simulated
+  edges:
+  - from: sender-http
+    to: warmup-step
+  - from: warmup-step
+    to: xml-to-json-conv
+  - from: xml-to-json-conv
+    to: rr-post
+  - from: rr-post
+    to: pd-terminator
+  errorHandling:
+    defaultExceptionSubprocess:
+      steps:
+      - id: error-log
+        type: log.message
+        config:
+          level: ERROR
+          message: XML JSON bridge failed
+        fidelity: compatible-subset
+  extensions: {}

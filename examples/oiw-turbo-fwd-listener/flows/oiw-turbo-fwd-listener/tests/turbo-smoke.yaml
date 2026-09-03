@@ -7,7 +7,7 @@ spec:
   assertions:
   - equals: COMPLETED
     type: exchange.status
-  - node: write-body
+  - node: log-receive
     type: node.executed
   flow: oiw-turbo-fwd-listener
   input:

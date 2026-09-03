@@ -1,0 +1,7 @@
+apiVersion: oiw.dev/v1alpha1
+kind: Package
+metadata:
+  id: weather-logger-async
+  name: Weather Logger Async
+spec:
+  version: 0.1.0

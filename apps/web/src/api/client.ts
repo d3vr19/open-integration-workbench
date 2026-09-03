@@ -40,6 +40,12 @@ export type SchemaStructuredDiff = components['schemas']['StructuredDiff'];
 export type SchemaPatchResponse = components['schemas']['PatchResponse'];
 export type SchemaPatchRequest = components['schemas']['PatchRequest'];
 export type SchemaSimulateRequest = components['schemas']['SimulateRequest'];
+export type SchemaExperimentSummary = components['schemas']['ExperimentSummary'];
+export type SchemaExperimentRecord = components['schemas']['ExperimentRecord'];
+export type SchemaRung = components['schemas']['Rung'];
+export type SchemaLawRecord = components['schemas']['LawRecord'];
+export type SchemaCalibrationSummary = components['schemas']['CalibrationSummary'];
+export type SchemaCalibrationReport = components['schemas']['CalibrationReport'];
 
 export class ApiClient {
   readonly base: string;
@@ -165,6 +171,34 @@ export class ApiClient {
   getDiff(projectId: string, rev = 'HEAD~1') {
     return this.fetch<SchemaStructuredDiff>(
       `/projects/${encodeURIComponent(projectId)}/diff?rev=${encodeURIComponent(rev)}`
+    );
+  }
+
+  listExperiments() {
+    return this.fetch<SchemaExperimentSummary[]>('/experiments');
+  }
+
+  getExperiment(experimentId: string) {
+    return this.fetch<SchemaExperimentRecord>(`/experiments/${encodeURIComponent(experimentId)}`);
+  }
+
+  listLaws(params?: { status?: 'candidate' | 'ratified' | 'retired'; scope?: string }) {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.scope) q.set('scope', params.scope);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return this.fetch<SchemaLawRecord[]>(`/laws${qs}`);
+  }
+
+  listCalibrations(projectId: string) {
+    return this.fetch<SchemaCalibrationSummary[]>(
+      `/projects/${encodeURIComponent(projectId)}/calibrations`
+    );
+  }
+
+  getCalibration(projectId: string, artifactId: string) {
+    return this.fetch<SchemaCalibrationReport>(
+      `/projects/${encodeURIComponent(projectId)}/calibrations/${encodeURIComponent(artifactId)}`
     );
   }
 }

@@ -306,6 +306,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/experiments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List experiment campaign records
+         * @description B2 Experiment Engine campaigns (variant ladders over the tenant
+         *     oracle). Each record carries its rungs with verdicts and compact
+         *     evidence. Records resolve from `<workspace>/.oiw/experiments/`.
+         */
+        get: operations["listExperiments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/experiments/{experimentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one experiment campaign record (full rung detail) */
+        get: operations["getExperiment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/laws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant-law registry
+         * @description Evidence-attached laws: engine-derived (from experiment campaigns)
+         *     and manual blood laws. Status is `candidate | ratified | retired`;
+         *     only RATIFIED laws are enforced (`oiw validate` OIW-W013 + the
+         *     turbo assembler placement union). Ratification is a CLI operator
+         *     action — this API is read-only.
+         */
+        get: operations["listLaws"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/calibrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List cached tenant-oracle calibration reports for a project
+         * @description Read-only listing of `<project>/.oiw/calibration-*.yaml` (cached
+         *     oracle verdicts). Powers the local-trace vs tenant-MPL comparison.
+         *     Reports are point-in-time (blood law): `startedAt` bounds the
+         *     MPL epoch that is meaningful.
+         */
+        get: operations["listCalibrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/calibrations/{artifactId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one cached calibration report (full MPL rows) */
+        get: operations["getCalibration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -595,6 +698,146 @@ export interface components {
                 uncompressedSize?: number;
                 isDir?: boolean;
             }[];
+        };
+        Rung: {
+            /** @description Unique rung id (encodes kind + target + position). */
+            rungId?: string;
+            /**
+             * @description The single-variable mutation applied vs the baseline.
+             * @enum {string}
+             */
+            kind?: "drop" | "move" | "swap" | "insert";
+            /** @description Node id the mutation centers on. */
+            target?: string;
+            /** @description Kind-specific payload (e.g. toPosition, newType, after). */
+            detail?: {
+                [key: string]: unknown;
+            };
+            rationale?: string;
+            /**
+             * @description Oracle verdict. GREEN = STARTED + message 200 + all-epoch MPL
+             *     COMPLETED; RED = content failure; SKIPPED = not run (budget,
+             *     cool-down, invalid variant, or campaign abort).
+             * @enum {string}
+             */
+            verdict?: "GREEN" | "RED" | "SKIPPED";
+            /**
+             * @description Compact oracle digest (finalStatus, httpStatus, mplStatuses)
+             *     plus `targetType` — the target's component type (laws scope on
+             *     types, not node ids).
+             */
+            evidence?: {
+                [key: string]: unknown;
+            };
+        };
+        ExperimentSummary: {
+            experimentId?: string;
+            baselineFlowId?: string;
+            hypothesis?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** @enum {string} */
+            baselineVerdict?: "GREEN" | "RED" | "SKIPPED";
+            /** @enum {string} */
+            status?: "draft" | "running" | "complete" | "aborted";
+            rungCount?: number;
+            greenCount?: number;
+            redCount?: number;
+            skippedCount?: number;
+        };
+        ExperimentRecord: {
+            experimentId?: string;
+            baselineFlowId?: string;
+            hypothesis?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** @enum {string} */
+            baselineVerdict?: "GREEN" | "RED" | "SKIPPED";
+            /** @enum {string} */
+            status?: "draft" | "running" | "complete" | "aborted";
+            rungs?: components["schemas"]["Rung"][];
+        };
+        LawRecord: {
+            lawId?: string;
+            /** @description Human/LLM-readable law statement. */
+            statement?: string;
+            /**
+             * @description Component-type scope (e.g. converter.json-to-xml), a
+             *     pair-scoped refinement (receiver.http#warmup-before-converter),
+             *     or flow.topology.
+             */
+            scope?: string;
+            kind?: string;
+            /** @description Experiment id, or "manual" for blood laws. */
+            origin?: string;
+            evidence?: {
+                greenRungs?: string[];
+                redRungs?: string[];
+            };
+            confidence?: number;
+            /** @enum {string} */
+            status?: "candidate" | "ratified" | "retired";
+            /** Format: date-time */
+            recordedAt?: string;
+            /** @enum {string} */
+            source?: "engine" | "manual";
+            /**
+             * @description Machine-checkable form (e.g. requires-position-after with
+             *     redPositions/greenPositions). Laws without a predicate are
+             *     advisory-only.
+             */
+            predicate?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        CalibrationSummary: {
+            artifactId?: string;
+            packageId?: string;
+            /** @description Tenant runtime status (STARTED | ERROR | TIMEOUT...). */
+            finalStatus?: string;
+            messageSent?: boolean;
+            httpResponseStatus?: number | null;
+            /** @description MPL rows with Status=COMPLETED (this run's epoch). */
+            mplCompleted?: number;
+            mplFailed?: number;
+            rewardOverall?: number | null;
+            /**
+             * Format: date-time
+             * @description Epoch boundary — only MPL rows at/after this instant belong to
+             *     this run (stale-row poison law).
+             */
+            startedAt?: string;
+            /** @description File name of the cached YAML report. */
+            reportPath?: string;
+        };
+        /** @description Full cached calibration report (calibration + reward). */
+        CalibrationReport: {
+            calibration?: {
+                packageId?: string;
+                artifactId?: string;
+                uploadedOk?: boolean;
+                deployAccepted?: boolean;
+                finalStatus?: string;
+                errorDetail?: string | null;
+                messageSent?: boolean;
+                httpResponseStatus?: number | null;
+                mplRows?: {
+                    MessageGuid?: string;
+                    Status?: string;
+                    CustomStatus?: string;
+                    IntegrationFlowName?: string;
+                    LogStart?: string;
+                }[];
+                /** Format: date-time */
+                startedAt?: string;
+            };
+            reward?: {
+                overall?: number;
+                dimensions?: {
+                    [key: string]: number;
+                };
+                allHardGatesPassed?: boolean;
+            } | null;
         };
     };
     responses: {
@@ -1056,6 +1299,147 @@ export interface operations {
             };
             /** @description Archive failed safety check. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listExperiments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Experiment campaign records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentSummary"][];
+                };
+            };
+        };
+    };
+    getExperiment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                experimentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Campaign record with rungs, verdicts, evidence. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExperimentRecord"];
+                };
+            };
+            /** @description Experiment record not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listLaws: {
+        parameters: {
+            query?: {
+                /** @description Filter by law status. */
+                status?: "candidate" | "ratified" | "retired";
+                /** @description Filter by component-type scope (e.g. converter.json-to-xml). */
+                scope?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Law registry contents. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LawRecord"][];
+                };
+            };
+        };
+    };
+    listCalibrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (lowercase kebab-case). */
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calibration report summaries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationSummary"][];
+                };
+            };
+            /** @description Project not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCalibration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project identifier (lowercase kebab-case). */
+                projectId: components["parameters"]["ProjectId"];
+                artifactId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Calibration report with MPL rows and reward vector. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalibrationReport"];
+                };
+            };
+            /** @description No calibration report for that artifact. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

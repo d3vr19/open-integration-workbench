@@ -1,0 +1,7 @@
+apiVersion: oiw.dev/v1alpha1
+kind: Package
+metadata:
+  id: xml-json-bridge
+  name: XML to JSON Bridge
+spec:
+  version: 0.1.0

@@ -27,7 +27,7 @@ spec:
       config:
         encoding: json
         maxItems: 100
-      fidelity: simulated
+      fidelity: compatible-subset
     - id: filter-valid
       type: filter
       config:
@@ -42,7 +42,7 @@ spec:
         encoding: json
         maxItems: 100
         combineStrategy: concat
-      fidelity: simulated
+      fidelity: compatible-subset
     - id: encode-base64
       type: encoder.base64
       config:

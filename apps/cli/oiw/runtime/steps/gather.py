@@ -58,15 +58,17 @@ class Gather(StepPlugin):
                 ctx.body = json.dumps(items).encode("utf-8")
             ctx.headers["Content-Type"] = "application/json"
         else:
-            # XML: concat children inside a <Gather> root
+            # XML: concat children inside a root element
             import contextlib
 
             from lxml import etree
 
-            root = etree.Element("Gather")
+            root_tag = node.config.get("rootElement", "Gather")
+            root = etree.Element(root_tag)
             for att in attachments:
                 with contextlib.suppress(Exception):
-                    root.append(etree.fromstring(att.body))
+                    el = etree.fromstring(att.body)
+                    root.append(el)
             ctx.body = etree.tostring(root, pretty_print=True)
             ctx.headers["Content-Type"] = "application/xml"
 
@@ -75,7 +77,11 @@ class Gather(StepPlugin):
         return ctx
 
     def compatibility(self) -> dict[str, Any]:
-        return {"fidelity": "simulated", "target_profiles": ["sap-cloud-integration-2026-07"]}
+        return {
+            "fidelity": "compatible-subset",
+            "target_profiles": ["sap-cloud-integration-2026-07"],
+            "note": "Bounded payload gathering for XML and JSON.",
+        }
 
     def security_classification(self) -> str:
         return "TRUSTED"

@@ -1,0 +1,28 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  name: smoke
+  description: Smoke test for XML to JSON bridge
+spec:
+  flow: xml-json-bridge
+  input:
+    entrypoint: sender-http
+    bodyInline: '<Order><id>ORD-99</id></Order>'
+    headers:
+      Content-Type: application/xml
+  mocks:
+  - target: rr-post
+    respond:
+      status: 200
+      body: '{"received":true}'
+  assertions:
+  - type: exchange.status
+    equals: COMPLETED
+  - type: node.executed
+    node: warmup-step
+  - type: node.executed
+    node: xml-to-json-conv
+  - type: node.executed
+    node: rr-post
+  - type: node.executed
+    node: pd-terminator

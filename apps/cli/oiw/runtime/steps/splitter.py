@@ -51,20 +51,15 @@ class SplitterGeneral(StepPlugin):
 
         try:
             if encoding == "json":
-                items = self._split_json(ctx.body, expression, max_items)
+                items = self._split_json(ctx, expression, max_items)
             else:
-                items = self._split_xml(ctx.body, expression, max_items)
+                items = self._split_xml(ctx, expression, max_items)
         except Exception as exc:
             ctx.exchange_status = ExchangeStatus.FAILED
             ctx.exception = exc
             ctx.add_trace(node.id, "error", f"split failed: {exc}")
             return ctx
 
-        # The prototype does not actually fork the message into N parallel
-        # executions (that requires the JVM runtime worker's iterator semantics).
-        # Instead, we store the split items as attachments on the context so
-        # downstream steps can iterate. DEV-003: full splitter behaviour is
-        # Phase 2 work (services/runtime-worker).
         from ..context import Attachment
 
         ctx.attachments = [
@@ -75,29 +70,69 @@ class SplitterGeneral(StepPlugin):
         ctx.add_trace(node.id, "exit", f"split into {len(items)} item(s)")
         return ctx
 
-    def _split_json(self, body: bytes, expression: str | None, max_items: int) -> list[bytes]:
-        data = json.loads(body)
-        if not isinstance(data, list):
-            data = [data]
-        items = data[:max_items]
-        return [json.dumps(item).encode("utf-8") for item in items]
+    def _resolve_expr(self, expr: str | None, ctx: MessageContext) -> str | None:
+        if not expr or not isinstance(expr, str):
+            return expr
+        out = expr
+        for k, v in ctx.headers.items():
+            out = out.replace(f"${{header.{k}}}", str(v))
+        for k, v in ctx.properties.items():
+            out = out.replace(f"${{property.{k}}}", str(v))
+        return out
 
-    def _split_xml(self, body: bytes, expression: str | None, max_items: int) -> list[bytes]:
+    def _split_json(self, ctx: MessageContext, expression: str | None, max_items: int) -> list[bytes]:
+        data = json.loads(ctx.body)
+        expr = self._resolve_expr(expression, ctx)
+
+        if expr:
+            # Handle key extraction like $.orders, /orders, orders
+            clean_key = expr.lstrip("$.").lstrip("/")
+            if isinstance(data, dict) and clean_key in data:
+                target = data[clean_key]
+                if isinstance(target, list):
+                    items = target[:max_items]
+                    return [json.dumps(item).encode("utf-8") for item in items]
+                return [json.dumps(target).encode("utf-8")]
+
+        if isinstance(data, list):
+            items = data[:max_items]
+            return [json.dumps(item).encode("utf-8") for item in items]
+        if isinstance(data, dict):
+            # If dict has a single list property and no specific expression, split that list
+            list_vals = [v for v in data.values() if isinstance(v, list)]
+            if len(list_vals) == 1:
+                return [json.dumps(item).encode("utf-8") for item in list_vals[0][:max_items]]
+            return [json.dumps(data).encode("utf-8")]
+        return [json.dumps(data).encode("utf-8")]
+
+    def _split_xml(self, ctx: MessageContext, expression: str | None, max_items: int) -> list[bytes]:
         from lxml import etree
 
-        root = etree.fromstring(body)
-        # Naive split: each direct child becomes its own document.
+        root = etree.fromstring(ctx.body)
+        expr = self._resolve_expr(expression, ctx)
+
+        if expr:
+            nodes = root.xpath(expr)
+            out: list[bytes] = []
+            for n in nodes[:max_items]:
+                if hasattr(n, "tag"):
+                    out.append(etree.tostring(n))
+                else:
+                    out.append(str(n).encode("utf-8"))
+            return out
+
+        # Default XML split: direct child elements
         children = list(root)[:max_items]
-        out: list[bytes] = []
+        out_children: list[bytes] = []
         for child in children:
-            out.append(etree.tostring(child))
-        return out
+            out_children.append(etree.tostring(child))
+        return out_children
 
     def compatibility(self) -> dict[str, Any]:
         return {
-            "fidelity": "simulated",
+            "fidelity": "compatible-subset",
             "target_profiles": ["sap-cloud-integration-2026-07"],
-            "note": "Prototype stores split items as attachments; full iterator semantics is Phase 2.",
+            "note": "Bounded payload splitting for XML and JSON.",
         }
 
     def security_classification(self) -> str:

@@ -1,0 +1,26 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  name: smoke
+  description: Smoke test for weather logger async
+spec:
+  flow: weather-logger-async
+  input:
+    entrypoint: sender-http
+    bodyInline: '{}'
+    headers:
+      Content-Type: application/json
+  mocks:
+  - target: rr-fetch
+    respond:
+      status: 200
+      body: '{"temperature": 22.5}'
+  assertions:
+  - type: exchange.status
+    equals: COMPLETED
+  - type: node.executed
+    node: rr-fetch
+  - type: node.executed
+    node: add-context
+  - type: node.executed
+    node: pd-terminator

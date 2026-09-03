@@ -661,8 +661,24 @@ class SapCiTenantAdapter:
                 success=False, version=None, error="empty or truncated archive", uploaded_at=None
             )
         # Id-collision preflight: never rely on the misleading 500.
-        artifacts = await self.list_artifacts(package_id, top=200)
-        if any(a.id == artifact_id for a in artifacts):
+        # LIVE LAW (2026-09-03, nav-wedge era): the package listing may be
+        # in gateway cooldown — probe the artifact KEY directly instead
+        # ($value download on the candidate id; 200 = exists, 404 = free).
+        exists = False
+        try:
+            artifacts = await self.list_artifacts(package_id, top=200)
+            exists = any(a.id == artifact_id for a in artifacts)
+        except SapCiTenantError:
+            probe = await self._client.get(
+                f"/IntegrationDesigntimeArtifacts(Id='{artifact_id}',Version='1.0.0')/$value",
+                headers={**self._basic_auth_header(), "Accept": "application/zip"},
+            )
+            probe2 = await self._client.get(
+                f"/IntegrationDesigntimeArtifacts(Id='{artifact_id}',Version='Active')/$value",
+                headers={**self._basic_auth_header(), "Accept": "application/zip"},
+            )
+            exists = probe.status_code == 200 or probe2.status_code == 200
+        if exists:
             return UploadResult(
                 success=False,
                 version=None,
@@ -697,8 +713,22 @@ class SapCiTenantAdapter:
         if resp.status_code >= 400:
             self._raise_for_status(resp, "create_artifact")
         # Read back the tenant-assigned version (auto-generated on create).
-        artifacts = await self.list_artifacts(package_id, top=200)
-        created_version = next((a.version for a in artifacts if a.id == artifact_id), None)
+        # LIVE LAW (nav-wedge era): the package listing may be cooling —
+        # probe the artifact key directly; '1.0.0' is the observed
+        # auto-generated version on this tenant (P6 ground truth).
+        try:
+            artifacts = await self.list_artifacts(package_id, top=200)
+            created_version = next((a.version for a in artifacts if a.id == artifact_id), None)
+        except SapCiTenantError:
+            created_version = None
+            for candidate in ("1.0.0", "Active"):
+                probe = await self._client.get(
+                    f"/IntegrationDesigntimeArtifacts(Id='{artifact_id}',Version='{candidate}')/$value",
+                    headers={**self._basic_auth_header(), "Accept": "application/zip"},
+                )
+                if probe.status_code == 200:
+                    created_version = candidate
+                    break
         return UploadResult(
             success=True,
             version=created_version,

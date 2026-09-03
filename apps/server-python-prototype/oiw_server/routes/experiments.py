@@ -56,8 +56,18 @@ class ExperimentRecord(BaseModel):
 
 
 def _experiments_dir() -> Path:
-    """Records resolve from the workspace, like the EMG store."""
+    """Records resolve from the workspace, like the EMG store; falls back
+    to docs/emg/experiments so a fresh workspace displays the committed campaign.
+    """
     ws = os.environ.get("OIW_WORKSPACE")
+    if ws:
+        p = Path(ws) / ".oiw" / "experiments"
+        if p.is_dir() and any(p.glob("*.yaml")):
+            return p
+    cli_root = Path(__file__).resolve().parents[4]
+    committed = cli_root / "docs" / "emg" / "experiments"
+    if committed.is_dir() and any(committed.glob("*.yaml")):
+        return committed
     root = Path(ws) if ws else Path.cwd()
     return Path(root) / ".oiw" / "experiments"
 

@@ -46,6 +46,11 @@ class ParityCaseSpec:
     artifact_id: str | None = None
     calibration: Path | None = None  # relative to repo root
     test: str | None = None
+    # Listener case (P6 PD topology): a sender.processdirect artifact has
+    # no HTTP endpoint to exercise — its tenant verdict is STARTED alone;
+    # message evidence arrives via the CALLER's chain (both-artifacts
+    # MPL COMPLETED, p6-demo.yaml). Comparable on STARTED when true.
+    listener: bool = False
 
 
 def load_corpus(manifest_path: Path) -> tuple[list[ParityCaseSpec], float]:
@@ -60,6 +65,7 @@ def load_corpus(manifest_path: Path) -> tuple[list[ParityCaseSpec], float]:
             artifact_id=c.get("artifactId"),
             calibration=Path(c["calibration"]) if c.get("calibration") else None,
             test=c.get("test"),
+            listener=bool(c.get("listener", False)),
         )
         for c in (spec.get("cases") or [])
     ]
@@ -163,6 +169,15 @@ def evaluate_case(
         return row
 
     if oracle["finalStatus"] == "STARTED" and not oracle["messageSent"]:
+        if case.listener:
+            # Listener case: STARTED IS the tenant verdict (PD senders have
+            # no HTTP entrypoint; message evidence belongs to the caller's
+            # chain). Comparable on STARTED == local PASS.
+            agreed = local_passed  # oracle success dim = STARTED here
+            row["verdict"] = "agreed" if agreed else "mismatched"
+            if not agreed:
+                row["details"] = f"local={row['localStatus']} vs oracle STARTED (listener form)"
+            return row
         row["verdict"] = "pending-oracle-message"
         return row
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Node } from 'reactflow';
 import type { EmgHit, ValidationResult, TestResult, BuildResult, StructuredDiff, SimulationResult, TraceEntry } from '../../api';
 import { CoPilotPanel } from '../llm/CoPilotPanel';
@@ -6,6 +7,9 @@ import { DeployPanel } from '../deploy/DeployPanel';
 import { PropertiesPanel } from '../canvas/PropertiesPanel';
 import { DiffViewer } from '../../DiffViewer';
 import { TraceInspector } from '../canvas/TraceInspector';
+import { ExperimentsPanel } from '../experiments/ExperimentsPanel';
+import { LawRegistryPanel } from '../experiments/LawRegistryPanel';
+import { TenantMplComparison } from '../canvas/TenantMplComparison';
 
 interface RightSidebarProps {
   selectedProject: string | null;
@@ -46,6 +50,8 @@ export function RightSidebar({
   selectedTraceNodeId,
   onSelectTraceNodeId,
 }: RightSidebarProps) {
+  const [showMplComparison, setShowMplComparison] = useState(false);
+
   return (
     <aside className="sidebar sidebar--right">
       <div className="sidebar__section sidebar__section--copilot">
@@ -64,6 +70,37 @@ export function RightSidebar({
       <div className="sidebar__section">
         <DeployPanel projectId={selectedProject} />
       </div>
+
+      <div className="sidebar__section">
+        <ExperimentsPanel />
+      </div>
+
+      <div className="sidebar__section">
+        <LawRegistryPanel />
+      </div>
+
+      {selectedProject && !simulation && (
+        <div className="sidebar__section">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 className="sidebar__title" style={{ margin: 0 }}>Tenant MPL</h3>
+            <button
+              className="btn-chip"
+              onClick={() => setShowMplComparison((v) => !v)}
+              data-testid="btn-open-mpl-compare"
+            >
+              {showMplComparison ? 'hide' : 'compare MPL'}
+            </button>
+          </div>
+          {showMplComparison && (
+            <TenantMplComparison
+              projectId={selectedProject}
+              flowId={selectedFlow}
+              simulation={null}
+              onClose={() => setShowMplComparison(false)}
+            />
+          )}
+        </div>
+      )}
 
       {selectedNode && (
         <PropertiesPanel
@@ -160,8 +197,24 @@ export function RightSidebar({
             >
               {showRawTrace ? 'step view' : 'raw events'}
             </button>
+            <button
+              className="btn-chip"
+              onClick={() => setShowMplComparison((v) => !v)}
+              data-testid="btn-toggle-mpl-compare"
+              title="Toggle tenant-MPL comparison view"
+              style={{ marginLeft: 6 }}
+            >
+              {showMplComparison ? 'simulation' : 'tenant MPL'}
+            </button>
           </h3>
-          {showRawTrace ? (
+          {showMplComparison ? (
+            <TenantMplComparison
+              projectId={selectedProject}
+              flowId={selectedFlow}
+              simulation={simulation}
+              onClose={() => setShowMplComparison(false)}
+            />
+          ) : showRawTrace ? (
             <div className="trace-list">
               {simulation.trace.map((t: TraceEntry, i: number) => (
                 <div key={i} className={`trace-item trace-item--${t.direction}`}>

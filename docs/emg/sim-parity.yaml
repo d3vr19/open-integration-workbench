@@ -1,5 +1,5 @@
 sim_parity:
-  generatedAt: '2026-09-02T17:51:49.981621+00:00'
+  generatedAt: '2026-09-03T18:04:57.595567+00:00'
   corpus: packages/parity-corpus/manifest.yaml
   engine: real
   cases:
@@ -14,7 +14,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 5.3
+    oracleReportAgeHours: 29.52
     verdict: agreed
   - name: oiw-turbo-fwd-smoke
     project: examples/oiw-turbo-fwd
@@ -27,7 +27,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 5.81
+    oracleReportAgeHours: 30.03
     verdict: agreed
   - name: oiw-conv-fwd-smoke
     project: examples/oiw-conv-fwd
@@ -40,7 +40,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 0.53
+    oracleReportAgeHours: 24.75
     verdict: agreed
   - name: order-to-s4-happy-path
     project: examples/order-to-s4
@@ -53,15 +53,47 @@ sim_parity:
   - name: sftp-order-drop-happy-path
     project: examples/sftp-order-drop
     artifactId: null
-    localPassed: false
-    localStatus: UNSUPPORTED
-    verdict: unsupported
-    details: 'OIW-REAL-UNSUPPORTED: real engine refuses simulated-fidelity step(s):
-      gather-orders (gather), split-orders (splitter.general). Implement true logic
-      or run with --engine simulated.'
+    localPassed: true
+    localStatus: PASS
+    verdict: pending-oracle
+    details: no cached calibration report for this case
+  - name: oiw-turbo-fwd-listener-started
+    project: examples/oiw-turbo-fwd-listener
+    artifactId: oiw_turbo_fwd-listener
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: false
+      mplRows: 0
+      mplCompleted: 0
+      success: false
+    oracleReportAgeHours: 0.01
+    verdict: agreed
+  - name: weather-logger-async-smoke
+    project: examples/weather-logger-async
+    artifactId: null
+    localPassed: true
+    localStatus: PASS
+    verdict: pending-oracle
+    details: no cached calibration report for this case
+  - name: payload-enricher-fwd-smoke
+    project: examples/payload-enricher-fwd
+    artifactId: null
+    localPassed: true
+    localStatus: PASS
+    verdict: pending-oracle
+    details: no cached calibration report for this case
+  - name: xml-json-bridge-smoke
+    project: examples/xml-json-bridge
+    artifactId: null
+    localPassed: true
+    localStatus: PASS
+    verdict: pending-oracle
+    details: no cached calibration report for this case
   agreement:
-    comparable: 3
-    agreed: 3
+    comparable: 4
+    agreed: 4
     ratio: 1.0
   gate:
     threshold: 0.9

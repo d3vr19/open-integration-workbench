@@ -1,0 +1,54 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: weather-logger-async
+  labels:
+    archetype: api-to-event
+  name: Weather Logger Async Flow
+  version: 1
+spec:
+  entrypoints:
+  - id: sender-http
+    type: sender.http
+    config:
+      path: /weather_logger
+      methods:
+      - POST
+    fidelity: simulated
+  nodes:
+  - id: rr-fetch
+    type: receiver.http
+    config:
+      method: GET
+      timeoutSeconds: 30
+      url: https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m
+    fidelity: simulated
+  - id: add-context
+    type: modifier.content
+    config:
+      properties:
+      - name: loggedAt
+        value: simulated-epoch
+    fidelity: compatible-subset
+  - id: pd-terminator
+    type: receiver.processdirect
+    config:
+      address: /weather_logger_pd
+    fidelity: simulated
+  edges:
+  - from: sender-http
+    to: rr-fetch
+  - from: rr-fetch
+    to: add-context
+  - from: add-context
+    to: pd-terminator
+  errorHandling:
+    defaultExceptionSubprocess:
+      steps:
+      - id: error-log
+        type: log.message
+        config:
+          level: ERROR
+          message: Weather logging failed
+        fidelity: compatible-subset
+  extensions: {}

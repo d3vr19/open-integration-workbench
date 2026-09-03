@@ -1261,3 +1261,68 @@ The EMG experience plan (Phases 1–2) executed live:
 **Division of labor this sprint:** frontend H1–H6 ‖ backend B-1 (parity gate: fresh calibrations for new cases + campaign baselines → ≥10 comparable), B-2 (order-to-s4 XSLT2 — stays backend, architectural), B-3 (Mapping breadth — after the gate). Backend hands off `runtime/steps/splitter.py` + `gather.py` until H4/H5 merge.
 
 **Tests:** server 101 (+10). All suites green: CLI 567, MCP 20, Gateway 43, Seed corpus 132. SPA tsc/lint/build green post-spec-regen.
+
+---
+
+### 2026-09-03 — WP-10 H1–H6: Parallel Collaboration Sprint Delivered (Track D UI, Tenant-MPL Comparison, 10/10 Journeys, Real Splitter/Gather, 3 Parity Projects)
+
+**Sprint executed across all shared tasks H1 through H6:**
+
+1. **H4 — `splitter.general` Real Engine (`apps/cli/oiw/runtime/steps/splitter.py`):**
+   - Promoted fidelity from `simulated` to `compatible-subset`.
+   - Real XML splitting via `lxml.etree` with XPath evaluation, namespace handling, and dynamic property reference resolution (`${property.x}`, `${header.x}`).
+   - Real JSON splitting with dot/bracket expression slicing.
+   - Bounded item enforcement (`maxItems`, `maxIterations`, OIW-E003).
+
+2. **H5 — `gather` Real Engine (`apps/cli/oiw/runtime/steps/gather.py`):**
+   - Promoted fidelity from `simulated` to `compatible-subset`.
+   - Real aggregation for XML elements (bundled into root tag or configured `rootElement`) and JSON arrays/objects.
+   - `examples/sftp-order-drop/flows/batch-orders/flow.yaml` updated: both split and gather marked `compatible-subset`.
+   - `sftp-order-drop-happy-path` unblocked in real engine: passes `oiw test --engine real` (2/2) and flips to `local=PASS` (`pending-oracle`) in `oiw parity`.
+
+3. **H6 — 3 New Parity-Case Example Projects:**
+   - Authored `examples/weather-logger-async` (`api-to-event`, HTTP receiver + property modifier + ProcessDirect).
+   - Authored `examples/payload-enricher-fwd` (Header enrichment + HTTP receiver + base64 encoder + ProcessDirect).
+   - Authored `examples/xml-json-bridge` (warmup modifier + `converter.xml-to-json` with explicit `rootElement: Order` + HTTP receiver + ProcessDirect, adhering strictly to the tenant placement law).
+   - All 3 pass `oiw validate --strict` (0 errors, 0 warnings) and `oiw test --all` / `oiw test --engine real --all`.
+   - Registered in `packages/parity-corpus/manifest.yaml` as `pending-oracle` (`local=PASS`).
+
+4. **H1 — Track D: Experiments & Laws Panel (`apps/web`):**
+   - Created `apps/web/src/components/experiments/ExperimentsPanel.tsx`: campaign cards, baseline verdict badge, verdict tallies (green/red/skipped), rung list with stamped evidence (`targetType`, `httpResponseStatus`, `finalStatus`, `mplStatuses`).
+   - Created `apps/web/src/components/experiments/LawRegistryPanel.tsx`: ratified/candidate/retired filters, scope chips, confidence score, green/red evidence rungs, machine predicate view (`requires-position-after` with red/green positions).
+   - Connected via typed methods in `apps/web/src/api/client.ts` and `apps/web/src/api.ts`.
+   - Added committed fallback in `apps/server-python-prototype/oiw_server/routes/experiments.py` so fresh workspaces load the committed `docs/emg/experiments/*.yaml`.
+
+5. **H2 — B-003: Tenant-MPL Comparison View (`apps/web`):**
+   - Created `apps/web/src/components/canvas/TenantMplComparison.tsx`: side-by-side local simulation trace vs cached tenant MPL rows.
+   - Epoch honesty: parses `startedAt` boundary and highlights only rows `LogStart >= startedAt` as `[THIS RUN]`, tagging prior runs as `[PRIOR EPOCH / STALE]`.
+   - Displays reward scores, dimension breakdowns, and artifact selection.
+   - Integrated into `RightSidebar.tsx` and styled in `App.css`.
+
+6. **H3 — Critical Journeys #8–10 (OW-012 Completion, 10/10 Green Journeys):**
+   - Journey #8: Canvas node selection and Node Properties panel mounting.
+   - Journey #9: Dirty state indicator (`unsaved changes (1)`) + Save -> PATCH round-trip.
+   - Journey #10: Track D Experiments, Laws Registry (UI == API validation), and Tenant-MPL Comparison view against committed calibration fixture.
+   - **Playwright Test Suite Result: 10/10 Journeys PASSED in 10.3s.**
+
+**Verification & Quality Gate Summary:**
+- CLI Tests: 575/575 passed (`apps/cli/tests`).
+- Server Tests: 101/101 passed (`apps/server-python-prototype/tests`).
+- Parity Runner: 3/3 comparable (100.00% agreement); 4 pending-oracle cases (`local=PASS`).
+- Web App: `npx tsc`, `npm run lint` (oxlint), `npm run build` (vite) all clean with 0 errors.
+
+---
+
+### 2026-09-03 (cont.) — B-1 parity push: listener form comparable + create-verb wedge-tolerance; oracle legs staged behind a long tenant cooldown
+
+**Parity state: 4/4 comparable @ 100%** (was 3/3). The listener case landed as comparable #4 — `oiw-turbo-fwd-listener` (STARTED = the tenant verdict for PD-listener forms; message evidence belongs to the caller's chain, P6 topology). Implementation: `parity.py` grows a `listener: bool` case marker (manifest); a STARTED+messageSent:false report is comparable-on-STARTED for listener cases ONLY — the normal-case path stays strict (`pending-oracle-message`, regression-tested both directions). The listener's stale test asserting a renamed node (`write-body` → `log-receive`) was fixed; local PASS.
+
+**Parallel-track integration (the WP-10 system working):** the frontend engineer's uncommitted tree arrived mid-session — splitter/gather real-engine implementations (H4/H5), Experiments/Laws UI panels (H1), journeys (H3), and 3 new parity-example projects (H6: weather-logger-async, payload-enricher-fwd, xml-json-bridge — all local-real-engine PASS, honest pending-oracle in the manifest). His sftp-order-drop flipped UNSUPPORTED → local PASS. Combined tree verified: CLI 577, server 101, tsc clean. My 4 generator-built examples were superseded by his H6 set (examples/ is his declared file-family; the overlap resolved in his favor).
+
+**Honest exporter finding:** `payload-enricher-fwd` uses `encoder.base64` — NO exporter shape exists (known good-first-issue #2: "harvest a reference bundle"). Its parity case stays pending-oracle BY DESIGN until the shape is harvested; refusing to emit is the honesty floor working. `weather-logger-async` + `xml-json-bridge` build clean (RR/PD topology, modifier/content + xml-to-json shapes).
+
+**Tenant oracle legs STAGED, not run — the wedge returned deeper:** after the listener calibrate (green, update-path via artifact-key namespace), the create-verb legs (oiw-wlog, oiw-x2j for the two new examples) hit `404 Package ID AdequareGST does not exist` — single-variable probe with a bogus package returns IDENTICAL bytes: POST-create VALIDATES PackageId via the wedged keyed-package route. The AdequareGST keyed-route wedge persisted >40 min (today's cumulative: campaign #1's 7 deploys + calibrates + probes) while Testpackage01 keyed reads 200 — a per-package cooldown, longer than the morning's windows. Testpackage01 holds REAL business artifacts (VendorMaster, ExchangeRates) — NOT scratch, not touched per WP-08 §C-004.
+
+**Banked while waiting (wedge-tolerance for the create verb):** `create_artifact`'s id-collision preflight AND version read-back both fell back to artifact-key namespace probes (`(Id,Version)/$value` — healthy during cooldowns) when the package listing 404s; 3 new tenant tests (probe-fallback create, refuse-existing-via-probe, read-back-fallback). CLI 575 → 577.
+
+**Next session opens with:** the two create+calibrate legs for weather-logger-async + xml-json-bridge (wedge should clear overnight; cool-down pacing before), then sftp-order-drop's oracle leg (SFTP-bearing), then parity recount — the gate math: 4 comparable now; +2 lands 6; +sftp lands 7; order-to-s4 stays blocked on XSLT2 (B-2); the last honest miles are H4/H5-unlocked cases + new shapes from Mapping breadth (B-3).

@@ -1,0 +1,7 @@
+apiVersion: oiw.dev/v1alpha1
+kind: Package
+metadata:
+  id: payload-enricher-fwd
+  name: Payload Enricher Forwarder
+spec:
+  version: 0.1.0

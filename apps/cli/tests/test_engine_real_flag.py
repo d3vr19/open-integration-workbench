@@ -92,13 +92,13 @@ def test_simulated_default_unchanged():
 
 def test_real_mode_refuses_stub_fidelity_loudly(tmp_path):
     proj = _write_mini_project(tmp_path / "stubbed", nodes=[
-        {"id": "gather-orders", "type": "gather", "config": {}, "fidelity": "simulated"},
+        {"id": "write-var", "type": "variables.write", "config": {"name": "v"}, "fidelity": "simulated"},
     ])
     results = run_tests(Project.load(proj), engine="real")
     r = results[0]
     assert not r.passed
     assert r.real_engine_blocked is True
-    assert any("OIW-REAL-UNSUPPORTED" in f and "gather" in f for f in r.failures)
+    assert any("OIW-REAL-UNSUPPORTED" in f and "variables.write" in f for f in r.failures)
 
 
 def test_real_mode_endpoint_steps_are_exempt():

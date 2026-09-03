@@ -1,0 +1,28 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  name: smoke
+  description: Smoke test for payload enricher forwarder
+spec:
+  flow: payload-enricher-fwd
+  input:
+    entrypoint: sender-http
+    bodyInline: '{"data":"sample"}'
+    headers:
+      Content-Type: application/json
+  mocks:
+  - target: rr-enrich
+    respond:
+      status: 200
+      body: '{"status":"ok"}'
+  assertions:
+  - type: exchange.status
+    equals: COMPLETED
+  - type: node.executed
+    node: prep-request
+  - type: node.executed
+    node: rr-enrich
+  - type: node.executed
+    node: encode-payload
+  - type: node.executed
+    node: pd-terminator

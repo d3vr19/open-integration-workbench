@@ -682,3 +682,99 @@ def test_unpinned_writable_package_still_refuses_nothing_new(profile) -> None:
     assert result.success is True
     assert "Id='MyFlow'" in seen["url"]  # top-of-list artifact
     _run(adapter.disconnect())
+
+
+def test_create_artifact_probe_fallback_on_nav_wedge(monkeypatch, tmp_path):
+    """Nav-wedge era (2026-09-03): when the package listing 404s (gateway
+    cooldown), create_artifact probes the artifact KEY directly instead of
+    dying — the artifact-key namespace stays healthy during cooldowns."""
+    import asyncio
+
+    import httpx
+
+    from oiw.tenant.sap_ci_adapter import SapCiTenantAdapter
+
+    calls = {"nav": 0, "probe": 0, "create": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if "IntegrationPackages" in path and "IntegrationDesigntimeArtifacts" in path:
+            calls["nav"] += 1
+            return httpx.Response(404, json={"error": {"code": "Not Found"}})
+        if "IntegrationDesigntimeArtifacts(Id=" in path and "$value" in path:
+            calls["probe"] += 1
+            return httpx.Response(404, json={"error": {"code": "Not Found"}})
+        if path.endswith("/IntegrationDesigntimeArtifacts") and request.method == "POST":
+            calls["create"] += 1
+            return httpx.Response(201, json={"d": {"Id": "new-art"}})
+        if request.method == "GET" and path.rstrip("/").endswith("/api/v1"):
+            return httpx.Response(200, json={"d": {"EntitySets": []}}, headers={"x-csrf-token": "tok"})
+        return httpx.Response(200, json={"d": {"results": []}})
+
+    async def main():
+        transport = httpx.MockTransport(handler)
+        adapter = SapCiTenantAdapter(
+            "https://t.example.com/api/v1", "u", "p",
+            client=httpx.AsyncClient(transport=transport, base_url="https://t.example.com/api/v1"),
+            writable_packages=["pkg/new-art"],
+        )
+        from oiw.environments import AuthConfig
+        from oiw.environments import EnvironmentProfile as EnvProfile
+
+        prof = EnvProfile(
+            name="t", target="sap-cloud-integration-2026-07",
+            tenant_url="https://t.example.com/api/v1",
+            auth=AuthConfig(method="basic", credential_ref="x"),
+        )
+        await adapter.connect(prof)
+        result = await adapter.create_artifact("pkg", "new-art", "New", b"ZIP-CONTENT-9876")
+        await adapter.disconnect()
+        return result
+
+    result = asyncio.run(main())
+    assert result.success, f"create must succeed via probe fallback: {result.error}"
+    assert calls["nav"] == 2  # preflight + version read-back, both wedged
+    assert calls["probe"] >= 2  # at least the preflight probes fired
+    assert calls["create"] == 1
+
+
+def test_create_artifact_refuses_existing_via_probe(monkeypatch):
+    """If the probe finds the artifact alive (wedge-era listing), create
+    refuses with the honest already-exists message (update path instead)."""
+    import asyncio
+
+    import httpx
+
+    from oiw.tenant.sap_ci_adapter import SapCiTenantAdapter
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if "IntegrationPackages" in path and "IntegrationDesigntimeArtifacts" in path:
+            return httpx.Response(404, json={"error": {"code": "Not Found"}})
+        if "IntegrationDesigntimeArtifacts(Id=" in path and "$value" in path:
+            return httpx.Response(200, content=b"ZIP")  # exists!
+        return httpx.Response(200, json={"d": {"results": []}})
+
+    async def main():
+        transport = httpx.MockTransport(handler)
+        adapter = SapCiTenantAdapter(
+            "https://t.example.com/api/v1", "u", "p",
+            client=httpx.AsyncClient(transport=transport, base_url="https://t.example.com/api/v1"),
+            writable_packages=["pkg/existing"],
+        )
+        from oiw.environments import AuthConfig
+        from oiw.environments import EnvironmentProfile as EnvProfile
+
+        prof = EnvProfile(
+            name="t", target="sap-cloud-integration-2026-07",
+            tenant_url="https://t.example.com/api/v1",
+            auth=AuthConfig(method="basic", credential_ref="x"),
+        )
+        await adapter.connect(prof)
+        result = await adapter.create_artifact("pkg", "existing", "X", b"ZIP-CONTENT-9876")
+        await adapter.disconnect()
+        return result
+
+    result = asyncio.run(main())
+    assert not result.success
+    assert "already exists" in (result.error or "")

@@ -148,10 +148,10 @@ class TestPieceAssembly:
         assert "converter.json-to-xml" in pieces
         assert "modifier.content" in pieces
         assert "log.message" in pieces
+        assert "splitter.general" in pieces
+        assert "gather" in pieces
         # Simulated stubs are NOT pieces (honesty floor).
         assert "transform.xslt" not in pieces
-        assert "splitter.general" not in pieces
-        assert "gather" not in pieces
 
     def test_assemble_happy_path(self) -> None:
         req = interpret_requirement_fallback(CREATE_REQ)

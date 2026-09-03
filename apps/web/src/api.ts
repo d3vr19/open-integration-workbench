@@ -4,7 +4,16 @@
  * backed by the typed client in ./api/client.ts.
  */
 
-import { fetchJSON, defaultApiClient } from './api/client';
+import {
+  fetchJSON,
+  defaultApiClient,
+  type SchemaExperimentSummary,
+  type SchemaExperimentRecord,
+  type SchemaRung,
+  type SchemaLawRecord,
+  type SchemaCalibrationSummary,
+  type SchemaCalibrationReport,
+} from './api/client';
 export * from './api/client';
 
 export interface ProjectSummary {
@@ -213,7 +222,29 @@ export const api = {
     fetchJSON<EmgInsightSummary[]>(`/projects/${projectId}/emg/insights`),
   emgInsightDetail: (insightId: string) =>
     fetchJSON<EmgInsightDetail>(`/emg/insights/${encodeURIComponent(insightId)}`),
+
+  // ---------------------------------------------------------------
+  // Experiments & Laws (WP-10 Track D / H1).
+  // ---------------------------------------------------------------
+  listExperiments: () => defaultApiClient.listExperiments(),
+  getExperiment: (id: string) => defaultApiClient.getExperiment(id),
+  listLaws: (params?: { status?: 'candidate' | 'ratified' | 'retired'; scope?: string }) =>
+    defaultApiClient.listLaws(params),
+
+  // ---------------------------------------------------------------
+  // Calibrations (WP-10 B-003 / H2).
+  // ---------------------------------------------------------------
+  listCalibrations: (projectId: string) => defaultApiClient.listCalibrations(projectId),
+  getCalibration: (projectId: string, artifactId: string) =>
+    defaultApiClient.getCalibration(projectId, artifactId),
 };
+
+export type ExperimentSummary = SchemaExperimentSummary;
+export type ExperimentRecord = SchemaExperimentRecord;
+export type RungRecord = SchemaRung;
+export type LawRecord = SchemaLawRecord;
+export type CalibrationSummary = SchemaCalibrationSummary;
+export type CalibrationReport = SchemaCalibrationReport;
 
 // -----------------------------------------------------------------
 // Agent + trajectory types (WP-04 Task 9).

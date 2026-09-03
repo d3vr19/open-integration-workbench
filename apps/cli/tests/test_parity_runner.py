@@ -129,7 +129,7 @@ def test_stale_oracle_excluded_from_ratio(tmp_path):
 def test_unsupported_local_run_is_refused_not_mismatched(tmp_path):
     repo, _ = _build_repo(tmp_path)
     _write_mini_project(repo / "proj-stub", nodes=[
-        {"id": "gather-orders", "type": "gather", "config": {}, "fidelity": "simulated"},
+        {"id": "write-var", "type": "variables.write", "config": {"name": "v"}, "fidelity": "simulated"},
     ])
     cal = repo / "reports" / "ok.yaml"
     _cal(cal, status="STARTED", sent=True, rows=1, age_h=2.0)
@@ -200,3 +200,96 @@ def test_cli_parity_enforce_gate_exits_nonzero(tmp_path):
         "--enforce-gate",
     ])
     assert res.exit_code == 1  # v0 baseline: gate open until fresh oracle data
+
+
+def test_listener_case_comparable_on_started(tmp_path):
+    """PD-listener case (P6 topology): STARTED alone is the tenant verdict.
+
+    A sender.processdirect artifact has no HTTP entrypoint; its message
+    evidence arrives via the caller's chain (both-artifacts MPL COMPLETED).
+    The listener case form is comparable on STARTED == local PASS.
+    """
+    from oiw.parity import evaluate_case
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    # build the listener project manually (mini-project helper is HTTP-shaped)
+    proj = repo / "proj-l"
+    (proj / "flows" / "f").mkdir(parents=True)
+    (proj / "oiw.yaml").write_text(
+        "apiVersion: oiw.dev/v1alpha1\nkind: IntegrationProject\n"
+        "metadata: {id: pl, name: pl, created: '1970-01-01T00:00:00Z'}\n"
+        "spec: {targetProfiles: [sap-cloud-integration-2026-07]}\n",
+        encoding="utf-8",
+    )
+    flow = {
+        "apiVersion": "oiw.dev/v1alpha1",
+        "kind": "IntegrationFlow",
+        "metadata": {"id": "f", "name": "f", "version": 1},
+        "spec": {
+            "entrypoints": [{
+                "id": "pd-in", "type": "sender.processdirect",
+                "config": {"address": "/x_pd"},
+            }],
+            "nodes": [{"id": "log-receive", "type": "log.message",
+                       "config": {"level": "INFO", "message": "PD payload received"},
+                       "fidelity": "compatible-subset"}],
+            "edges": [{"from": "pd-in", "to": "log-receive"}],
+        },
+    }
+    import yaml as _yaml
+    (proj / "flows" / "f" / "flow.yaml").write_text(_yaml.safe_dump(flow))
+
+    def _test(assertions: list[dict]) -> None:
+        (proj / "flows" / "f" / "tests").mkdir(exist_ok=True)
+        (proj / "flows" / "f" / "tests" / "smoke.yaml").write_text(_yaml.safe_dump({
+            "apiVersion": "oiw.dev/v1alpha1",
+            "kind": "FlowTest",
+            "metadata": {"name": "smoke"},
+            "spec": {
+                "flow": "f",
+                "input": {"entrypoint": "pd-in", "bodyInline": "{}",
+                          "headers": {"Content-Type": "application/json"}},
+                "assertions": assertions,
+                "mocks": [],
+            },
+        }))
+
+    _test([
+        {"type": "exchange.status", "equals": "COMPLETED"},
+        {"type": "node.executed", "node": "log-receive"},
+    ])
+    cal = repo / "reports" / "listener.yaml"
+    _cal(cal, status="STARTED", sent=False, rows=0, age_h=2.0)
+
+    case = type("C", (), {"name": "listener", "project": Path("proj-l"), "artifact_id": "a",
+                          "calibration": cal.relative_to(repo), "test": "smoke",
+                          "listener": True})()
+    out = evaluate_case(case, repo, now=NOW)
+    assert out["verdict"] == "agreed"
+    assert out["localStatus"] == "PASS"
+
+    # and a local FAIL against STARTED-listener is an honest mismatch
+    _test([{"type": "exchange.status", "equals": "FAILED"}])
+    out2 = evaluate_case(case, repo, now=NOW)
+    assert out2["verdict"] == "mismatched"
+
+
+def test_non_listener_no_message_stays_pending(tmp_path):
+    """The listener form never weakens the normal case: an HTTP-sender
+    case with messageSent=false remains pending-oracle-message."""
+    from oiw.parity import evaluate_case
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _write_mini_project(repo / "proj-h", nodes=[
+        {"id": "step-a", "type": "log.message", "config": {"level": "INFO", "message": "x"},
+         "fidelity": "compatible-subset"},
+    ])
+    cal = repo / "reports" / "no_msg.yaml"
+    _cal(cal, status="STARTED", sent=False, rows=0, age_h=2.0)
+    case = type("C", (), {"name": "h", "project": Path("proj-h"), "artifact_id": "a",
+                          "calibration": cal.relative_to(repo), "test": None,
+                          "listener": False})()
+    out = evaluate_case(case, repo, now=NOW)
+    assert out["verdict"] == "pending-oracle-message"

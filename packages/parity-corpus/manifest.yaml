@@ -32,3 +32,18 @@ spec:
     - name: sftp-order-drop-happy-path
       project: examples/sftp-order-drop
       test: happy-path
+    - name: oiw-turbo-fwd-listener-started
+      project: examples/oiw-turbo-fwd-listener
+      artifactId: oiw_turbo_fwd-listener
+      calibration: examples/oiw-turbo-fwd-listener/.oiw/calibration.yaml
+      test: turbo-smoke-oiw-turbo-fwd-listener
+      listener: true
+    - name: weather-logger-async-smoke
+      project: examples/weather-logger-async
+      test: smoke
+    - name: payload-enricher-fwd-smoke
+      project: examples/payload-enricher-fwd
+      test: smoke
+    - name: xml-json-bridge-smoke
+      project: examples/xml-json-bridge
+      test: smoke

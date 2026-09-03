@@ -164,6 +164,10 @@ export function useFlowEditor(selectedProject: string | null, selectedFlow: stri
         return { ...n, data: { ...data, config: { ...data.config, [key]: value } } };
       }),
     );
+    setPendingOps((ops) => [
+      ...ops,
+      { op: 'updateNodeConfig', nodeId, config: { [key]: value }, merge: true },
+    ]);
     setDirty(true);
   }, []);
 

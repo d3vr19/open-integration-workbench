@@ -1813,3 +1813,492 @@
   font-variant-numeric: tabular-nums;
 }
 
+
+/* ----------------------------------------------------------------- */
+/* WP-10 Track D: Experiments & Laws Panels (H1)                    */
+/* ----------------------------------------------------------------- */
+
+.experiments-panel,
+.law-registry-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.experiments-panel__header,
+.law-registry-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.experiments-panel__title,
+.law-registry-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--oiw-text-muted);
+  margin: 0;
+}
+
+.campaign-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.campaign-card {
+  background: var(--oiw-bg);
+  border: 1px solid var(--oiw-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.campaign-card:hover {
+  border-color: var(--oiw-text-muted);
+}
+
+.campaign-card--active {
+  border-color: var(--oiw-accent);
+  background: rgba(79, 192, 141, 0.05);
+}
+
+.campaign-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.campaign-card__id {
+  font-family: monospace;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--oiw-text);
+}
+
+.campaign-card__baseline {
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.campaign-card__tallies {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tally-item--green {
+  color: #10b981;
+}
+
+.tally-item--red {
+  color: #ef4444;
+}
+
+.tally-item--skipped {
+  color: var(--oiw-text-muted);
+}
+
+.campaign-detail {
+  background: var(--oiw-bg);
+  border: 1px solid var(--oiw-border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 6px;
+}
+
+.campaign-detail__hypothesis {
+  font-size: 12px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.campaign-detail__subhead {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 0 6px 0;
+  color: var(--oiw-text-muted);
+}
+
+.rungs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.rung-card {
+  background: var(--oiw-surface);
+  border: 1px solid var(--oiw-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.rung-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.rung-card__id {
+  font-size: 11px;
+  color: var(--oiw-text);
+}
+
+.rung-card__action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.rung-card__target {
+  font-family: monospace;
+}
+
+.rung-card__rationale {
+  font-size: 10px;
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+
+.rung-card__evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.evidence-chip {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--oiw-border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-family: monospace;
+}
+
+/* Law Registry */
+.law-registry-panel__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.status-filter-group {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-chip {
+  background: var(--oiw-surface);
+  color: var(--oiw-text-muted);
+  border: 1px solid var(--oiw-border);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-chip:hover {
+  color: var(--oiw-text);
+  border-color: var(--oiw-text-muted);
+}
+
+.btn-chip--active {
+  background: var(--oiw-accent);
+  color: white;
+  border-color: var(--oiw-accent);
+}
+
+.scope-active-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--oiw-text-muted);
+}
+
+.scope-tag {
+  background: transparent;
+  border: 1px dashed var(--oiw-border);
+  color: var(--oiw-accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-family: monospace;
+  cursor: pointer;
+}
+
+.scope-tag:hover {
+  background: rgba(79, 192, 141, 0.1);
+}
+
+.laws-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.law-card {
+  background: var(--oiw-bg);
+  border: 1px solid var(--oiw-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+}
+
+.law-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.law-card__chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.law-card__id {
+  font-size: 10px;
+  color: var(--oiw-text-muted);
+}
+
+.law-card__statement {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0 0 6px 0;
+  color: var(--oiw-text);
+}
+
+.law-card__scope-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  margin-bottom: 6px;
+}
+
+.law-evidence {
+  margin: 6px 0;
+  padding: 4px 6px;
+  background: var(--oiw-surface);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.evidence-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.evidence-label {
+  font-weight: 600;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.evidence-label.green {
+  color: #10b981;
+}
+
+.evidence-label.red {
+  color: #ef4444;
+}
+
+.evidence-rung {
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 9px;
+}
+
+.evidence-rung--green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.evidence-rung--red {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.predicate-box {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 4px;
+  padding: 6px;
+  margin-top: 6px;
+  font-size: 10px;
+}
+
+.predicate-box__title {
+  font-weight: 600;
+  color: #60a5fa;
+  margin-bottom: 2px;
+}
+
+.predicate-box__type {
+  font-family: monospace;
+  margin-bottom: 4px;
+}
+
+.predicate-box--advisory {
+  font-size: 10px;
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* ----------------------------------------------------------------- */
+/* WP-10 Track B-003: Tenant-MPL Comparison View (H2)                */
+/* ----------------------------------------------------------------- */
+
+.mpl-comparison {
+  background: var(--oiw-bg);
+  border: 1px solid var(--oiw-border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.mpl-comparison__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.mpl-comparison__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--oiw-text);
+  margin: 0;
+}
+
+.mpl-comparison__artifact-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+
+.mpl-comparison__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .mpl-comparison__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mpl-column {
+  background: var(--oiw-surface);
+  border: 1px solid var(--oiw-border);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.mpl-column__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--oiw-border);
+  padding-bottom: 4px;
+}
+
+.mpl-column__header h4 {
+  font-size: 11px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--oiw-text);
+}
+
+.mpl-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.epoch-boundary-box {
+  background: rgba(255, 193, 7, 0.08);
+  border: 1px solid rgba(255, 193, 7, 0.25);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 10px;
+  margin-bottom: 8px;
+}
+
+.mpl-rows-heading {
+  font-size: 11px;
+  font-weight: 600;
+  margin: 6px 0;
+  color: var(--oiw-text-muted);
+}
+
+.mpl-rows-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.mpl-row-card {
+  border: 1px solid var(--oiw-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 10px;
+  background: var(--oiw-bg);
+}
+
+.mpl-row-card--current {
+  border-left: 3px solid #10b981;
+}
+
+.mpl-row-card--stale {
+  border-left: 3px solid #f59e0b;
+  opacity: 0.7;
+}
+
+.mpl-row-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.mpl-row-card__guid {
+  font-size: 9px;
+  color: var(--oiw-text);
+}
+
+.mpl-row-card__meta {
+  font-size: 9px;
+}
