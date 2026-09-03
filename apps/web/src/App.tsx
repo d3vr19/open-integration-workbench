@@ -79,6 +79,9 @@ function App() {
           onEdgesDelete={flowEditor.onEdgesDelete}
           onDragOver={flowEditor.onDragOver}
           onDrop={flowEditor.onDrop}
+          traceBadges={actions.traceBadges}
+          selectedTraceNodeId={actions.selectedTraceNodeId}
+          onSelectTraceNode={actions.setSelectedTraceNodeId}
         />
 
         <RightSidebar
@@ -97,6 +100,8 @@ function App() {
           simulation={actions.simulation}
           showRawTrace={actions.showRawTrace}
           onToggleRawTrace={() => actions.setShowRawTrace((v) => !v)}
+          selectedTraceNodeId={actions.selectedTraceNodeId}
+          onSelectTraceNodeId={actions.setSelectedTraceNodeId}
         />
       </div>
     </div>

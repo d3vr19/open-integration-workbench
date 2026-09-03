@@ -1141,3 +1141,27 @@ The EMG experience plan (Phases 1–2) executed live:
   - `npm run lint` clean (oxlint).
   - `npm run build` clean (vite build).
   - `npx playwright test` 4/4 passing with zero regressions or test edits.
+
+---
+
+### 2026-09-03 (cont. 4) — WP-09 PR-4 / Track B: Trace Viewer v1.5 (B-001 & B-002, OW-018)
+
+**Branch:** `feature/wp09-b-trace-v15`  
+**Scope:** `apps/web/src/components/canvas/{FlowCanvas,TraceInspector}.tsx`, `apps/web/src/hooks/useProjectActions.ts`, `apps/web/src/components/layout/{CanvasArea,RightSidebar}.tsx`, `apps/web/src/App.{css,tsx}`, `apps/web/e2e/trace-simulation.spec.ts`.
+
+**Delivered:**
+- **Canvas node badges wired to inspector (B-001)**:
+  - Memoized node decoration in `FlowCanvas.tsx` with pass/fail status, execution duration in ms, and active highlight.
+  - Clicking a node's badge directly selects and focuses that step's snapshot in `TraceInspector` (`selectedTraceNodeId` bidirectional sync).
+- **Trace replay / step-through transport controls (B-002)**:
+  - Added transport control bar to `TraceInspector.tsx` supporting: jump to first (`⏮`), step back (`◀`), autoplay / pause (`▶` / `⏸`), step forward (`▶`), and jump to last (`⏭`).
+  - Added step counter indicator (`Step X of Y`) and autoplay timer advancing through exchange snapshots.
+  - Displays full exchange snapshot at each step: `In` body/headers/properties, `Out` body/headers/properties, outbound HTTP call details, and exception summaries.
+- **E2E Test Coverage (C-001 / Critical Journey #5)**:
+  - Added `e2e/trace-simulation.spec.ts` testing simulation execution, inspector rendering, transport forward-stepping, and canvas badge click selection.
+- **Verification:**
+  - `npx tsc -p tsconfig.app.json --noEmit` clean.
+  - `npm run lint` clean (oxlint).
+  - `npm run build` clean (vite build).
+  - `npx playwright test` 5/5 passing (copilot, emg-insights, and trace-simulation).
+

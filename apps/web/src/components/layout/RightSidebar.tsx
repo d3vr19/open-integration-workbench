@@ -23,6 +23,8 @@ interface RightSidebarProps {
   simulation: SimulationResult | null;
   showRawTrace: boolean;
   onToggleRawTrace: () => void;
+  selectedTraceNodeId?: string | null;
+  onSelectTraceNodeId?: (nodeId: string | null) => void;
 }
 
 export function RightSidebar({
@@ -41,6 +43,8 @@ export function RightSidebar({
   simulation,
   showRawTrace,
   onToggleRawTrace,
+  selectedTraceNodeId,
+  onSelectTraceNodeId,
 }: RightSidebarProps) {
   return (
     <aside className="sidebar sidebar--right">
@@ -168,7 +172,11 @@ export function RightSidebar({
               ))}
             </div>
           ) : (
-            <TraceInspector simulation={simulation} />
+            <TraceInspector
+              simulation={simulation}
+              selectedNodeId={selectedTraceNodeId}
+              onSelectNodeId={onSelectTraceNodeId}
+            />
           )}
           {showRawTrace && simulation.outbound_calls.length > 0 && (
             <div className="outbound-calls">

@@ -1,7 +1,7 @@
 import type React from 'react';
 import type { Connection, Edge, Node, NodeMouseHandler, OnNodesDelete, OnEdgesDelete } from 'reactflow';
 import type { IntegrationFlow, ResourceSummary } from '../../api';
-import { FlowCanvas } from '../canvas/FlowCanvas';
+import { FlowCanvas, type TraceBadgeData } from '../canvas/FlowCanvas';
 import { ResourceEditor } from '../../ResourceEditor';
 
 interface CanvasAreaProps {
@@ -23,6 +23,9 @@ interface CanvasAreaProps {
   onEdgesDelete: OnEdgesDelete;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
+  traceBadges?: Map<string, TraceBadgeData>;
+  selectedTraceNodeId?: string | null;
+  onSelectTraceNode?: (nodeId: string) => void;
 }
 
 export function CanvasArea({
@@ -44,6 +47,9 @@ export function CanvasArea({
   onEdgesDelete,
   onDragOver,
   onDrop,
+  traceBadges,
+  selectedTraceNodeId,
+  onSelectTraceNode,
 }: CanvasAreaProps) {
   return (
     <main className="canvas-area">
@@ -88,6 +94,9 @@ export function CanvasArea({
             onEdgesDelete={onEdgesDelete}
             onDragOver={onDragOver}
             onDrop={onDrop}
+            traceBadges={traceBadges}
+            selectedTraceNodeId={selectedTraceNodeId}
+            onSelectTraceNode={onSelectTraceNode}
           />
         </>
       ) : (

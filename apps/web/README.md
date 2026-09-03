@@ -28,6 +28,9 @@
   to 106 lines of pure layout using custom hooks (`useProjectWorkspace`, `useFlowEditor`,
   `useProjectActions`) and layout components (`AppHeader`, `LeftSidebar`, `CanvasArea`,
   `RightSidebar`). Scoped per-panel loading and error states without global error banner.
+- **Trace Viewer v1.5** (WP-09 Tasks B-001 & B-002): Canvas node pass/fail/duration badges
+  wired directly to `TraceInspector` (clicking a badge navigates to that step's exchange snapshot).
+  Replay transport controls with step forward/backward and autoplay.
 
 ## Stack
 

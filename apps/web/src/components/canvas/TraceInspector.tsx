@@ -1,17 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import type { SimulationResult, TraceEntry } from '../../api';
 
 /**
- * TraceInspector — FIGAF-style interactive trace viewer.
+ * TraceInspector — FIGAF-style interactive trace viewer (v1.5).
  *
- * The engine records enter/exit/error snapshots per step (body, headers,
- * properties, durations). This component steps through the exchange the
- * way message-monitoring tools do: pick a step, see the message AS IT WAS
- * entering and leaving that step, the outbound call it produced, and the
- * error details if it failed.
- *
- * Future work (tracked in good-first-issues): overlaying these results
- * onto the canvas nodes + tenant-MPL comparison views.
+ * WP-09 Track B (B-001 & B-002):
+ * - Canvas node badges wired to inspector via selectedNodeId / onSelectNodeId
+ * - Replay / step-through transport mode (step forward, back, play/pause)
  */
 
 interface NodeStep {
@@ -89,17 +84,140 @@ function PropsTable({ props }: { props: Record<string, unknown> | null }) {
   );
 }
 
-export function TraceInspector({ simulation }: { simulation: SimulationResult }) {
+interface TraceInspectorProps {
+  simulation: SimulationResult;
+  selectedNodeId?: string | null;
+  onSelectNodeId?: (nodeId: string | null) => void;
+}
+
+export function TraceInspector({ simulation, selectedNodeId, onSelectNodeId }: TraceInspectorProps) {
   const steps = useMemo(() => buildSteps(simulation), [simulation]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  const selected = selectedIdx != null ? steps[selectedIdx] : null;
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Sync with external selectedNodeId (B-001: canvas badge click -> inspector step)
+  useEffect(() => {
+    if (selectedNodeId) {
+      const idx = steps.findIndex((s) => s.nodeId === selectedNodeId);
+      if (idx !== -1 && idx !== selectedIdx) {
+        setSelectedIdx(idx);
+      }
+    }
+  }, [selectedNodeId, steps, selectedIdx]);
+
+  // Notify parent on step change
+  const selectStep = useCallback(
+    (idx: number | null) => {
+      setSelectedIdx(idx);
+      if (idx != null && steps[idx]) {
+        onSelectNodeId?.(steps[idx].nodeId);
+      } else {
+        onSelectNodeId?.(null);
+      }
+    },
+    [steps, onSelectNodeId],
+  );
+
+  // B-002: Transport step-through controls
+  const handleFirst = useCallback(() => {
+    setIsPlaying(false);
+    if (steps.length > 0) selectStep(0);
+  }, [steps.length, selectStep]);
+
+  const handlePrev = useCallback(() => {
+    setIsPlaying(false);
+    if (steps.length === 0) return;
+    const nextIdx = selectedIdx == null ? steps.length - 1 : Math.max(0, selectedIdx - 1);
+    selectStep(nextIdx);
+  }, [selectedIdx, steps.length, selectStep]);
+
+  const handleNext = useCallback(() => {
+    setIsPlaying(false);
+    if (steps.length === 0) return;
+    const nextIdx = selectedIdx == null ? 0 : Math.min(steps.length - 1, selectedIdx + 1);
+    selectStep(nextIdx);
+  }, [selectedIdx, steps.length, selectStep]);
+
+  const handleLast = useCallback(() => {
+    setIsPlaying(false);
+    if (steps.length > 0) selectStep(steps.length - 1);
+  }, [steps.length, selectStep]);
+
+  const togglePlay = useCallback(() => {
+    setIsPlaying((playing) => !playing);
+  }, []);
+
+  // Autoplay timer
+  useEffect(() => {
+    if (!isPlaying || steps.length === 0) return;
+    const interval = setInterval(() => {
+      setSelectedIdx((prev) => {
+        const next = prev == null ? 0 : prev + 1;
+        if (next >= steps.length) {
+          setIsPlaying(false);
+          return prev;
+        }
+        onSelectNodeId?.(steps[next].nodeId);
+        return next;
+      });
+    }, 1200);
+    return () => clearInterval(interval);
+  }, [isPlaying, steps, onSelectNodeId]);
 
   if (steps.length === 0) {
     return <div className="trace-inspector__empty">No trace entries.</div>;
   }
 
+  const selected = selectedIdx != null ? steps[selectedIdx] : null;
+
   return (
-    <div className="trace-inspector">
+    <div className="trace-inspector" data-testid="trace-inspector">
+      {/* B-002: Replay transport control bar */}
+      <div className="trace-inspector__transport" data-testid="trace-transport">
+        <button
+          className="trace-inspector__transport-btn"
+          onClick={handleFirst}
+          disabled={selectedIdx === 0}
+          title="Jump to first step"
+        >
+          ⏮
+        </button>
+        <button
+          className="trace-inspector__transport-btn"
+          onClick={handlePrev}
+          disabled={selectedIdx === 0}
+          title="Previous step"
+        >
+          ◀
+        </button>
+        <button
+          className={`trace-inspector__transport-btn ${isPlaying ? 'trace-inspector__transport-btn--active' : ''}`}
+          onClick={togglePlay}
+          title={isPlaying ? 'Pause replay' : 'Play replay'}
+        >
+          {isPlaying ? '⏸' : '▶'}
+        </button>
+        <button
+          className="trace-inspector__transport-btn"
+          onClick={handleNext}
+          disabled={selectedIdx === steps.length - 1}
+          title="Next step"
+        >
+          ▶
+        </button>
+        <button
+          className="trace-inspector__transport-btn"
+          onClick={handleLast}
+          disabled={selectedIdx === steps.length - 1}
+          title="Jump to last step"
+        >
+          ⏭
+        </button>
+        <span className="trace-inspector__transport-counter">
+          {selectedIdx != null ? `Step ${selectedIdx + 1} of ${steps.length}` : `${steps.length} steps`}
+        </span>
+      </div>
+
       <div className="trace-inspector__steps">
         {steps.map((s, i) => (
           <button
@@ -107,8 +225,9 @@ export function TraceInspector({ simulation }: { simulation: SimulationResult })
             className={`trace-inspector__step
               ${s.error ? 'trace-inspector__step--error' : ''}
               ${selectedIdx === i ? 'trace-inspector__step--active' : ''}`}
-            onClick={() => setSelectedIdx(i === selectedIdx ? null : i)}
+            onClick={() => selectStep(i === selectedIdx ? null : i)}
             title={s.error ? `${s.error.exception_type ?? 'error'}: ${s.error.summary}` : s.nodeId}
+            data-testid={`trace-step-${s.nodeId}`}
           >
             <span className="trace-inspector__step-name">{s.nodeId}</span>
             <span className="trace-inspector__step-status">
@@ -122,7 +241,7 @@ export function TraceInspector({ simulation }: { simulation: SimulationResult })
       </div>
 
       {selected && (
-        <div className="trace-inspector__detail">
+        <div className="trace-inspector__detail" data-testid="trace-detail">
           <div className="trace-inspector__detail-header">
             <span className="trace-inspector__node-id">{selected.nodeId}</span>
             {selected.error && (

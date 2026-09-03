@@ -178,6 +178,8 @@
   position: relative;
   background: var(--oiw-bg);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .canvas-placeholder {
@@ -1702,3 +1704,112 @@
   font-size: 12px;
   padding: 8px;
 }
+
+/* Canvas node trace badges (B-001) */
+.oiw-node-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.oiw-node-label {
+  font-weight: 500;
+}
+
+.node-trace-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.node-trace-badge:hover {
+  transform: scale(1.05);
+}
+
+.node-trace-badge--pass {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.node-trace-badge--fail {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.node-trace-badge--active {
+  box-shadow: 0 0 0 2px var(--oiw-accent);
+}
+
+.oiw-node--traced {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.oiw-node--trace-pass {
+  border-color: rgba(16, 185, 129, 0.6) !important;
+}
+
+.oiw-node--trace-fail {
+  border-color: rgba(239, 68, 68, 0.6) !important;
+}
+
+.oiw-node--trace-active {
+  box-shadow: 0 0 0 2px #4fc08d !important;
+}
+
+/* Replay / transport controls (B-002) */
+.trace-inspector__transport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  background: var(--oiw-bg);
+  border: 1px solid var(--oiw-border);
+  border-radius: 6px;
+}
+
+.trace-inspector__transport-btn {
+  background: var(--oiw-surface);
+  color: var(--oiw-text);
+  border: 1px solid var(--oiw-border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.trace-inspector__transport-btn:hover:not(:disabled) {
+  background: var(--oiw-border);
+}
+
+.trace-inspector__transport-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.trace-inspector__transport-btn--active {
+  background: var(--oiw-accent);
+  color: white;
+}
+
+.trace-inspector__transport-counter {
+  font-size: 11px;
+  color: var(--oiw-text-muted);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
