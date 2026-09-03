@@ -1,0 +1,26 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  description: RR warmup -> XSLT2 mapping (Saxon) -> RR forward -> PD terminator.
+  name: smoke
+spec:
+  assertions:
+  - equals: COMPLETED
+    type: exchange.status
+  - node: step-1-transform
+    type: node.executed
+  flow: oiw-map-fwd
+  input:
+    bodyInline: <order><id>abc</id></order>
+    entrypoint: sender-main
+    headers:
+      Content-Type: application/xml
+  mocks:
+  - respond:
+      body: <payload><id>xyz</id></payload>
+      status: 200
+    target: rr-warmup
+  - respond:
+      body: ''
+      status: 200
+    target: rr-post

@@ -1,0 +1,101 @@
+shape: Splitter-EDISplitter
+componentType: Splitter
+direction: step
+observedIn: 1
+source: 'SAP Business Accelerator Hub: Cloud Integration - Trading Partner Management
+  V2 (Customer Order Process flow); SAP-authored reference bytes; operator-downloaded
+  content export, 2026-09-04'
+properties:
+- key: edifactSourceEncoding
+  value: UTF-8
+- key: tradacomsHeaderName
+  value: SND_CONVERSION_XSD
+- key: edifactTransactionMode
+  value: message
+- key: edifactUnaRequired
+  value: 'false'
+- key: tradacomsSplitPreference
+  value: WithoutValidation
+- key: vdaSourceEncoding
+  value: UTF-8
+- key: x12ExcludeAk3Ak4
+  value: 'false'
+- key: x12UniqueTSNumber
+  value: dynamic
+- key: x12UniqueInterchangeNumber
+  value: dynamic
+- key: vdaHeaderName
+  value: SND_CONVERSION_XSD
+- key: tradacomsSourceEncoding
+  value: UTF-8
+- key: vdaEdiSchemaSource
+  value: header
+- key: edifactValidate
+  value: envelopAndMessage
+- key: edifactUniqueInterchangeNumber
+  value: dynamic
+- key: x12CreateAck
+  value: required
+- key: componentVersion
+  value: '2.12'
+- key: x12NumberRangeName
+  value: ${property.SAP_EDISPLITTER_X12_NUMBER_RANGE}
+- key: edifactDecimalCharacter
+  value: dynamic
+- key: x12TSNumberRangeName
+  value: ${property.SAP_EDISPLITTER_997_TS_NUMBER_RANGE}
+- key: x12CustomizeEnvelope
+  value: fromIncomingPayload
+- key: edifactInterchangeNumberFrom
+  value: numberRange
+- key: edifactEdiSchemaSource
+  value: Header
+- key: cmdVariantUri
+  value: ctype::FlowstepVariant/cname::EDISplitter/version::2.12.0
+- key: vdaSplitPreference
+  value: withoutValidation
+- key: edifactNumberRangeName
+  value: ICN_DEFAULT
+- key: edifactValidateMessage
+  value: 'true'
+- key: x12TSNumberFrom
+  value: dynamic
+- key: x12InterchangeNumberFrom
+  value: dynamic
+- key: x12UniqueFGNumber
+  value: dynamic
+- key: x12EdiSchemaSource
+  value: Header
+- key: x12ValidateMessageOptions
+  value: basic
+- key: parallelProcessing
+  value: 'false'
+- key: x12FGNumberRangeName
+  value: ${property.SAP_EDISPLITTER_997_GROUP_NUMBER_RANGE}
+- key: edifactContrlVersion
+  value: defaultVersion
+- key: x12SourceEncoding
+  value: UTF-8
+- key: edifactSendInvalidMessages
+  value: 'true'
+- key: edifactCreateAck
+  value: checkEDIEnvelop
+- key: tradacomsEdiSchemaSource
+  value: Header
+- key: x12SendInvalidMessages
+  value: 'true'
+- key: edifactHeaderName
+  value: SND_CONVERSION_XSD
+- key: splitType
+  value: EDISplitter
+- key: x12TransactionMode
+  value: message
+- key: x12HeaderName
+  value: SND_CONVERSION_XSD
+- key: x12FunctionalGroupNumberFrom
+  value: dynamic
+- key: edifactCustomizeEnvelope
+  value: fromIncomingPayload
+notes: "TPM V2 Splitter is the EDI Splitter (splitType=EDISplitter) \u2014 the general\
+  \ splitter shape may differ; treat as a reference for the Splitter activity family\
+  \ only after comparing with a general-splitter flow."

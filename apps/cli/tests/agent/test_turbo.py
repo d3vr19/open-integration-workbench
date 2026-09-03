@@ -149,16 +149,16 @@ class TestPieceAssembly:
         assert "modifier.content" in pieces
         assert "log.message" in pieces
         assert "script.groovy" in pieces
-        # B-2 (2026-09-03): pieces must be BOTH runtime-real AND
-        # exporter-renderable (the shippable intersection). splitter/gather
-        # run for real (H4/H5) but have NO exporter mapping yet — they
-        # teacher-escalate until the Hub-harvested shapes land (B-3).
+        # B-3 (2026-09-04): the Saxon-HE bridge (runtime-real, B-2) + the
+        # XSLTMapping exporter shape (reference-mirrored from the Hub TPM V2
+        # harvest + tenant ground truth) make transform.xslt SHIPPABLE —
+        # the intersection law now admits it.
+        assert "transform.xslt" in pieces
+        # splitter/gather run for real (H4/H5) but have NO exporter shapes
+        # yet — they teacher-escalate until Hub-harvested shapes land.
         assert "splitter.general" not in pieces
         assert "gather" not in pieces
         assert "filter" not in pieces
-        # transform.xslt: Saxon bridge makes it RUNTIME-real, but the
-        # exporter has no Mapping activityType — not a piece until B-3.
-        assert "transform.xslt" not in pieces
 
     def test_assemble_happy_path(self) -> None:
         req = interpret_requirement_fallback(CREATE_REQ)

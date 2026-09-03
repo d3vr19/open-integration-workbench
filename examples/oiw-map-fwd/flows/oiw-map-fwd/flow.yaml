@@ -1,0 +1,52 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: oiw-map-fwd
+  name: oiw-map-fwd
+  version: 1
+  labels:
+    archetype: parity-case
+spec:
+  entrypoints:
+  - config:
+      methods:
+      - POST
+      path: /oiw_map_fwd
+    fidelity: simulated
+    id: sender-main
+    type: sender.http
+  extensions: {}
+  nodes:
+  - config:
+      method: GET
+      timeoutSeconds: 30
+      url: https://httpbin.org/xml
+    fidelity: simulated
+    id: rr-warmup
+    type: receiver.http
+  - config:
+      resource: flows/oiw-map-fwd/resources/mappings/normalize.xsl
+    fidelity: compatible-subset
+    id: step-1-transform
+    type: transform.xslt
+  - config:
+      method: POST
+      timeoutSeconds: 30
+      url: https://httpbin.org/post
+    fidelity: simulated
+    id: rr-post
+    type: receiver.http
+  - config:
+      address: /oiw-map-fwd_pd
+    fidelity: simulated
+    id: pd-terminator
+    type: receiver.processdirect
+  edges:
+  - from: sender-main
+    to: rr-warmup
+  - from: rr-warmup
+    to: step-1-transform
+  - from: step-1-transform
+    to: rr-post
+  - from: rr-post
+    to: pd-terminator

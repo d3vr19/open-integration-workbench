@@ -1,0 +1,74 @@
+shape: Converter-XMLtoEDI
+componentType: XMLtoEDIConverter
+direction: step
+observedIn: 1
+source: 'SAP Business Accelerator Hub: Cloud Integration - Trading Partner Management
+  V2 (Customer Order Process flow); SAP-authored reference bytes; operator-downloaded
+  content export, 2026-09-04'
+properties:
+- key: edifactUseCustomSeparator
+  value: 'true'
+- key: edifactSourceEncoding
+  value: UTF-8
+- key: tradacomsHeaderName
+  value: REC_CONVERSION_XSD
+- key: tradacomsConversionPreference
+  value: 'Yes'
+- key: x12DataElementSeparator
+  value: ${property.SAP_TPM_X12_Data_Element_Separator}
+- key: x12EmptySegment
+  value: Dynamic
+- key: x12CompositeSeparator
+  value: ${property.SAP_TPM_X12_Composite_Separator}
+- key: vdaSourceEncoding
+  value: UTF-8
+- key: x12EdiSchemaSource
+  value: Header
+- key: vdaHeaderName
+  value: REC_CONVERSION_XSD
+- key: vdaTargetEncoding
+  value: UTF-8
+- key: edifactTargetEncoding
+  value: UTF-8
+- key: tradacomsSourceEncoding
+  value: UTF-8
+- key: vdaEdiSchemaSource
+  value: Header
+- key: edifactSegmentTerminator
+  value: ${property.SAP_TPM_EDIFACT_Segment_Terminator}
+- key: x12SourceEncoding
+  value: UTF-8
+- key: vdaConversionPreference
+  value: 'yes'
+- key: edifactCompositeSeparator
+  value: ${property.SAP_TPM_EDIFACT_Composite_Separator}
+- key: edifactDataElementSeparator
+  value: ${property.SAP_TPM_EDIFACT_Data_Element_Separator}
+- key: x12SegmentTerminator
+  value: ${property.SAP_TPM_X12_Segment_Terminator}
+- key: x12UseCustomSeparator
+  value: 'true'
+- key: tradacomsEmptySegment
+  value: Dynamic
+- key: tradacomsEdiSchemaSource
+  value: Header
+- key: edifactEmptySegment
+  value: Dynamic
+- key: componentVersion
+  value: '2.9'
+- key: edifactHeaderName
+  value: REC_CONVERSION_XSD
+- key: edifactDecimalCharacter
+  value: '#x2e'
+- key: x12HeaderName
+  value: REC_CONVERSION_XSD
+- key: edifactEdiSchemaSource
+  value: Header
+- key: cmdVariantUri
+  value: ctype::FlowstepVariant/cname::XMLtoEDIConverter/version::2.9.0
+- key: vdaSegmentTerminator
+  value: dynamic
+- key: edifactEscapeCharacter
+  value: ${property.SAP_TPM_EDIFACT_Escape_Character}
+- key: x12RepetitionSeparator
+  value: ${property.SAP_TPM_X12_Repetition_Separator}

@@ -56,4 +56,9 @@ spec:
       artifactId: oiw-notifier
       calibration: examples/status-notifier-async/.oiw/calibration-oiw-notifier.yaml
       test: smoke
+    - name: oiw-map-fwd-smoke
+      project: examples/oiw-map-fwd
+      artifactId: oiw-map
+      calibration: examples/oiw-map-fwd/.oiw/calibration-oiw-map.yaml
+      test: smoke
 

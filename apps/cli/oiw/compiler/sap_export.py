@@ -36,6 +36,11 @@ _OIW_TO_ACTIVITY = {
     "converter.json-to-xml": "JsonToXmlConverter",
     "converter.xml-to-json": "XmlToJsonConverter",
     "variables.write": "Variables",
+    # B-3 (2026-09-04): XSLT mapping shape from SAP-authored references —
+    # the Hub TPM V2 export (dynamic/header form + property set) and the
+    # tenant's static form (mappingSrcIflow + mappingpath + mappinguri;
+    # see packages/pattern-book/shapes/Mapping-XSLTMapping.yaml).
+    "transform.xslt": "Mapping",
 }
 
 _COLLAB_PROPS = [
@@ -425,6 +430,35 @@ def collect_flow_scripts(flow: dict, project_root: Path | None) -> dict[str, str
         name = _resolve_script_name(node, project_root)
         src = (project_root / str(node["config"]["resource"])).resolve()  # type: ignore[union-attr]
         out[f"src/main/resources/script/{name}"] = src.read_text(encoding="utf-8")
+    return out
+
+
+def collect_flow_mappings(flow: dict, project_root: Path | None) -> dict[str, str]:
+    """Return {bundle_path: text} for every transform.xslt in the flow.
+
+    B-3 (2026-09-04): mappings ride the bundle under
+    src/main/resources/mapping/<name>.xsl — the mappinguri/mappingpath
+    dialect the Mapping callActivity references (tenant ground truth +
+    Hub TPM V2 resources layout: mapping/*.xsl).
+    """
+    out: dict[str, str] = {}
+    for node in flow.get("spec", {}).get("nodes", []):
+        if str(node.get("type", "")) != "transform.xslt":
+            continue
+        resource = str((node.get("config") or {}).get("resource", "")).strip()
+        if not resource:
+            raise ValueError(
+                f"transform.xslt node '{node.get('id')}' requires config.resource"
+            )
+        if project_root is None:
+            raise ValueError(
+                f"transform.xslt node '{node.get('id')}' requires project_root to "
+                "resolve config.resource"
+            )
+        src = (project_root / resource).resolve()
+        if not src.is_file():
+            raise ValueError(f"mapping source not found: {src}")
+        out[f"src/main/resources/mapping/{src.stem}.xsl"] = src.read_text(encoding="utf-8")
     return out
 
 
@@ -883,6 +917,45 @@ def export_flow_to_iflw(
                     ("useNamespaces", "true"),
                     ("jsonNamespaceSeparator", ":"),
                 ]
+            elif activity == "Mapping":
+                # B-3 (2026-09-04): STATIC XSLTMapping dialect mirrored from
+                # tenant ground truth (IntegrationSuiteAlertingFramework/
+                # Send_Cloud_Integration_Error_Messages_to_ANS — a RUNNING
+                # flow) cross-checked against the Hub TPM V2 reference
+                # (packages/pattern-book/shapes/Mapping-XSLTMapping.yaml).
+                # Static form: mappingSource=mappingSrcIflow (in-flow
+                # resource); TPM's dynamic/header form is NOT emitted —
+                # OIW mappings are node-owned, never runtime-selected.
+                resource = str(cfg.get("resource", "")).strip()
+                if not resource:
+                    raise ValueError(
+                        f"transform.xslt node '{node['id']}' requires config.resource "
+                        "(project-relative path to the .xsl mapping) — refusing to emit "
+                        "a Mapping step whose resource would be missing from the bundle"
+                    )
+                if project_root is None:
+                    raise ValueError(
+                        f"transform.xslt node '{node['id']}' requires project_root to "
+                        "resolve config.resource"
+                    )
+                src = (project_root / resource).resolve()
+                if not src.is_file():
+                    raise ValueError(f"mapping source not found: {src}")
+                # mappingname = resource basename without extension;
+                # mappingpath/mappinguri follow the reference dialect verbatim
+                mname = src.stem
+                extra = [
+                    ("mappingoutputformat", "Bytes"),
+                    ("mappinguri", f"dir://mapping/xslt/src/main/resources/mapping/{mname}.xsl"),
+                    ("mappingname", mname),
+                    ("mappingHeaderNameKey", ""),
+                    ("mappingpath", f"src/main/resources/mapping/{mname}"),
+                    ("mappingSource", "mappingSrcIflow"),
+                    ("componentVersion", "1.2"),
+                    ("activityType", "Mapping"),
+                    ("cmdVariantUri", "ctype::FlowstepVariant/cname::XSLTMapping/version::1.2.0"),
+                    ("subActivityType", "XSLTMapping"),
+                ]
             elif activity == "Variables":
                 name_v = escape(str(cfg.get("name", "")))
                 if not name_v:
@@ -1162,6 +1235,7 @@ def build_cpi_bundle(
         flow, display_name=name, project_root=project_root, externalized_params_out=ext_params
     )
     scripts = collect_flow_scripts(flow, project_root)
+    mappings = collect_flow_mappings(flow, project_root)
     if configurations_out is not None:
         configurations_out.extend(ext_params)
 
@@ -1242,6 +1316,7 @@ def build_cpi_bundle(
             param_xml.append("</parameters>")
             entries["src/main/resources/parameters.propdef"] = "\n".join(param_xml)
         entries.update(scripts)
+        entries.update(mappings)
         for ename in sorted(entries):
             info = zipfile.ZipInfo(ename, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED

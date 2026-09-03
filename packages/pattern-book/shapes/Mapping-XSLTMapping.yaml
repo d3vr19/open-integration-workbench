@@ -1,0 +1,23 @@
+shape: Mapping-XSLTMapping
+componentType: Mapping
+direction: step
+observedIn: 1
+source: 'SAP Business Accelerator Hub: Cloud Integration - Trading Partner Management
+  V2 (Customer Order Process flow); SAP-authored reference bytes; operator-downloaded
+  content export, 2026-09-04'
+properties:
+- key: mappingoutputformat
+  value: Bytes
+- key: mappingHeaderNameKey
+  value: MAPPING_XSLT
+- key: mappingSource
+  value: mappingSrcHeader
+- key: componentVersion
+  value: '1.1'
+- key: cmdVariantUri
+  value: ctype::FlowstepVariant/cname::XSLTMapping/version::1.1.8
+- key: subActivityType
+  value: XSLTMapping
+notes: XSLTMapping subActivityType; mappingSource=mappingSrcHeader (header names the
+  .xsl resource); mappings ride the bundle under src/main/resources/mapping/*.xsl
+  (13 .xsl in TPM V2). B-3 target.

@@ -1,0 +1,60 @@
+shape: Converter-EDItoXML
+componentType: EDItoXMLConverter
+direction: step
+observedIn: 1
+source: 'SAP Business Accelerator Hub: Cloud Integration - Trading Partner Management
+  V2 (Customer Order Process flow); SAP-authored reference bytes; operator-downloaded
+  content export, 2026-09-04'
+properties:
+- key: edifactSourceEncoding
+  value: UTF-8
+- key: tradacomsHeaderName
+  value: SND_CONVERSION_XSD
+- key: tradacomsConversionPreference
+  value: 'Yes'
+- key: x12EmptySegment
+  value: Dynamic
+- key: vdaSourceEncoding
+  value: UTF-8
+- key: edifactEnvelopeTruncator
+  value: 'true'
+- key: x12TargetRootElement
+  value: interchange
+- key: vdaHeaderName
+  value: SND_CONVERSION_XSD
+- key: x12EdiSchemaSource
+  value: Header
+- key: edifactTargetRootElement
+  value: interchange
+- key: x12EnvelopeTruncator
+  value: 'true'
+- key: vdaTargetEncoding
+  value: UTF-8
+- key: edifactTargetEncoding
+  value: UTF-8
+- key: tradacomsSourceEncoding
+  value: UTF-8
+- key: vdaEdiSchemaSource
+  value: Header
+- key: x12SourceEncoding
+  value: UTF-8
+- key: vdaConversionPreference
+  value: 'yes'
+- key: tradacomsEmptySegment
+  value: Dynamic
+- key: tradacomsEdiSchemaSource
+  value: Header
+- key: edifactEmptySegment
+  value: Dynamic
+- key: componentVersion
+  value: '2.9'
+- key: edifactHeaderName
+  value: SND_CONVERSION_XSD
+- key: edifactDecimalCharacter
+  value: dynamic
+- key: x12HeaderName
+  value: SND_CONVERSION_XSD
+- key: edifactEdiSchemaSource
+  value: Header
+- key: cmdVariantUri
+  value: ctype::FlowstepVariant/cname::EDItoXMLConverter/version::2.9.0

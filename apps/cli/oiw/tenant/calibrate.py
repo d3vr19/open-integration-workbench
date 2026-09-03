@@ -185,6 +185,21 @@ async def _poll_terminal(
     return "TIMEOUT", last
 
 
+def message_content_type(body: str) -> str:
+    """Infer the message Content-Type from the probe body's shape.
+
+    LIVE LAW (2026-09-03/04, oiw-x2j + oiw-map): the probe body's content
+    type MUST match the flow's — a JSON content-type on an XML body fails
+    at the first XML-parsing step ('Unexpected character { in prolog;
+    expected <'). XML is inferred from a leading '<'; everything else
+    defaults to JSON (the historical probe body).
+    """
+    stripped = (body or "").lstrip()
+    if stripped.startswith("<"):
+        return "application/xml"
+    return "application/json"
+
+
 async def calibrate_artifact(
     project_path: Path,
     profile: EnvironmentProfile,
@@ -351,7 +366,7 @@ async def calibrate_artifact(
             kwargs: dict[str, Any] = {
                 "headers": {
                     **adapter._basic_auth_header(),
-                    "Content-Type": "application/json",
+                    "Content-Type": message_content_type(message_body),
                 }
             }
             if method not in ("GET", "HEAD"):

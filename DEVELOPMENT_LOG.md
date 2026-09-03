@@ -1427,3 +1427,19 @@ Executed Sprint 2 tasks from `docs/work-packages/work-package-10-sprint2-tasks.m
 - **order-to-s4 parity case**: UNSUPPORTED → **pending-oracle** (local PASS via Saxon). Its oracle leg ALSO waits on validator/router exporter shapes (same family as H13) — the Hub harvest is the single unlock for the last 3 gate cases.
 
 **Tests:** CLI 601 → 605 (XSLT bridge paths + intersection law; splitter e2e honesty updated). Ruff clean. Parity 7/7 @ 100% with order-to-s4 now local-green.
+
+### 2026-09-04 — B-3 FIRST TURN COMPLETE + HUB HARVEST: Mapping shape live-proven; parity 8/8 @ 100%
+
+**The operator's Hub unlock paid off in one turn.** The TPM V2 download (configure-only on-tenant; openable as a content export) yielded SAP-authored references for EVERY hunted family: **XmlValidator** (H13's validator — minimal 4-prop shape, xsd via header), **Mapping/XSLTMapping** (B-3's target), **Splitter-EDISplitter** (45 props, EDI dialect — noted: NOT necessarily the general splitter), **XMLtoEDI/EDItoXML** converters, plus 13 real .xsl mapping resources, 6 WSDLs, ProcessCall/Variables/ExclusiveGateway shapes. Five pattern-book references committed; the full export banked at packages/test-fixtures/real-sap/sap-hub-tpm-v2/ (SAP reference material, CodeJam standing). **Export-format law:** Hub exports = ZIP of nested `<hash>_content` zips + resources.cnt + base64 contentmetadata.md (predicted by p5-p6 log, now handled).
+
+**B-3 executed end-to-end in one session (the METHOD, fastest turn yet):**
+1. **Harvest**: TPM V2 (property set) + tenant corpus cross-check → found the STATIC dialect on a RUNNING tenant flow (mappingSource=mappingSrcIflow, mappingpath=src/main/resources/mapping/<name>, mappinguri=dir://mapping/xslt/..., mappingname) — TPM itself uses the dynamic/header form, useless for node-owned IR; the static form is the right mirror.
+2. **Mirror**: `sap_export.py` gains `transform.xslt → Mapping` + the XSLTMapping branch (verbatim 10-prop dialect) + `collect_flow_mappings` (.xsl rides the bundle at src/main/resources/mapping/<name>.xsl — the TPM resource layout).
+3. **Test**: 5 exporter tests (dialect verbatim, resource bundling, loud refusals, determinism); the **shippable-piece intersection flips: transform.xslt is now a PIECE** (Saxon runtime × Mapping exporter — B-2's law admitting its first graduate).
+4. **Prove**: new parity example `oiw-map-fwd` (RR-warmup→XSLT2 mapping→RR→PD + listener) — local PASS via Saxon, tenant deploy reward **1.0** (message 200, MPL COMPLETED, C-1 promoted). **Parity: 8/8 @ 100%** (gate ≥10 — 2 honest paths left: validator shape for order-to-s4/sftp cases; H7 decoder for payload-enricher).
+
+**Two more live laws banked:** (a) the message-probe CONTENT-TYPE must match the body — calibrate now infers XML from a leading '<' (`message_content_type`); (b) mapping-input law discovered live: the oiw-map chain first failed prolog-error because the RR-warmup fetched JSON into an XML mapping — the warmup source's content type must feed what the next step parses (example fixed: warmup→httpbin.org/xml). The wedge never bit: TestOIW/OIWtest rotation + spaced-name client-matching + CSRF retry all held through 5 deploys.
+
+**Also:** his H8/H9/H10/H11 landed in-tree mid-session (interpreter splitter phrasing, absorb ServiceTask classification, `oiw simulate` verb, new assertion types — test files visible); CLI suite grew to 611 all green. Sap-hub TPM V2 resources gave the dev's H7 a second reference family if the decode-only scope ever needs widening (TPM carries no encoder either — decode-only stands).
+
+**Next:** XmlValidator exporter branch (H13, mine now — the 4-prop shape is in hand) → unblocks order-to-s4 + sftp-order-drop oracle legs → 10/10 GATE PASSED expected this session.

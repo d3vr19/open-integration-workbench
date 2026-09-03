@@ -55,3 +55,14 @@ def test_message_method_prefers_declared_get():
     assert message_method({"config": {"path": "/x", "methods": ["POST"]}}) == "POST"
     assert message_method({"config": {"methods": ["POST", "GET"]}}) == "GET"
     assert message_method({}) == "POST"
+
+
+def test_message_content_type_inference() -> None:
+    """XML probe bodies get XML content-type (prolog law, 2026-09-04)."""
+    from oiw.tenant.calibrate import message_content_type
+
+    assert message_content_type("<Order><id>1</id></Order>") == "application/xml"
+    assert message_content_type('  \n<root/>') == "application/xml"
+    assert message_content_type('{"a": 1}') == "application/json"
+    assert message_content_type("{}") == "application/json"
+    assert message_content_type("") == "application/json"

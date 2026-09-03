@@ -1,0 +1,24 @@
+calibration:
+  packageId: TestOIW
+  artifactId: oiw-map-listener
+  uploadedOk: true
+  deployAccepted: true
+  trackingUuid: null
+  finalStatus: STARTED
+  errorDetail: null
+  messageSent: false
+  httpResponseStatus: null
+  mplRows: []
+  startedAt: '2026-09-03T22:52:42.020192+00:00'
+  finishedAt: ''
+reward:
+  overall: 0.85
+  dimensions:
+    structural_validity: 1.0
+    unit_tests: 1.0
+    security_policy: 1.0
+    completion: 0.0
+    corrections_needed: 1.0
+    deployment_success: 1.0
+    runtime_stability: 1.0
+  all_hard_gates_passed: true

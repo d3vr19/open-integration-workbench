@@ -1,0 +1,24 @@
+candidate:
+  id: oracle-fail-oiw-map-c04d0a
+  kind: oracle-failure
+  createdAt: '2026-09-03T22:55:36.155257+00:00'
+  provenance:
+    source: tenant-oracle
+    packageId: OIWtest
+    artifactId: oiw-map
+    isReal: true
+  verdict:
+    finalStatus: STARTED
+    uploadedOk: true
+    deployAccepted: true
+    messageSent: true
+    httpResponseStatus: 500
+    mplRows: 1
+    errorDetail: null
+    diagnostic: ORACLE-MESSAGE-FAILED
+  suggestedTriage: executor-test
+  notes:
+  - "Blood law: oracle verdicts are point-in-time \u2014 check for the deploy-rate\
+    \ wedge before treating this as content failure."
+  - 'Triage options: exporter-fix | executor-test | tenant-drift | discard.'
+  project: examples/oiw-map-fwd

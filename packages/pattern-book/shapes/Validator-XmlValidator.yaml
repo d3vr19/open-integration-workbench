@@ -1,0 +1,16 @@
+shape: Validator-XmlValidator
+componentType: XmlValidator
+direction: step
+observedIn: 1
+source: 'SAP Business Accelerator Hub: Cloud Integration - Trading Partner Management
+  V2 (Customer Order Process flow); SAP-authored reference bytes; operator-downloaded
+  content export, 2026-09-04'
+properties:
+- key: preventException
+  value: 'true'
+- key: xsd
+  value: ${header.REC_VALIDATION_XSD}
+- key: componentVersion
+  value: '2.1'
+- key: cmdVariantUri
+  value: ctype::FlowstepVariant/cname::XmlValidator/version::2.1.0
