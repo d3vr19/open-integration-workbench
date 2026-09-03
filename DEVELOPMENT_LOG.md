@@ -1187,3 +1187,21 @@ The EMG experience plan (Phases 1–2) executed live:
   - `npx playwright test` 7/7 passing in ~7.5s.
 
 
+
+---
+
+### 2026-09-03 — B2 Experiment Engine v1: the METHOD automated (ladder → oracle → law registry)
+
+**Shipped** (roadmap handoff open thread 2 — "the existential one"):
+
+- **`apps/cli/oiw/experiment/engine.py`** — rung generation + variant materialization + law derivation, all pure/local. Ladder kinds mirror the conv1–conv10 vocabulary: `drop | move | swap | insert`, one mutation per rung (ddmin discipline — single-variable per deploy). Entrypoints never mutated (one-exchange-pattern blood law is settled; the ladder does not relitigate settled laws). Insert/swap variants require proven pieces (piece-provider config — LIVE-SAFE configs only, never invented).
+- **`apps/cli/oiw/experiment/runner.py`** — cool-down-governed oracle execution. DEFAULT_COOLDOWN_S=360 (≤10 deploys/hr — the twice-proven wedge law); budgets (max-rungs, wall-clock) enforced; verdict vocabulary GREEN/RED/SKIPPED mapped from the calibration report with the SAME success criteria as C-1 (STARTED + message 200 + all-epoch-MPL COMPLETED). Records persist per-campaign under `.oiw/experiments/` — an aborted run leaves a complete partial record, never a silent gap.
+- **`apps/cli/oiw/experiment/registry.py`** — `tenant-laws.yaml` registry (atomic writes, EMG-store pattern). Laws carry evidence (green/red rung ids), confidence, and `source: engine|manual`. Corroboration MERGES evidence into existing engine laws (re-derived laws strengthen, not duplicate). Manual blood laws (source=manual) are never touched by the engine.
+- **CLI** — `oiw experiment ladder` (DRY-RUN plan generation, zero tenant calls), `oiw experiment run` (REAL TENANT, allowlist-gated via the existing calibrate loop, `--unattended` requires operator opt-in, attended mode prompts before the campaign), `oiw experiment laws` (derive + record candidates; nothing auto-ratifies), `oiw experiment registry` (list, --scope filter).
+- **ACCEPTANCE MET**: `tests/learn/test_experiment.py` (26 tests) includes the roadmap's regression bar — **the engine re-derives the converter placement law from the conv1–conv10 corpus** (reconstructed as move-rungs over `examples/oiw-conv-fwd`: converter at position 0 = RED, every post-RR position = GREEN → scope `converter.json-to-xml`, red evidence = exactly the pre-RR positions). Runner tests cover verdict mapping, cool-down pacing (gaps > 300s measured against a fast fake oracle), rung budgets, wall-clock skips. Registry tests cover roundtrip, corroboration merge, manual-law immunity.
+
+**Not yet done (deliberately):** `oiw validate` does not yet WARN from the registry (consumer wiring is the next PR); live campaign on a scratch artifact pending operator time + cool-down budget; law statements are mechanical (placement deltas) — LLM-readable statement polish is B3 territory, not B2.
+
+**Process note:** collateral fix — `examples/oiw-conv-fwd/.oiw/calibration-oiw_turbo_fwd.yaml` (parity-manifest-referenced oracle report) was accidentally deleted during dry-run cleanup and restored from git immediately; parity suite re-verified green after restore.
+
+**Tests:** CLI 528 → 554 (+26). All other suites untouched and green (server 91 verified; MCP/gateway/seed-corpus unaffected by this change surface). Ruff clean on all touched files.

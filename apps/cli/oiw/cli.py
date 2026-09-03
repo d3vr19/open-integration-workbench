@@ -784,6 +784,382 @@ def turbo_stats(project_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# B2 — Experiment Engine (roadmap handoff 2026-09-02, open thread 2)
+# ---------------------------------------------------------------------------
+
+
+@main.group()
+def experiment() -> None:
+    """B2: variant ladders over the tenant oracle → evidence-attached laws.
+
+    Automates the METHOD (harvest → mirror → oracle single-variable proof
+    → law to registry) that was run by hand for conv1–conv10.
+    """
+
+
+@experiment.command("ladder")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    required=True,
+    help="Project root containing the baseline flow.",
+)
+@click.option("--flow", "flow_id", required=True, help="Baseline (green) flow id.")
+@click.option(
+    "--hypothesis",
+    default="isolate load-bearing placement of chain steps",
+    help="What this campaign is trying to isolate.",
+)
+@click.option(
+    "--kinds",
+    default="drop,move",
+    help="Rung kinds to generate (comma-separated: drop,move,insert,swap).",
+)
+@click.option(
+    "--insert-types",
+    default="",
+    help="Proven piece types usable for insert rungs (comma-separated).",
+)
+@click.option(
+    "--max-rungs",
+    type=int,
+    default=20,
+    show_default=True,
+    help="Ladder size cap (each rung = one tenant deploy).",
+)
+@click.option(
+    "--out",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Experiments directory (default <project>/.oiw/experiments/).",
+)
+def experiment_ladder(
+    project_path: Path,
+    flow_id: str,
+    hypothesis: str,
+    kinds: str,
+    insert_types: str,
+    max_rungs: int,
+    out: Path | None,
+) -> None:
+    """Generate a single-variable variant ladder (DRY RUN — no tenant).
+
+    The ladder is the experiment plan: one mutation per rung, ordered
+    cheapest-first. Review it, then execute selected rungs via
+    `oiw experiment run`. Laws are only derived from a GREEN baseline —
+    calibrate the artifact fresh first (mind the deploy-rate cool-down).
+    """
+    from .experiment.engine import generate_ladder
+    from .experiment.runner import save_record
+
+    try:
+        project = Project.load(project_path)
+        flow = project.get_flow(flow_id)
+    except ProjectError as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
+
+    kinds_t = tuple(k for k in (k.strip() for k in kinds.split(",")) if k)
+    insert_t = tuple(t for t in (t.strip() for t in insert_types.split(",")) if t)
+    record = generate_ladder(
+        flow,
+        hypothesis=hypothesis,
+        kinds=kinds_t,
+        insert_types=insert_t,
+        max_rungs=max_rungs,
+    )
+    out_dir = out or (project_path / ".oiw" / "experiments")
+    path = save_record(record, out_dir)
+    click.echo(f"experiment: {record.experiment_id} (draft)")
+    click.echo(f"baseline:   {flow_id} ({len(flow.nodes)} nodes, verdict pending)")
+    click.echo(f"rungs:      {len(record.rungs)} (kinds: {', '.join(kinds_t) or 'none'})")
+    click.echo(f"record:     {path}")
+    click.echo("next:       review rungs, then `oiw experiment run` (tenant, cool-down paced)")
+
+
+@experiment.command("run")
+@click.option(
+    "--project",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    required=True,
+    help="Project root (the rung variants are materialized into a temp copy).",
+)
+@click.option(
+    "--package",
+    "package_id",
+    required=True,
+    help="Tenant package id (allowlist-gated, scratch only).",
+)
+@click.option("--artifact", "artifact_id", default=None, help="Explicit artifact id.")
+@click.option("--record", "record_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option(
+    "--profile",
+    default="dev",
+    help="Environment profile (e.g. btp).",
+)
+@click.option("--max-rungs", type=int, default=20, show_default=True)
+@click.option(
+    "--wall-clock",
+    "wall_clock_s",
+    type=float,
+    default=3600.0,
+    show_default=True,
+    help="Hard wall-clock cap in seconds.",
+)
+@click.option(
+    "--cooldown",
+    "cooldown_s",
+    type=float,
+    default=360.0,
+    show_default=True,
+    help="Minimum seconds between tenant deploys (blood law: ~10/hr wedges).",
+)
+@click.option(
+    "--unattended",
+    is_flag=True,
+    default=False,
+    help="Do not prompt before EACH rung (operator approval on record).",
+)
+def experiment_run(
+    project_path: Path,
+    package_id: str,
+    artifact_id: str | None,
+    record_path: Path,
+    profile: str,
+    max_rungs: int,
+    wall_clock_s: float,
+    cooldown_s: float,
+    unattended: bool,
+) -> None:
+    """Execute a ladder rung-by-rung against the live oracle (REAL TENANT).
+
+    Each rung = one variant deploy on the pinned scratch artifact, cool-
+    down paced. NEVER in CI. With --unattended the whole ladder runs
+    hands-off; otherwise every rung prompts (default attended mode).
+    Verdicts stamp the record; `oiw experiment laws` derives candidates.
+    """
+    import asyncio
+
+    from .environments import load_profile
+    from .experiment.runner import (
+        ExperimentBudget,
+        ExperimentRunner,
+        load_record,
+        save_record,
+    )
+    from .tenant.calibrate import calibrate_artifact
+    from .tenant.sap_ci_adapter import build_tenant_adapter
+
+    record = load_record(record_path)
+    if record.status == "complete":
+        click.echo("error: record already complete — generate a new ladder", err=True)
+        sys.exit(2)
+
+    # Preflight the same way calibrate does (real adapter required).
+    adapter = build_tenant_adapter(writable_packages=[package_id])
+    from .tenant.sap_ci_adapter import SapCiTenantAdapter as _Real
+
+    if not isinstance(adapter, _Real):
+        click.echo("error: experiment run requires OIW_USE_REAL_TENANT=1", err=True)
+        sys.exit(2)
+
+    # Attended mode: the operator sees the deploy count BEFORE anything runs.
+    n = len(record.rungs)
+    est = max(0, n - 1) * cooldown_s / 60.0
+    click.echo(f"experiment: {record.experiment_id} — {n} rungs on {package_id}")
+    click.echo(f"cool-down:   {cooldown_s:.0f}s between deploys (~{est:.0f} min total)")
+    if not unattended and not click.confirm("Proceed rung-by-rung (prompt before each)?"):
+        click.echo("aborted.")
+        return
+
+    from .project import IntegrationFlow
+
+    async def _oracle(
+        proj: Path, flow: IntegrationFlow, *, artifact_id: str | None
+    ) -> dict:
+        # Materialize the variant into a temp project, calibrate it.
+        import shutil
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp(prefix="oiw-exp-"))
+        try:
+            (tmp / "flows" / flow.id).mkdir(parents=True)
+            import yaml as _yaml
+
+            (tmp / "flows" / flow.id / "flow.yaml").write_text(
+                _yaml.safe_dump(_flow_to_dict(flow), sort_keys=False), encoding="utf-8"
+            )
+            prof = load_profile(project_path, profile)
+            rep = await calibrate_artifact(
+                tmp,
+                prof,
+                adapter,
+                package_id,
+                artifact_id=artifact_id,
+                timeout_s=90,
+            )
+            return rep.to_dict()["calibration"]
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    async def _main() -> None:
+        project = Project.load(project_path)
+        baseline = project.get_flow(record.baseline_flow_id)
+        record.status = "running"
+        runner = ExperimentRunner(
+            _oracle,
+            ExperimentBudget(
+                max_rungs=max_rungs,
+                wall_clock_s=wall_clock_s,
+                cooldown_s=cooldown_s,
+                unattended=unattended,
+            ),
+            project_path=project_path,
+            artifact_id=artifact_id,
+        )
+        await runner.run(record, baseline)
+
+    asyncio.run(_main())
+    out_dir = record_path.parent
+    path = save_record(record, out_dir)
+    click.echo(f"\nrecord updated: {path}")
+    click.echo(f"baseline verdict: {record.baseline_verdict}")
+    greens = [r for r in record.rungs if r.verdict == "GREEN"]
+    reds = [r for r in record.rungs if r.verdict == "RED"]
+    skips = [r for r in record.rungs if r.verdict == "SKIPPED"]
+    click.echo(f"rungs: {len(greens)} green | {len(reds)} red | {len(skips)} skipped")
+    click.echo("next: `oiw experiment laws` to derive + record law candidates")
+
+
+def _flow_to_dict(flow) -> dict:
+    """Serialize an IntegrationFlow into flow.yaml dict form (loader-compatible)."""
+    from dataclasses import asdict, is_dataclass
+
+    d = asdict(flow) if is_dataclass(flow) else dict(flow.__dict__)
+    # dataclass field names -> flow.yaml schema names
+    d.pop("source_path", None)
+    d.pop("diagram", None)
+    d.pop("error_handling", None)
+    edges = d.pop("edges", [])
+    d["edges"] = [{"from": e["from_"], "to": e["to"]} for e in edges]
+    meta = {
+        "id": d.pop("id"),
+        "name": d.pop("name"),
+        "version": d.pop("version"),
+        "labels": d.pop("labels", {}) or {},
+    }
+    spec = {
+        "entrypoints": d.pop("entrypoints", []),
+        "nodes": d.pop("nodes", []),
+        "edges": d["edges"],
+        "extensions": d.pop("extensions", {}) or {},
+    }
+    return {
+        "apiVersion": "oiw.dev/v1alpha1",
+        "kind": "IntegrationFlow",
+        "metadata": meta,
+        "spec": spec,
+    }
+
+
+@experiment.command("laws")
+@click.option("--record", "record_path", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option(
+    "--registry",
+    "registry_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Law registry path (default <OIW_WORKSPACE>/.oiw/tenant-laws.yaml).",
+)
+@click.option(
+    "--out-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Where to ALSO write the derived candidates as YAML (default: alongside record).",
+)
+def experiment_laws(
+    record_path: Path,
+    registry_path: Path | None,
+    out_dir: Path | None,
+) -> None:
+    """Derive law candidates from a completed experiment record.
+
+    Verdict flips (green baseline → red rung) isolate the minimal delta.
+    Candidates merge into the registry as `candidate` status with the
+    rungs as evidence; corroborations strengthen existing laws instead
+    of duplicating. Nothing auto-ratifies — an operator reviews then
+    flips status (the piece-library + assembler consume ratified laws).
+    """
+    from .experiment.engine import derive_laws
+    from .experiment.registry import load_registry
+    from .experiment.runner import load_record
+
+    record = load_record(record_path)
+    if record.status != "complete":
+        click.echo(
+            f"error: record status is {record.status!r} — only complete records yield laws",
+            err=True,
+        )
+        sys.exit(2)
+
+    candidates = derive_laws(record)
+    reg = load_registry(registry_path)
+    recorded = reg.record_candidates(candidates, origin=record.experiment_id)
+    if candidates:
+        reg.save()
+    click.echo(f"experiment: {record.experiment_id}")
+    click.echo(f"candidates: {len(candidates)} derived, {len(recorded)} recorded")
+    for law in recorded:
+        marker = "corroborated" if law.origin != record.experiment_id else "new"
+        click.echo(f"  [{law.status}] {law.law_id} ({marker}) scope={law.scope} conf={law.confidence}")
+        click.echo(f"          {law.statement}")
+        ev = law.evidence or {}
+        click.echo(
+            f"          evidence: green={ev.get('greenRungs', [])} red={ev.get('redRungs', [])}"
+        )
+    reg_path = reg.path
+    click.echo(f"registry: {reg_path} ({len(reg.laws)} laws total)")
+    if out_dir:
+        import yaml as _yaml
+
+        out_dir.mkdir(parents=True, exist_ok=True)
+        cpath = out_dir / f"{record.experiment_id}-laws.yaml"
+        _yaml.safe_dump(
+            {"candidates": [c.to_dict() for c in candidates]},
+            cpath.open("w"),
+            sort_keys=False,
+        )
+        click.echo(f"candidates also written: {cpath}")
+
+
+@experiment.command("registry")
+@click.option(
+    "--registry",
+    "registry_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Law registry path (default <OIW_WORKSPACE>/.oiw/tenant-laws.yaml).",
+)
+@click.option("--scope", default=None, help="Filter by scope (e.g. converter.json-to-xml).")
+def experiment_registry(registry_path: Path | None, scope: str | None) -> None:
+    """List the tenant-law registry (engine candidates + manual blood laws)."""
+    from .experiment.registry import load_registry
+
+    reg = load_registry(registry_path)
+    laws = reg.for_scope(scope) if scope else reg.laws
+    if not laws:
+        click.echo(f"no laws{' in scope ' + scope if scope else ''} — registry: {reg.path}")
+        return
+    click.echo(f"registry: {reg.path}")
+    for law in laws:
+        src = "manual" if law.source == "manual" else "engine"
+        click.echo(f"  [{law.status}|{src}] {law.law_id} scope={law.scope} conf={law.confidence}")
+        click.echo(f"      {law.statement}")
+
+
+# ---------------------------------------------------------------------------
 # WP-05 Task 6: Deploy command
 # ---------------------------------------------------------------------------
 
