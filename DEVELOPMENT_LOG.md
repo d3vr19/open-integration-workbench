@@ -1464,3 +1464,34 @@ Executed Sprint 2 tasks from `docs/work-packages/work-package-10-sprint2-tasks.m
 **Honest remaining gaps (unchanged, tracked):** order-to-s4 + sftp-order-drop oracle legs wait on validator/router/splitter/gather EXPORTER shapes (references: XmlValidator from TPM is dynamic-form only — static form unproven; the dev's H7 decoder reference is committed and waiting). payload-enricher-fwd waits on H7. The gate is met WITHOUT them; they grow the comparable set further when shapes land.
 
 **Tests:** CLI 611 (groovy JVM tests → SAP dialect; enforce-gate test → green-gate truth). All suites green. Tenant healthy: all four rotation artifacts STARTED, three new C-1 insight promotions this session (map/groovy/tagconv all reward 1.0).
+
+---
+
+### 2026-09-04 (final) — SESSION CLOSE / HANDOFF — READ FIRST, NEXT SELF
+
+**STATE (all committed + pushed through `8909b9b`):**
+- **PARITY GATE PASSED: 10/10 comparable @ 100%** (`oiw parity --enforce-gate` exits 0; every case backed by a fresh rotation-package oracle report). The instrument that opened at 1-comparable/0.0 on 2026-08-26 is green.
+- Suites: CLI 611 · Server 101 · MCP 20 · Gateway 43 · Seed 132 · SPA tsc/lint/build + 10 Playwright journeys — ALL GREEN.
+- Tenant healthy: every OIW rotation artifact (TestOIW + OIWtest) STARTED; 6 C-1 insight promotions across the session; scratch-package rotation defeats the per-package keyed-route wedge.
+- The dev's sprint-2 board (H7–H13) is live in `docs/work-packages/work-package-10-sprint2-tasks.md`; his H7 decoder reference (Base64 Decode, decode-only — NO Encoder activityType exists on-tenant) is committed and waiting.
+
+**OPERATOR UNLOCK FOR THE VALIDATOR GAP (banked, next session's first candidate):** the real-world pattern — convert the JSON payload to XML (live-proven converter piece) + convert the JSON-schema to XSD (offline tooling, one-time per schema) + validate via XmlValidator. A chain of proven shapes instead of a faked validator export. The TPM reference also demonstrates the wiring: its validator reads the XSD name from a HEADER (`${header.REC_VALIDATION_XSD}`) set by an upstream step — so even the "dynamic-only" form is usable with a modifier step feeding it. Also noted: "static" means the XSD name fixed in the step config at design time vs TPM's runtime-header selection; the fixed form remains unproven — the convert-then-validate pattern may not need it at all.
+
+**OPEN THREADS (ranked, next pickup):**
+1. **Convert-then-validate pattern** (operator insight above) → unblocks order-to-s4 + sftp-order-drop oracle legs → comparable set grows past 10. Needs: jsonschema→XSD conversion utility + a parity example proving the chain live.
+2. **Router/splitter/gather exporter shapes** — references already banked from the Hub TPM V2 export (ExclusiveGateway ×7, Splitter-EDI dialect ×45-props — caveat noted: EDI dialect ≠ general splitter); splitter/gather pieces already run real (H4/H5) so shapes are the only missing half.
+3. **B-3 Mapping breadth continues** — 13 real .xsl references banked from TPM; XSLTMapping shape live-proven; next: varied mapping examples + campaign-grade laws.
+4. **Dev's H7** (decoder exporter — reference ready) → unblocks payload-enricher-fwd (+1 comparable).
+5. B2 experiment engine: ready for its second campaign (laws on Mapping placement would write themselves via the rotation packages now).
+
+**LAWS THAT COST BLOOD (this session's additions — do not relitigate):**
+- Hub content exports = ZIP of nested `<hash>_content` zips + resources.cnt + base64 contentmetadata.md; configure-only packages seal ALL $value downloads (inventory via nav listings still works).
+- Runtime rows key on the artifact DISPLAY name (not Id); gateway $filter rejects spaces in string literals (client-side match for spaced names).
+- The message-probe body's content-type must match the flow (inference: leading '<' → XML); the warmup source's content-type feeds what the next step parses.
+- CPI Groovy speaks ONLY the SAP Message API dialect (`processData(Message)` — scripts never self-call; the runner must invoke it); Groovy script meta-properties SHADOW binding maps (bare `properties["k"]=v` never worked on the JVM).
+- Shippable-piece law: a turbo piece must be runtime-real AND exporter-renderable (transform.xslt = first graduate: Saxon × XSLTMapping).
+- Wedge rotation: per-package keyed-route cooldowns are circumvented by deploying across the 3 scratch packages; CSRF tokens expire during cool-downs (refetch + REBUILD headers, never replay).
+
+**Session arc:** B-2 (Saxon XSLT2 bridge) → B-3 (Hub harvest → XSLTMapping live-proven) → Groovy SAP-dialect bridge → 4 new comparable cases → GATE PASSED. The flywheel's fastest turn yet: harvest-to-live-proof in single sessions per shape.
+
+**Next session opens with:** the convert-then-validate pattern (operator's unlock), then shapes from the banked TPM references. The corpus, pattern book, and law registry are all committed — the next self starts warm.
