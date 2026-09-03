@@ -1114,3 +1114,30 @@ The EMG experience plan (Phases 1–2) executed live:
   - `npm run lint` clean (oxlint).
   - `npm run build` clean (vite build).
   - `npx playwright test` 4/4 passing with 0 test edits.
+
+---
+
+### 2026-09-03 (cont. 3) — WP-09 PR-3 / Task A-003: Full SPA decomposition (OW-029)
+
+**Branch:** `feature/wp09-a-003-workspace`  
+**Scope:** `apps/web/src/App.tsx`, `apps/web/src/hooks/**`, `apps/web/src/components/layout/**`, `apps/web/README.md`.
+
+**Delivered:**
+- **Hooks extraction**:
+  - `src/hooks/useProjectWorkspace.ts`: encapsulates project listing, flow listing, resource listing, selections, and workspace error/loading states.
+  - `src/hooks/useFlowEditor.ts`: manages React Flow nodes/edges, node selection, connect/drag/drop, pending operations, and optimistic single-PATCH save.
+  - `src/hooks/useProjectActions.ts`: manages validate, test, build, diff, git status, and simulation execution.
+- **Layout panel extraction**:
+  - `src/components/layout/AppHeader.tsx`: header brand, unsaved changes indicator, save action, git status.
+  - `src/components/layout/LeftSidebar.tsx`: project explorer, flow explorer, palette, resources, and action buttons with scoped error/loading states.
+  - `src/components/layout/CanvasArea.tsx`: flow canvas, resource editor tab switching, and placeholder.
+  - `src/components/layout/RightSidebar.tsx`: co-pilot, EMG insights, deployment, node properties, validation/test/build/diff/trace results.
+- **App.tsx shrinkage**:
+  - Reduced `App.tsx` from a 570-line god component to **106 lines of pure layout** (well below the <150 line WP-09 target).
+  - Eliminated the global `.error-banner` overlay across the canvas; errors are now localized with `.error-banner--inline` inside their respective panels.
+  - Preserved 100% of `data-testid` contracts (`emg-hit-badge`, `emg-hit-details`, etc.) and CSS selectors used by E2E tests.
+- **Verification:**
+  - `npx tsc -p tsconfig.app.json --noEmit` clean.
+  - `npm run lint` clean (oxlint).
+  - `npm run build` clean (vite build).
+  - `npx playwright test` 4/4 passing with zero regressions or test edits.

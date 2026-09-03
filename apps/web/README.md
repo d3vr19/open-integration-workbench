@@ -24,6 +24,10 @@
 - **Generated API client** (OW-015 / WP-09 Task A-002): TypeScript schema generated from
   `packages/api-spec/openapi.yaml` into `src/api/gen/schema.d.ts`, wrapped by typed `ApiClient`
   in `src/api/client.ts` with stable boundary re-exports in `src/api.ts`.
+- **Full SPA decomposition** (OW-029 / WP-09 Task A-003): `App.tsx` decomposed from 570 lines
+  to 106 lines of pure layout using custom hooks (`useProjectWorkspace`, `useFlowEditor`,
+  `useProjectActions`) and layout components (`AppHeader`, `LeftSidebar`, `CanvasArea`,
+  `RightSidebar`). Scoped per-panel loading and error states without global error banner.
 
 ## Stack
 
@@ -52,7 +56,6 @@ npm run api:gen  # regenerate src/api/gen/schema.d.ts from packages/api-spec/ope
 
 - Undo/redo (command pattern)
 - Collaborative editing (presence)
-- Full SPA decomposition (FlowCanvas/PropertiesPanel/PalettePanel extraction — OW-029)
 - Real semantic diff in PatchPreviewDialog (OW-028 — currently derives from step results)
 
 Spec ref: §6.1 (Front End), §10 (Visual Designer).
