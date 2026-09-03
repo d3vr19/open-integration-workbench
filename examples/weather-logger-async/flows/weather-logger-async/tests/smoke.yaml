@@ -24,3 +24,10 @@ spec:
     node: add-context
   - type: node.executed
     node: pd-terminator
+  - type: outbound.header.equals
+    target: rr-fetch
+    name: Content-Type
+    equals: application/json
+  - type: property.contains
+    name: loggedAt
+    contains: simulated-epoch

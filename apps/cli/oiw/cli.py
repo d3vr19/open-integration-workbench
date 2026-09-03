@@ -21,6 +21,8 @@ from .compiler.report import format_import_report
 from .diff import semantic_diff
 from .git_ops import git_commit_proposal, git_status
 from .project import Project, ProjectError
+from .runtime.engine import execute_flow, serialize_simulation_result
+from .runtime.mpl import mpl_records_from_context
 from .schema_validator import SchemaError, validate_project
 from .testing import TestResult, run_tests
 from .validators.graph import validate_flow_graph
@@ -245,6 +247,145 @@ def test(
         _write_junit(results, junit_path)
         click.echo(f"junit: {junit_path}")
     if failed:
+        sys.exit(1)
+
+
+@main.command()
+@click.option(
+    "--project",
+    "-p",
+    "project_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=Path("."),
+    show_default=True,
+    help="Path to integration project root.",
+)
+@click.option(
+    "--flow",
+    "-f",
+    "flow_id",
+    type=str,
+    default=None,
+    help="Flow ID to simulate.",
+)
+@click.option(
+    "--test",
+    "-t",
+    "test_name",
+    type=str,
+    default="smoke",
+    show_default=True,
+    help="Named FlowTest to simulate with.",
+)
+@click.option(
+    "--engine",
+    type=click.Choice(["simulated", "real"]),
+    default="simulated",
+    show_default=True,
+    help="Simulation engine ('simulated' or 'real').",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    default=False,
+    help="Emit structured JSON trace matching the simulate API payload.",
+)
+def simulate(
+    project_path: Path,
+    flow_id: str | None,
+    test_name: str,
+    engine: str,
+    json_output: bool,
+) -> None:
+    """Run flow simulation with step-by-step trace (WP-10 H10)."""
+    try:
+        project = Project.load(project_path)
+    except Exception as exc:
+        click.echo(f"error loading project: {exc}", err=True)
+        sys.exit(2)
+
+    # Resolve flow
+    if not flow_id:
+        if len(project.flows) == 1:
+            flow_id = project.flows[0].id
+        else:
+            click.echo("error: --flow is required when project contains multiple flows", err=True)
+            sys.exit(2)
+
+    try:
+        flow = project.get_flow(flow_id)
+    except Exception as exc:
+        click.echo(f"error: flow '{flow_id}' not found: {exc}", err=True)
+        sys.exit(2)
+
+    # Find the named FlowTest
+    target_test = None
+    for t in project.tests:
+        if t.flow == flow_id and t.name == test_name:
+            target_test = t
+            break
+    if target_test is None:
+        click.echo(f"error: test '{test_name}' not found for flow '{flow_id}'", err=True)
+        sys.exit(2)
+
+    # Resolve input body
+    input_spec = target_test.input
+    if "bodyFile" in input_spec:
+        body_path = project.root / input_spec["bodyFile"]
+        if not body_path.exists():
+            click.echo(f"error: input bodyFile not found: {input_spec['bodyFile']}", err=True)
+            sys.exit(2)
+        body = body_path.read_bytes()
+    elif "bodyInline" in input_spec:
+        body = input_spec["bodyInline"].encode("utf-8")
+    else:
+        body = b""
+
+    headers = {k: str(v) for k, v in (input_spec.get("headers") or {}).items()}
+    mocks = {m["target"]: m for m in target_test.mocks}
+
+    # Execute flow (local-only, mock seam)
+    ctx = execute_flow(
+        flow=flow,
+        input_body=body,
+        input_headers=headers,
+        resources=project.resources,
+        mocks=mocks,
+        engine=engine,
+    )
+
+    mpl_records = None
+    if engine == "real":
+        mpl_records = mpl_records_from_context(ctx, flow.id)
+
+    if json_output:
+        import json as _json
+
+        payload = serialize_simulation_result(ctx, mpl_records=mpl_records)
+        click.echo(_json.dumps(payload, indent=2))
+    else:
+        for t in ctx.trace:
+            if t.node_id in ("__flow__", "__engine__"):
+                continue
+            status_str = "FAIL" if t.direction == "error" else "PASS"
+            fg_color = "red" if t.direction == "error" else "green"
+            duration = f"{t.duration_ms} ms" if t.duration_ms is not None else "0 ms"
+            click.echo(
+                f"  [{click.style(status_str, fg=fg_color)}] {t.node_id} ({t.direction}): {t.summary} ({duration})"
+            )
+
+        status_color = "green" if ctx.exchange_status == "COMPLETED" else "red"
+        click.echo(
+            f"exchange status: {click.style(ctx.exchange_status, fg=status_color)} "
+            f"({ctx.properties.get('__duration_ms__', 0)} ms)"
+        )
+        if engine == "real" and mpl_records:
+            click.echo(f"mpl records: {len(mpl_records)} (Origin={mpl_records[0].get('Origin')})")
+
+    if ctx.exchange_status == "COMPLETED":
+        sys.exit(0)
+    else:
         sys.exit(1)
 
 
@@ -2234,6 +2375,15 @@ def tenant() -> None:
     help="P6 autonomous-creation path: POST-create a NEW artifact "
     "(must not exist; requires --artifact; still allowlist-gated).",
 )
+@click.option(
+    "--message-file",
+    "message_file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="P5a-M1 spec: body for the message-exercise leg (default '{}'). "
+    "Flows expecting XML need an XML body — the probe body's content type "
+    "must match the flow's (live lesson: xml-json-bridge prolog error).",
+)
 def tenant_calibrate(
     project_path: Path,
     profile: str,
@@ -2243,6 +2393,7 @@ def tenant_calibrate(
     timeout_s: int,
     out: Path | None,
     create: bool,
+    message_file: Path | None,
 ) -> None:
     """P5a-M1 oracle harness: upload->deploy->poll->[message]->MPL report.
 
@@ -2272,6 +2423,7 @@ def tenant_calibrate(
             display_name=display_name,
             timeout_s=timeout_s,
             create=create,
+            message_body=message_file.read_text(encoding="utf-8") if message_file else "{}",
         )
 
     try:

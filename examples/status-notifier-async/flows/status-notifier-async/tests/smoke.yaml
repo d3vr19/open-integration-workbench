@@ -1,0 +1,37 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  name: smoke
+  description: Smoke test for status notifier async
+spec:
+  flow: status-notifier-async
+  input:
+    entrypoint: sender-http
+    bodyInline: '{"event": "ping"}'
+    headers:
+      Content-Type: application/json
+  mocks:
+  - target: rr-status-check
+    respond:
+      status: 200
+      body: '{"status": "active"}'
+  assertions:
+  - type: exchange.status
+    equals: COMPLETED
+  - type: node.executed
+    node: sender-http
+  - type: node.executed
+    node: set-headers
+  - type: node.executed
+    node: rr-status-check
+  - type: node.executed
+    node: log-event
+  - type: node.executed
+    node: pd-terminator
+  - type: outbound.header.equals
+    target: rr-status-check
+    name: X-Notification-Status
+    equals: DISPATCHED
+  - type: property.contains
+    name: notificationCategory
+    contains: alert

@@ -1,0 +1,16 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationProject
+metadata:
+  created: '2026-09-04T00:00:00Z'
+  description: 'Integration project: Status Notifier Async'
+  id: status-notifier-async
+  name: Status Notifier Async
+spec:
+  emg:
+    confidentialityScope: project-private
+    enabled: false
+  minimumCompilerVersion: 0.1.0
+  package: package/package.yaml
+  secretProvider: local-keyring
+  targetProfiles:
+  - sap-cloud-integration-2026-07

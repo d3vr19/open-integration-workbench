@@ -181,15 +181,39 @@ def interpret_requirement_fallback(raw_text: str) -> NormalizedRequirement:
         "transform": ["transform", "mapping", "xslt", "convert"],
         "route": ["route", "router", "routing", "branch"],
         "filter": ["filter"],
-        "split": ["split", "splitter"],
         "gather": ["gather", "aggregate"],
         "encode": ["encode", "base64"],
         "log": ["log"],
     }
     operations = [op for op, kws in op_keywords.items() if any(kw in text for kw in kws)]
 
+    # WP-10 H8: splitter detection with negative controls
+    # Negative controls: "split the difference", "split tunneling" do NOT trigger.
+    # Positive controls: "split the batch", "process each item", "split orders into individual messages", etc.
+    split_negative_patterns = [
+        re.compile(r"\bsplit\s+the\s+difference\b", re.IGNORECASE),
+        re.compile(r"\bsplit\s+tunneling\b", re.IGNORECASE),
+    ]
+    split_text = text
+    for neg in split_negative_patterns:
+        split_text = neg.sub("", split_text)
+
+    is_split = bool(
+        re.search(r"\bsplitter\b", split_text)
+        or re.search(r"\bsplit\b", split_text)
+        or re.search(
+            r"\b(?:process|handle|iterate\s+over|for)?\s*each\s+(?:item|order|message|record|element)\b",
+            split_text,
+        )
+        or re.search(r"\bper\s+(?:item|order|message|record|element)\b", split_text)
+    )
+    if is_split and "split" not in operations:
+        operations.append("split")
+
     # Components (only those mentioned or implied)
     components: list[str] = []
+    if is_split:
+        components.append("splitter.general")
     if "validation" in text or "validate" in text or "schema" in text:
         components.append("validator.json-schema")
     if "script" in text or "groovy" in text:

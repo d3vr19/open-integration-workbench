@@ -387,6 +387,10 @@ def _ir_from_parsed(parsed: dict[str, Any], artifact_id: str) -> dict[str, Any] 
         if not stype:
             continue
         cfg = dict(step.get("config") or {})
+        # WP-10 H9: classify ExternalCall serviceTasks as mid-flow receiver.http in absorb's IR builder
+        act_type = cfg.get("activityType") or (cfg.get("properties") or {}).get("activityType")
+        if (stype == "ServiceTask" or stype == "ExternalCall") and act_type == "ExternalCall":
+            stype = "receiver.http"
         cfg.pop("properties", None)  # raw tables stay in the redacted flow.yaml? no — drop bulk
         nodes.append(
             {

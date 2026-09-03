@@ -17,7 +17,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from oiw.runtime.engine import execute_flow
+from oiw.runtime.engine import execute_flow, serialize_simulation_result, trace_payload
 from pydantic import BaseModel
 
 from ..workspace import load_project
@@ -73,41 +73,11 @@ def simulate_sync(project_id: str, flow_id: str, req: SimulateRequest) -> Simula
         mocks=mocks_dict,
     )
 
-    return SimulateResponse(
-        status=ctx.exchange_status,
-        duration_ms=ctx.properties.get("__duration_ms__", 0),
-        trace=[_trace_payload(t) for t in ctx.trace],
-        outbound_calls=[
-            {
-                "target": c["target"],
-                "method": c["method"],
-                "url": c["url"],
-                "body": c.get("body", b"").decode("utf-8", errors="replace")
-                if isinstance(c.get("body"), bytes)
-                else c.get("body"),
-                "requestHeaders": c.get("headers", {}),
-            }
-            for c in ctx.outbound_calls
-        ],
-        headers=dict(ctx.headers),
-        properties={k: v for k, v in ctx.properties.items() if not k.startswith("__")},
-    )
+    sim_dict = serialize_simulation_result(ctx)
+    return SimulateResponse(**sim_dict)
 
 
-def _trace_payload(t: Any) -> dict[str, Any]:
-    """Full trace entry for the FIGAF-style viewer: summaries plus per-step
-    body/headers/properties snapshots, durations, and error typing."""
-    return {
-        "node_id": t.node_id,
-        "timestamp": t.timestamp,
-        "direction": t.direction,
-        "summary": t.summary,
-        "body_preview": t.body_preview,
-        "headers": t.headers,
-        "properties": t.properties,
-        "duration_ms": t.duration_ms,
-        "exception_type": t.exception_type,
-    }
+_trace_payload = trace_payload
 
 
 # ---------------------------------------------------------------------

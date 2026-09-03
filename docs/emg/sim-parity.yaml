@@ -1,5 +1,5 @@
 sim_parity:
-  generatedAt: '2026-09-03T18:04:57.595567+00:00'
+  generatedAt: '2026-09-03T20:43:40.005264+00:00'
   corpus: packages/parity-corpus/manifest.yaml
   engine: real
   cases:
@@ -14,7 +14,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 29.52
+    oracleReportAgeHours: 32.16
     verdict: agreed
   - name: oiw-turbo-fwd-smoke
     project: examples/oiw-turbo-fwd
@@ -27,7 +27,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 30.03
+    oracleReportAgeHours: 32.68
     verdict: agreed
   - name: oiw-conv-fwd-smoke
     project: examples/oiw-conv-fwd
@@ -40,7 +40,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 24.75
+    oracleReportAgeHours: 27.4
     verdict: agreed
   - name: order-to-s4-happy-path
     project: examples/order-to-s4
@@ -68,15 +68,21 @@ sim_parity:
       mplRows: 0
       mplCompleted: 0
       success: false
-    oracleReportAgeHours: 0.01
+    oracleReportAgeHours: 2.65
     verdict: agreed
   - name: weather-logger-async-smoke
     project: examples/weather-logger-async
-    artifactId: null
+    artifactId: oiw-wlog
     localPassed: true
     localStatus: PASS
-    verdict: pending-oracle
-    details: no cached calibration report for this case
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 0.93
+    verdict: agreed
   - name: payload-enricher-fwd-smoke
     project: examples/payload-enricher-fwd
     artifactId: null
@@ -86,14 +92,33 @@ sim_parity:
     details: no cached calibration report for this case
   - name: xml-json-bridge-smoke
     project: examples/xml-json-bridge
-    artifactId: null
+    artifactId: oiw-x2j
     localPassed: true
     localStatus: PASS
-    verdict: pending-oracle
-    details: no cached calibration report for this case
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 0.77
+    verdict: agreed
+  - name: status-notifier-async-smoke
+    project: examples/status-notifier-async
+    artifactId: oiw-notifier
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 0.01
+    verdict: agreed
   agreement:
-    comparable: 4
-    agreed: 4
+    comparable: 7
+    agreed: 7
     ratio: 1.0
   gate:
     threshold: 0.9

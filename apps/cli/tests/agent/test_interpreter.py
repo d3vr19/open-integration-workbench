@@ -240,3 +240,52 @@ class TestInterpreterAmbiguousScenario:
         )
         result = await interpret_requirement("Make it better", project, gateway)
         assert result.confidence < 0.5
+
+
+class TestSplitterPhrasing:
+    """WP-10 H8: Interpreter splitter-phrasing gap (roadmap open thread #5)."""
+
+    @pytest.mark.parametrize(
+        "phrase",
+        [
+            "split the batch",
+            "process each item",
+            "split orders into individual messages",
+        ],
+    )
+    def test_splitter_phrasing_yields_splitter_general(self, phrase: str) -> None:
+        result = interpret_requirement_fallback(f"Create a flow to {phrase} and forward")
+        assert "splitter.general" in result.components
+        assert "split" in result.operations
+
+    @pytest.mark.parametrize(
+        "phrase",
+        [
+            "split the difference",
+            "split tunneling",
+        ],
+    )
+    def test_negative_controls_do_not_trigger_splitter(self, phrase: str) -> None:
+        result = interpret_requirement_fallback(f"Create a flow with {phrase}")
+        assert "splitter.general" not in result.components
+        assert "split" not in result.operations
+
+    def test_end_to_end_assemble_from_requirement(self) -> None:
+        from oiw.agent.turbo_pieces import assemble_from_requirement, proven_pieces
+
+        req = interpret_requirement_fallback(
+            "Split the batch and forward orders to https://httpbin.org/post"
+        )
+        assert "splitter.general" in req.components
+
+        res = assemble_from_requirement(req, "test-split-fwd")
+        pieces = proven_pieces()
+        if "splitter.general" in pieces:
+            assert res.assembled is True
+            assert any(p.node_type == "splitter.general" for p in res.pieces)
+            splitter_piece = next(p for p in res.pieces if p.node_type == "splitter.general")
+            assert splitter_piece.config.get("maxItems") or splitter_piece.config.get("maxIterations")
+        else:
+            assert res.assembled is False
+            assert "splitter.general" in res.unmatched_components
+

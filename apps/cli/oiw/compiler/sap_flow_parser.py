@@ -252,25 +252,62 @@ def parse_bpmn2_iflw(content: bytes | str) -> dict[str, Any]:
                     adapter_type = "SFTP"
                 result["receiver"] = {"type": adapter_type, "parameters": _extract_ifl_params(elem)}
 
-        # ServiceTask with name (BPMN2 processing step)
-        elif tag_lower == "servicetask" and elem.get("name"):
+        # ServiceTask (BPMN2 processing step) — WP-10 H9: extract activityType and properties
+        elif tag_lower == "servicetask":
             name = elem.get("name", "")
-            if "groovy" in name.lower() or "script" in name.lower():
+            props: dict[str, str] = {}
+            for ext in elem.iter():
+                ext_local = ext.tag.split("}")[-1] if "}" in ext.tag else ext.tag
+                if ext_local != "extensionElements":
+                    continue
+                for prop in ext:
+                    prop_local = prop.tag.split("}")[-1] if "}" in prop.tag else prop.tag
+                    if prop_local != "property":
+                        continue
+                    k = None
+                    v = None
+                    for child in prop:
+                        lt = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                        if lt == "key":
+                            k = (child.text or "").strip()
+                        elif lt == "value":
+                            v = child.text or ""
+                    if k:
+                        props[k] = v
+
+            activity_type = props.get("activityType", "")
+            if activity_type == "ExternalCall":
                 result["steps"].append(
-                    {"id": elem.get("id", ""), "type": "Script", "config": {"Language": "Groovy"}}
+                    {
+                        "id": elem.get("id", ""),
+                        "type": "ServiceTask",
+                        "config": {
+                            "name": name,
+                            "activityType": "ExternalCall",
+                            "properties": props,
+                        },
+                    }
                 )
-            elif "mapping" in name.lower() or "xslt" in name.lower() or "transform" in name.lower():
+            elif name and ("groovy" in name.lower() or "script" in name.lower()):
                 result["steps"].append(
-                    {"id": elem.get("id", ""), "type": "Mapping", "config": {"MappingType": "XSLT"}}
+                    {"id": elem.get("id", ""), "type": "Script", "config": {"Language": "Groovy", "properties": props}}
                 )
-            elif "filter" in name.lower():
-                result["steps"].append({"id": elem.get("id", ""), "type": "Filter", "config": {}})
-            elif "router" in name.lower() or "route" in name.lower():
-                result["steps"].append({"id": elem.get("id", ""), "type": "Router", "config": {}})
+            elif name and ("mapping" in name.lower() or "xslt" in name.lower() or "transform" in name.lower()):
+                result["steps"].append(
+                    {"id": elem.get("id", ""), "type": "Mapping", "config": {"MappingType": "XSLT", "properties": props}}
+                )
+            elif name and ("filter" in name.lower()):
+                result["steps"].append({"id": elem.get("id", ""), "type": "Filter", "config": {"properties": props}})
+            elif name and ("router" in name.lower() or "route" in name.lower()):
+                result["steps"].append({"id": elem.get("id", ""), "type": "Router", "config": {"properties": props}})
             else:
-                # Generic service task — record as a processing step
+                # Generic service task — record as a processing step with properties preserved
                 result["steps"].append(
-                    {"id": elem.get("id", ""), "type": "ServiceTask", "config": {"name": name}}
+                    {
+                        "id": elem.get("id", ""),
+                        "type": "ServiceTask",
+                        "config": {"name": name, "activityType": activity_type, "properties": props},
+                    }
                 )
 
         # WP-08 PR-5 / Track B-002: classify callActivity by its ifl:property

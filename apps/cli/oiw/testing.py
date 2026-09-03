@@ -176,6 +176,23 @@ def _check_assertion(assertion: dict[str, Any], ctx, project: Project) -> tuple[
                 return True, ""
             return False, f"outbound body for '{target}' does not contain: {assertion['contains']}"
         return True, ""
+    if atype == "outbound.header.equals":
+        target = assertion.get("target", "")
+        name = assertion.get("name", "")
+        expected = assertion.get("equals")
+        call = next((c for c in ctx.outbound_calls if c["target"] == target), None)
+        if call is None:
+            return False, f"no outbound call recorded for target '{target}'"
+        headers = call.get("headers", {})
+        actual = headers.get(name)
+        if actual is None:
+            for k, v in headers.items():
+                if k.lower() == name.lower():
+                    actual = v
+                    break
+        if actual is not None and str(actual) == str(expected):
+            return True, ""
+        return False, f"outbound call '{target}' header '{name}': expected {expected!r}, got {actual!r}"
     if atype == "header.equals":
         name = assertion["name"]
         expected = assertion["equals"]
@@ -190,6 +207,15 @@ def _check_assertion(assertion: dict[str, Any], ctx, project: Project) -> tuple[
         if str(actual) == str(expected):
             return True, ""
         return False, f"property '{name}': expected {expected!r}, got {actual!r}"
+    if atype == "property.contains":
+        name = assertion.get("name", "")
+        needle = assertion.get("contains", "")
+        actual = ctx.properties.get(name)
+        if actual is None:
+            return False, f"property '{name}' not found in exchange properties"
+        if needle in str(actual):
+            return True, ""
+        return False, f"property '{name}' does not contain: {needle!r} (actual: {str(actual)!r})"
     if atype == "body.contains":
         needle = assertion["contains"]
         actual = ctx.body.decode("utf-8", errors="replace")

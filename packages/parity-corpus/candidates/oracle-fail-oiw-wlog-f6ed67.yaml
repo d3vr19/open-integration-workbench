@@ -1,0 +1,24 @@
+candidate:
+  id: oracle-fail-oiw-wlog-f6ed67
+  kind: oracle-failure
+  createdAt: '2026-09-03T19:18:20.272167+00:00'
+  provenance:
+    source: tenant-oracle
+    packageId: TestOIW
+    artifactId: oiw-wlog
+    isReal: true
+  verdict:
+    finalStatus: TIMEOUT
+    uploadedOk: true
+    deployAccepted: true
+    messageSent: false
+    httpResponseStatus: null
+    mplRows: 0
+    errorDetail: null
+    diagnostic: ORACLE-DEPLOY-POLL-TIMEOUT
+  suggestedTriage: triage-required
+  notes:
+  - "Blood law: oracle verdicts are point-in-time \u2014 check for the deploy-rate\
+    \ wedge before treating this as content failure."
+  - 'Triage options: exporter-fix | executor-test | tenant-drift | discard.'
+  project: examples/weather-logger-async

@@ -34,6 +34,53 @@ def _public_properties(ctx: MessageContext) -> dict[str, Any]:
     return {k: v for k, v in ctx.properties.items() if not str(k).startswith("__")}
 
 
+def trace_payload(t: Any) -> dict[str, Any]:
+    """Full trace entry for the FIGAF-style viewer: summaries plus per-step
+    body/headers/properties snapshots, durations, and error typing."""
+    return {
+        "node_id": t.node_id,
+        "timestamp": t.timestamp,
+        "direction": t.direction,
+        "summary": t.summary,
+        "body_preview": t.body_preview,
+        "headers": t.headers,
+        "properties": t.properties,
+        "duration_ms": t.duration_ms,
+        "exception_type": t.exception_type,
+    }
+
+
+def serialize_simulation_result(
+    ctx: MessageContext,
+    mpl_records: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Serialize execution result matching the simulate API payload shape (WP-10 H10)."""
+    out: dict[str, Any] = {
+        "status": ctx.exchange_status,
+        "duration_ms": ctx.properties.get("__duration_ms__", 0),
+        "trace": [trace_payload(t) for t in ctx.trace],
+        "outbound_calls": [
+            {
+                "target": c["target"],
+                "method": c["method"],
+                "url": c["url"],
+                "body": (
+                    c.get("body", b"").decode("utf-8", errors="replace")
+                    if isinstance(c.get("body"), bytes)
+                    else c.get("body")
+                ),
+                "requestHeaders": c.get("headers", {}),
+            }
+            for c in ctx.outbound_calls
+        ],
+        "headers": dict(ctx.headers),
+        "properties": _public_properties(ctx),
+    }
+    if mpl_records is not None:
+        out["mpl_records"] = mpl_records
+    return out
+
+
 class ExecutionError(Exception):
     """Raised when a flow cannot be executed."""
 

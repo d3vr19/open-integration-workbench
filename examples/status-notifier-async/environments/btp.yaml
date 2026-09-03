@@ -1,0 +1,21 @@
+apiVersion: oiw.dev/v1alpha1
+kind: EnvironmentProfile
+metadata:
+  name: btp
+  description: |
+    Live BTP tenant (Cloud Foundry-hosted Cloud Integration) using HTTP Basic
+    auth with S-user credentials. WP-08 Track 0 — read-only smoke profile.
+
+    All secrets are externalized to env vars; nothing inline. Use with
+    `OIW_USE_REAL_TENANT=1 oiw tenant ping --profile btp`.
+spec:
+  target: sap-cloud-integration-2026-07
+  tenantUrl: ${OIW_TENANT_URL}
+  auth:
+    method: basic
+    credentialRef: tenant
+  externalizedParameters: {}
+  deploymentPolicy:
+    requiresApproval: true
+    approvers: []
+    autoVerify: false

@@ -253,3 +253,130 @@ class TestShapes:
         assert req.archetype == "http-to-http"
         assert "receiver.http" in req.components
         assert req.confidence == 0.8
+
+
+def _fake_iflw_servicetask_zip(
+    flow_id: str = "FlowWithServiceTask",
+    activity_type: str | None = "ExternalCall",
+    task_name: str = "Request-Reply",
+) -> bytes:
+    """Generate a synthetic .iflw ZIP containing a serviceTask."""
+    ext_props = ""
+    if activity_type:
+        ext_props = f"""
+      <bpmn2:extensionElements>
+        <ifl:property><key>activityType</key><value>{activity_type}</value></ifl:property>
+        <ifl:property><key>cmdVariantUri</key><value>ctype::FlowstepVariant/cname::{activity_type}/version::1.0.4</value></ifl:property>
+      </bpmn2:extensionElements>"""
+    iflw = f"""<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+    xmlns:ifl="http:///com.sap.ifl.model/Ifl.xsd" id="Definitions_1">
+  <bpmn2:collaboration id="Collaboration_1">
+    <bpmn2:messageFlow id="MessageFlow_1" name="HTTPS" sourceRef="Participant_1" targetRef="StartEvent_1">
+      <bpmn2:extensionElements>
+        <ifl:property><key>ComponentType</key><value>HTTPS</value></ifl:property>
+        <ifl:property><key>direction</key><value>Sender</value></ifl:property>
+        <ifl:property><key>urlPath</key><value>/{flow_id}</value></ifl:property>
+      </bpmn2:extensionElements>
+    </bpmn2:messageFlow>
+    <bpmn2:messageFlow id="MessageFlow_2" name="HTTP_Receiver" sourceRef="EndEvent_1" targetRef="Participant_2">
+      <bpmn2:extensionElements>
+        <ifl:property><key>ComponentType</key><value>HTTP</value></ifl:property>
+        <ifl:property><key>direction</key><value>Receiver</value></ifl:property>
+      </bpmn2:extensionElements>
+    </bpmn2:messageFlow>
+  </bpmn2:collaboration>
+  <bpmn2:process id="Process_1">
+    <bpmn2:startEvent id="StartEvent_1"><bpmn2:messageEventDefinition/></bpmn2:startEvent>
+    <bpmn2:callActivity id="CallActivity_1" name="modifier">
+      <bpmn2:extensionElements>
+        <ifl:property><key>activityType</key><value>Enricher</value></ifl:property>
+      </bpmn2:extensionElements>
+    </bpmn2:callActivity>
+    <bpmn2:serviceTask id="ServiceTask_1" name="{task_name}">{ext_props}
+    </bpmn2:serviceTask>
+    <bpmn2:endEvent id="EndEvent_1"><bpmn2:messageEventDefinition/></bpmn2:endEvent>
+  </bpmn2:process>
+</bpmn2:definitions>
+"""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"src/main/resources/scenarioflows/integrationflow/{flow_id}.iflw", iflw)
+    return buf.getvalue()
+
+
+class TestServiceTaskClassification:
+    """WP-10 H9: Absorb ServiceTask classification (thread #5's other half)."""
+
+    def test_external_call_classified_as_receiver_http(self, tmp_path: Path) -> None:
+        from oiw.tenant.absorb import _ir_from_zip
+
+        zip_bytes = _fake_iflw_servicetask_zip(activity_type="ExternalCall")
+        zip_path = tmp_path / "external_call.zip"
+        zip_path.write_bytes(zip_bytes)
+
+        ir = _ir_from_zip(zip_path, "external-call-artifact")
+        assert ir is not None
+        st_node = next(n for n in ir["spec"]["nodes"] if n["id"] == "ServiceTask_1")
+        # Must produce receiver.http instead of an unclassified stub
+        assert st_node["type"] == "receiver.http"
+
+    def test_non_external_call_service_task_stays_unclassified(self, tmp_path: Path) -> None:
+        from oiw.tenant.absorb import _ir_from_zip
+
+        zip_bytes = _fake_iflw_servicetask_zip(activity_type="CustomTask", task_name="custom_op")
+        zip_path = tmp_path / "non_external_call.zip"
+        zip_path.write_bytes(zip_bytes)
+
+        ir = _ir_from_zip(zip_path, "non-external-call-artifact")
+        assert ir is not None
+        st_node = next(n for n in ir["spec"]["nodes"] if n["id"] == "ServiceTask_1")
+        # Honest: stays unclassified ServiceTask
+        assert st_node["type"] == "ServiceTask"
+
+    def test_turbo_injection_boundary_oiw_i002(self, tmp_path: Path) -> None:
+        """Boundary test: reclassified chain is fully piece-covered and does NOT
+        trip OIW-I002; unclassified ServiceTask chain still trips OIW-I002."""
+        from oiw.agent.turbo import _assembly_from_injection, _injection_is_shippable
+        from oiw.tenant.absorb import _ir_from_zip, flow_shape_from_ir
+
+        # 1. Chain with ExternalCall -> classifies as receiver.http
+        zip_ext = tmp_path / "ext.zip"
+        zip_ext.write_bytes(_fake_iflw_servicetask_zip(activity_type="ExternalCall"))
+        ir_ext = _ir_from_zip(zip_ext, "ext-flow")
+        shape_ext = flow_shape_from_ir(ir_ext)
+
+        injected_ext = [
+            {
+                "action": "flow.patch",
+                "arguments": {
+                    "operations": [{"op": "addNode", "node": {"id": s["action"][3], "type": s["action"][2]}}]
+                },
+            }
+            for s in shape_ext
+        ]
+        assembly_ext = _assembly_from_injection(injected_ext)
+        assert assembly_ext is not None
+        # Should be shippable (all pieces proven) -> NO OIW-I002
+        assert _injection_is_shippable(assembly_ext) is True
+
+        # 2. Chain with non-ExternalCall -> stays ServiceTask
+        zip_non_ext = tmp_path / "non_ext.zip"
+        zip_non_ext.write_bytes(_fake_iflw_servicetask_zip(activity_type="UnknownServiceTask", task_name="op"))
+        ir_non_ext = _ir_from_zip(zip_non_ext, "non-ext-flow")
+        shape_non_ext = flow_shape_from_ir(ir_non_ext)
+
+        injected_non_ext = [
+            {
+                "action": "flow.patch",
+                "arguments": {
+                    "operations": [{"op": "addNode", "node": {"id": s["action"][3], "type": s["action"][2]}}]
+                },
+            }
+            for s in shape_non_ext
+        ]
+        assembly_non_ext = _assembly_from_injection(injected_non_ext)
+        assert assembly_non_ext is not None
+        # Contains unclassified ServiceTask -> NOT shippable -> trips OIW-I002 fallback
+        assert _injection_is_shippable(assembly_non_ext) is False
+

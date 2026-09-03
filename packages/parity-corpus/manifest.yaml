@@ -40,10 +40,20 @@ spec:
       listener: true
     - name: weather-logger-async-smoke
       project: examples/weather-logger-async
+      artifactId: oiw-wlog
+      calibration: examples/weather-logger-async/.oiw/calibration-oiw-wlog.yaml
       test: smoke
     - name: payload-enricher-fwd-smoke
       project: examples/payload-enricher-fwd
       test: smoke
     - name: xml-json-bridge-smoke
       project: examples/xml-json-bridge
+      artifactId: oiw-x2j
+      calibration: examples/xml-json-bridge/.oiw/calibration-oiw-x2j.yaml
       test: smoke
+    - name: status-notifier-async-smoke
+      project: examples/status-notifier-async
+      artifactId: oiw-notifier
+      calibration: examples/status-notifier-async/.oiw/calibration-oiw-notifier.yaml
+      test: smoke
+

@@ -1,0 +1,65 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: status-notifier-async
+  labels:
+    archetype: api-to-event
+  name: Status Notifier Async Flow
+  version: 1
+spec:
+  entrypoints:
+  - id: sender-http
+    type: sender.http
+    config:
+      path: /status_notifier_event
+      methods:
+      - POST
+    fidelity: simulated
+  nodes:
+  - id: set-headers
+    type: modifier.content
+    config:
+      headers:
+      - name: X-Notification-Status
+        value: DISPATCHED
+      properties:
+      - name: notificationCategory
+        value: system-alert-urgent
+    fidelity: compatible-subset
+  - id: rr-status-check
+    type: receiver.http
+    config:
+      method: GET
+      timeoutSeconds: 30
+      url: https://api.open-meteo.com/v1/forecast?latitude=48.85&longitude=2.35&current=temperature_2m
+    fidelity: simulated
+  - id: log-event
+    type: log.message
+    config:
+      level: INFO
+      message: Status notification processed successfully
+    fidelity: compatible-subset
+  - id: pd-terminator
+    type: receiver.processdirect
+    config:
+      address: /status_notifier_pd
+    fidelity: simulated
+  edges:
+  - from: sender-http
+    to: set-headers
+  - from: set-headers
+    to: rr-status-check
+  - from: rr-status-check
+    to: log-event
+  - from: log-event
+    to: pd-terminator
+  errorHandling:
+    defaultExceptionSubprocess:
+      steps:
+      - id: error-log
+        type: log.message
+        config:
+          level: ERROR
+          message: Status notification failed
+        fidelity: compatible-subset
+  extensions: {}

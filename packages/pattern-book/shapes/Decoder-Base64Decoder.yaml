@@ -1,0 +1,17 @@
+shape: Decoder-Base64Decoder_Testing
+componentType: Decoder
+direction: step
+observedIn: 2
+source: EMCKomalTEST/Base64Decoder_Testing + EMCKomalTEST/Vendor_Invoice_Test (tenant
+  catalog)
+properties:
+- key: componentVersion
+  value: '1.0'
+- key: cmdVariantUri
+  value: ctype::FlowstepVariant/cname::Base64 Decode/version::1.0.1
+- key: encoderType
+  value: Base64 Decode
+notes: "ONLY live-observed member of the encode/decode family on this tenant: activityType=Decoder,\
+  \ encoderType=Base64 Decode, cname::Base64 Decode/version::1.0.1. NO Encoder activityType\
+  \ exists anywhere in the 600-flow corpus \u2014 encode-direction is UNPROVEN (H7\
+  \ must refuse it loudly, not guess)."

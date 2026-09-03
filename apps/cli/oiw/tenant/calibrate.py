@@ -122,28 +122,65 @@ async def _poll_terminal(
     artifact_id: str,
     timeout_s: int = 60,
     interval_s: int = 4,
+    display_name: str | None = None,
 ) -> tuple[str, str | None]:
-    """Poll /IntegrationRuntimeArtifacts until terminal. Returns (status, raw)."""
+    """Poll /IntegrationRuntimeArtifacts until terminal. Returns (status, raw).
+
+    LIVE LAWS (2026-09-03, TestOIW/oiw-wlog):
+      1. The runtime row's `Name` is the artifact's DISPLAY name, not its
+         Id — create-with-human-display-name deploys fine but polls by Id
+         as TIMEOUT.
+      2. The gateway's $filter REJECTS spaces inside string literals
+         (single-variable probes: eq/startswith/contains all 400 on
+         multi-word names). Spaced names are matched CLIENT-SIDE: pull
+         the most recent runtime rows (ordered desc) and compare locally.
+    """
     deadline = asyncio.get_event_loop().time() + timeout_s
     last = "UNKNOWN"
+    candidates = [artifact_id]
+    if display_name and display_name != artifact_id:
+        candidates.append(display_name)
+    spaced = any(" " in c for c in candidates)
     while asyncio.get_event_loop().time() < deadline:
-        r = await client.get(
-            "/IntegrationRuntimeArtifacts",
-            params={
-                "$filter": f"Name eq '{artifact_id}'",
-                "$orderby": "DeployedOn desc",
-                "$top": 1,
-                "$format": "json",
-            },
-            headers={**auth, "Accept": "application/json"},
-        )
-        if "json" in r.headers.get("content-type", ""):
-            results = r.json().get("d", {}).get("results", [])
-            if results:
-                raw = str(results[0].get("Status") or "").upper()
-                last = {"STARTED": "STARTED", "ERROR": "ERROR", "DEPLOYED": "STARTED"}.get(raw, "PENDING")
-                if last in ("STARTED", "ERROR"):
-                    return last, raw
+        if spaced:
+            r = await client.get(
+                "/IntegrationRuntimeArtifacts",
+                params={
+                    "$orderby": "DeployedOn desc",
+                    "$top": 50,
+                    "$format": "json",
+                },
+                headers={**auth, "Accept": "application/json"},
+            )
+            results = []
+            if "json" in r.headers.get("content-type", ""):
+                results = [
+                    a
+                    for a in r.json().get("d", {}).get("results", [])
+                    if a.get("Name") in candidates
+                ]
+        else:
+            results = []
+            for name in candidates:
+                r = await client.get(
+                    "/IntegrationRuntimeArtifacts",
+                    params={
+                        "$filter": f"Name eq '{name}'",
+                        "$orderby": "DeployedOn desc",
+                        "$top": 1,
+                        "$format": "json",
+                    },
+                    headers={**auth, "Accept": "application/json"},
+                )
+                if "json" in r.headers.get("content-type", ""):
+                    results.extend(r.json().get("d", {}).get("results", []))
+        if results:
+            raw = str(results[0].get("Status") or "").upper()
+            last = {"STARTED": "STARTED", "ERROR": "ERROR", "DEPLOYED": "STARTED"}.get(
+                raw, "PENDING"
+            )
+            if last in ("STARTED", "ERROR"):
+                return last, raw
         await asyncio.sleep(interval_s)
     return "TIMEOUT", last
 
@@ -287,7 +324,11 @@ async def calibrate_artifact(
         rep.deploy_accepted = bool(deploy_result.success)
 
         status, raw = await _poll_terminal(
-            adapter._client, adapter._basic_auth_header(), rep.artifact_id, timeout_s=timeout_s
+            adapter._client,
+            adapter._basic_auth_header(),
+            rep.artifact_id,
+            timeout_s=timeout_s,
+            display_name=display_name or bundle_name,
         )
         rep.final_status = status
         if raw == "ERROR":
@@ -322,17 +363,49 @@ async def calibrate_artifact(
             except httpx.HTTPError as exc:
                 rep.error_detail = f"message send failed: {exc}"
             await asyncio.sleep(3)
-            mpl = await adapter._client.get(
-                "/MessageProcessingLogs",
-                params={
-                    "$filter": f"IntegrationFlowName eq '{rep.artifact_id}'",
-                    "$orderby": "LogStart desc",
-                    "$top": 5,
-                    "$format": "json",
-                },
-                headers={**adapter._basic_auth_header(), "Accept": "application/json"},
-            )
-            if "json" in mpl.headers.get("content-type", ""):
+            # MPL rows key on IntegrationFlowName — which follows the
+            # DISPLAY name on this tenant (same law as the runtime poll).
+            mpl_names = [rep.artifact_id]
+            dname = display_name or bundle_name
+            if dname and dname != rep.artifact_id:
+                mpl_names.append(dname)
+            mpl_rows: list[dict[str, Any]] = []
+            # gateway $filter rejects spaces in literals (live law, 2026-09-03):
+            # spaced names are pulled unfiltered (recent, top N) and matched
+            # client-side; plain names use the exact server filter.
+            if any(" " in nm for nm in mpl_names):
+                mpl = await adapter._client.get(
+                    "/MessageProcessingLogs",
+                    params={
+                        "$orderby": "LogStart desc",
+                        "$top": 50,
+                        "$format": "json",
+                    },
+                    headers={**adapter._basic_auth_header(), "Accept": "application/json"},
+                )
+                if "json" in mpl.headers.get("content-type", ""):
+                    mpl_rows = [
+                        row
+                        for row in mpl.json().get("d", {}).get("results", [])
+                        if row.get("IntegrationFlowName") in mpl_names
+                    ]
+            else:
+                for nm in mpl_names:
+                    mpl = await adapter._client.get(
+                        "/MessageProcessingLogs",
+                        params={
+                            "$filter": f"IntegrationFlowName eq '{nm}'",
+                            "$orderby": "LogStart desc",
+                            "$top": 5,
+                            "$format": "json",
+                        },
+                        headers={**adapter._basic_auth_header(), "Accept": "application/json"},
+                    )
+                    if "json" in mpl.headers.get("content-type", ""):
+                        mpl_rows.extend(mpl.json().get("d", {}).get("results", []))
+                    if mpl_rows:
+                        break
+            if mpl_rows:
                 # MPL EPOCH FILTER (2026-09-02): only rows from THIS run's
                 # window count. An artifact redeployed many times (bisection
                 # history) carries stale FAILED rows that poison the verdict
@@ -349,7 +422,7 @@ async def calibrate_artifact(
                         k: row.get(k)
                         for k in ("MessageGuid", "Status", "CustomStatus", "IntegrationFlowName", "LogStart")
                     }
-                    for row in mpl.json().get("d", {}).get("results", [])
+                    for row in mpl_rows
                     # keep rows at/after this run started (1s clock-skew slack)
                     if (t := _row_logstart_ms(row)) is None or t >= epoch_ms - 1000.0
                 ]

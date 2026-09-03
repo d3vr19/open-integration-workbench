@@ -17,14 +17,33 @@
 
 **Unblocks:** `payload-enricher-fwd` parity case (currently honest-pending), good-first-issue #2.
 
+**⚠️ HARVEST LANDED (2026-09-03, backend) — read this before implementing:**
+The harvest scanned all 600 tenant bundles for the encode/decode family. **The
+live truth:** the ONLY observed member is **`activityType=Decoder`,
+`encoderType=Base64 Decode`**, `cname::Base64 Decode/version::1.0.1`,
+`componentVersion=1.0` — seen in exactly 2 flows (both committed as the reference:
+`packages/pattern-book/shapes/Decoder-Base64Decoder.yaml`, customer-content
+license, reference-only). **There is NO Encoder activityType anywhere on the
+tenant** — encode-direction has zero precedent.
+
+**Revised honest scope:**
+1. Map `encoder.base64` → activityType `Decoder` when the node config's
+   direction is **decode**; emit the reference property set VERBATIM
+   (`componentVersion=1.0`, `cmdVariantUri=...cname::Base64 Decode/version::1.0.1`,
+   `encoderType=Base64 Decode`).
+2. Direction **encode (or absent)** → **raise loudly** ("no live-proven Encoder
+   shape on the tenant — refuse to guess; needs a reference bundle"). The
+   honesty floor outranks the convenience; `payload-enricher-fwd`'s example
+   flow must therefore use direction=decode to become buildable — flag that
+   example edit to backend for review (it changes a parity-case project).
+3. Unit tests both ways: decode builds; encode raises. Plus the verbatim
+   property-set assertion against the reference YAML.
+
 **Context:** The runtime plugin exists (`apps/cli/oiw/runtime/steps/encoder_base64.py`,
 fidelity=compatible-subset) but `sap_export.py` has NO CPI mapping — `oiw build`
 refuses to emit a bundle containing an encoder node ("no designer-proven CPI
 mapping"). The METHOD (always): **harvest reference bytes → mirror verbatim →
-unit tests**. The backend engineer is harvesting the reference `.iflw` from the
-tenant corpus (Phase 3 of the backend plan) and will commit it to
-`packages/pattern-book/shapes/Encoder-*.yaml`. **If that file exists, start; if
-not, pick H8 first and swing back** (it should land same-day).
+unit tests**.
 
 **Files:** `apps/cli/oiw/compiler/sap_export.py` (encoder branch + `_OIW_TO_ACTIVITY`
 entry ONLY — see partition below), `apps/cli/tests/test_sap_export_v6_shapes.py`
@@ -179,3 +198,28 @@ the commit message; log entry per PR.
 | Touch `sap_export.py` beyond the declared H7 partition | Backend's B-3 Mapping work lives there this sprint; the partition keeps merges mechanical |
 | Add splitter/gather/xslt/encoder to parity examples | Splitter/gather exporter shapes are unproven for round-trips (H4/H5 were runtime-only); xslt is B-2 |
 | Commit calibration reports for your examples | Oracle legs are backend's (tenant creds never travel to you) |
+
+---
+
+## NEW FINDINGS for the board (backend session, 2026-09-03 evening)
+
+1. **`sftp-order-drop` ALSO blocked on a missing exporter shape:** its
+   `validator.json-schema` node has no CPI mapping (same family as H7's
+   encoder). The corpus scan found **no Validator/Schema activityType
+   anywhere** — same situation as Encoder. Natural follow-up task (H13,
+   below): harvest hunt or honest-refusal decision.
+
+## H13 — `validator.json-schema` exporter shape decision *(new)*
+
+**Files:** `apps/cli/oiw/compiler/sap_export.py` (isolated branch + map entry,
+same partition as H7), tests.
+
+**Acceptance:**
+1. Scan decision first: the corpus shows NO live Validator shape. Either
+   (a) find a tenant flow with schema-validation semantics under a
+   DIFFERENT activity name (check `contentEnricherWithLookup`, `Filter`
+   dialects — coordinate with backend, tenant reads are backend's), or
+   (b) implement honest refusal for validator nodes with a clear
+   remediation message + a `--engine simulated`-only note.
+2. If (b): unit test the refusal; `sftp-order-drop` stays honest-pending
+   until a reference is found (log it in the case's README).

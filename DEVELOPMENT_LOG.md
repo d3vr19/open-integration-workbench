@@ -1336,3 +1336,82 @@ The EMG experience plan (Phases 1–2) executed live:
 **Sprint-2 board issued** to the frontend engineer: `docs/work-packages/work-package-10-sprint2-tasks.md` — H7 encoder.base64 exporter shape (START HERE; gated on backend's reference harvest landing in packages/pattern-book/shapes/Encoder-*.yaml — if absent, H8 first), H8 interpreter splitter-phrasing, H9 absorb ExternalCall classification, H10 `oiw simulate` CLI verb, H11 FlowTest assertions (outbound.header.equals + property.contains), H12 rolling parity examples (proven shapes only; NO splitter/gather/xslt/encoder in examples until B-3/H7 merge). Declared partition: H7's sap_export.py changes are ISOLATED (map entry + one elif branch); backend's B-3 Mapping work proceeds in parallel in the same file without touching those lines.
 
 **Backend execution plan locked with operator:** (1) multi-package oracle legs for weather-logger-async → TestOIW, xml-json-bridge → OIWtest → 6/6 comparable; (2) sftp-order-drop leg with the REAL etssftp target + AxisBnk_dev credential (operator-approved, env-externalized) → 7/7; (3) Encoder reference harvest (read-only tenant pull from the corpus's Encoder-bearing flow); (4) B-3 Mapping breadth. Expected: 7/10 comparable @ 100% before B-3's first shape lands.
+
+---
+
+### 2026-09-04 — WP-10 Sprint 2: H8, H9, H10, H11, H12 Execution & Verification
+
+Executed Sprint 2 tasks from `docs/work-packages/work-package-10-sprint2-tasks.md` across agent, compiler, absorb, runtime, CLI, testing, and parity corpus.
+
+1. **H8 — Interpreter Splitter-Phrasing Gap (Roadmap Open Thread #5):**
+   - Negative control filtering: added regex filtering for `"split the difference"` and `"split tunneling"` so idioms do not spuriously trigger batch splitting.
+   - Positive phrasing matching: mapped `"split the batch"`, `"process each item"`, `"split orders into individual messages"`, and `per (item|order|message|record|element)` to `components: ["splitter.general"]` and `operations: ["split"]`.
+   - Guaranteed bounded default config in `apps/cli/oiw/agent/turbo_pieces.py` (`_piece_config` sets `{"maxItems": 100, "encoding": "json"}`) so generated splitter flows pass validation rule `OIW-E003`.
+   - Added test suite `TestSplitterPhrasing` in `apps/cli/tests/agent/test_interpreter.py` (24/24 passed).
+
+2. **H9 — Absorb ServiceTask Classification (Thread #5's Other Half):**
+   - `apps/cli/oiw/compiler/sap_flow_parser.py`: parsed `ifl:property` extension elements on `<bpmn2:serviceTask>` to extract `activityType`.
+   - `apps/cli/oiw/tenant/absorb.py`: reclassified `ServiceTask` nodes having `activityType == "ExternalCall"` into `receiver.http` (simulated fidelity) in `_ir_from_parsed`. Non-ExternalCall service tasks remain unclassified `ServiceTask` (honest boundary).
+   - Added `TestServiceTaskClassification` in `apps/cli/tests/test_absorb.py` verifying:
+     - Synthetic `.iflw` with ExternalCall produces `receiver.http`.
+     - Non-ExternalCall stays unclassified `ServiceTask`.
+     - Direct boundary test on turbo injection: fully-piece-covered chain from reclassified ExternalCall is shippable and does not trip `OIW-I002`; chain with unclassified `ServiceTask` trips `OIW-I002` fallback.
+   - All 8 absorb tests green.
+
+3. **H10 — `oiw simulate` CLI Verb:**
+   - Added `oiw simulate --project <p> --flow <f> --test <t> --engine simulated|real --json` in `apps/cli/oiw/cli.py`.
+   - Shared trace serializer `trace_payload` and response serializer `serialize_simulation_result` extracted to `apps/cli/oiw/runtime/engine.py` and reused by `apps/server-python-prototype/oiw_server/routes/simulate.py` (single source of truth).
+   - Exit codes verified: 0 on COMPLETED, 1 on FAILED, 2 on usage errors (missing project, flow not found, test not found).
+   - Real engine runs emit MPL records with `Origin=local-sim`.
+   - Purely local execution (mock seam); zero network/tenant dependencies.
+   - Added `apps/cli/tests/test_simulate_cli.py` (7/7 passed).
+
+4. **H11 — FlowTest Assertion Types:**
+   - Extended FlowTest JSON schema `packages/ir-schema/schemas/flow-test.json` Assertion enum to include `"outbound.header.equals"` and `"property.contains"`.
+   - Implemented assertions in `apps/cli/oiw/testing.py` (`_check_assertion`):
+     - `outbound.header.equals`: asserts target, header name (case-insensitive), and expected value against captured outbound calls.
+     - `property.contains`: asserts substring presence on exchange properties.
+   - Schema validation verified via `oiw validate --strict`.
+   - Added both assertions to `examples/weather-logger-async/flows/weather-logger-async/tests/smoke.yaml` (passes `oiw validate --strict` and `oiw test --all --engine real`).
+   - Added unit test suite `apps/cli/tests/test_testing_assertions.py` (8/8 passed).
+
+5. **H12 — More Parity-Example Projects (Rolling):**
+   - Created `examples/status-notifier-async/` using proven shapes only: `sender.http` (POST `/status_notifier_event`) -> `modifier.content` -> `receiver.http` (Request-Reply GET) -> `log.message` -> `receiver.processdirect` (`/status_notifier_pd`).
+   - Validated: `oiw validate --strict` passes with 0 errors/0 warnings; `oiw test --all --engine real` passes; `oiw simulate --engine real` passes.
+   - Registered `status-notifier-async-smoke` in `packages/parity-corpus/manifest.yaml` as pending-oracle.
+   - `oiw parity` confirms 4/4 comparable (100.00% agreement), 5 pending-oracle cases ready for backend oracle legs.
+
+6. **H7 Status Check:**
+   - Checked `packages/pattern-book/shapes/Encoder-*.yaml` — still absent.
+   - Per task board specification, H7 remains gated on backend's reference harvest landing (Track B-003).
+
+**Full Verification Summary:**
+- CLI Tests: 601 passed, 0 failed, 6 skipped (`apps/cli/tests/`).
+- Server Tests: 101 passed, 0 failed (`apps/server-python-prototype/tests/`).
+- Parity Runner: 4/4 comparable (100.00% agreement); 5 pending-oracle cases (`local=PASS`).
+- Ruff lint: clean on all touched files.
+
+
+---
+
+### 2026-09-03 (cont. 3) — PARITY 7/7 @ 100%: multi-package oracle legs green; 3 new tenant laws banked; decoder reference harvested
+
+**Phases 1–2 executed (operator's TestOIW + OIWtest rotation worked exactly as intended):** the per-package wedge was circumvented by the two fresh packages — every oracle leg ran without waiting. Four new comparable cases, all reward 1.0 on the main artifacts (three C-1 insight promotions):
+
+| case | artifact | package | note |
+|---|---|---|---|
+| weather-logger-async | oiw-wlog (+oiw-wlog-listener) | TestOIW | needed its PD companion deployed (P6 pair law re-confirmed live) |
+| xml-json-bridge | oiw-x2j (+listener) | OIWtest | `--message-file` XML body (new CLI flag, P5a spec gap) |
+| status-notifier-async (dev's H12, landed mid-session) | oiw-notifier (+listener) | OIWtest | pure proven shapes |
+| oiw-turbo-fwd-listener (refresh) | existing | AdequareGST | listener-form comparable #4 from earlier |
+
+**Three new tenant laws banked as code + tests:**
+1. **Runtime rows key on the DISPLAY name, not the Id** — create-with-human-display-name deploys fine but polls by Id as TIMEOUT. Poller now tries Id + display name.
+2. **Gateway $filter rejects spaces inside string literals** (eq/startswith/contains all 400 on multi-word names — single-variable probes). Poller + MPL leg fall back to unfiltered recent-rows + client-side match for spaced names.
+3. **The message-probe body's content type must match the flow's** — xml-json-bridge failed with 'Unexpected character { in prolog; expected <' (JSON body into an XML flow). `oiw tenant calibrate --message-file` added (P5a-M1 spec had it, the CLI didn't). With the XML body: reward 1.0 — which ALSO live-proved `converter.xml-to-json` at message time (the shape was exporter-verified but message-unproven until now).
+
+**SFTP leg (Phase 2) honest-blocked, NOT silently:** sftp-order-drop's `validator.json-schema` has NO exporter mapping and the corpus scan found NO Validator activityType anywhere on the tenant — the case stays pending-oracle until a reference exists (H13 issued to the dev). Its receiver.sftp config was updated to the live-proven dialect (etssftp:2232 / AxisBnk_dev / sapcc / EMCNPCC / ../../INTERFACE/DP_WORLD / no-autoCreate) from oiw_pd_hf's designtime bundle — SFTP itself is ready the moment the validator shape exists.
+
+**Phase 3 harvest complete (H7 unblocked):** scanned all 600 corpus bundles for the encode/decode family — the ONLY live shape is **activityType=Decoder, encoderType=Base64 Decode, cname::Base64 Decode/version::1.0.1, componentVersion=1.0** (2 flows: Base64Decoder_Testing + Vendor_Invoice_Test). NO Encoder activityType exists anywhere — encode-direction is unproven. Reference committed: `packages/pattern-book/shapes/Decoder-Base64Decoder.yaml`; H7's board entry updated to decode-only + loud-refusal-on-encode.
+
+**Tests:** CLI 577 → 601 (his H8/H9 landed mid-session: +24 incl. absorb/interpreter). Server 101. Parity 7/7 @ 100% (gate ≥10: three honest paths remain — H7+payload-enricher, H13+sftp, B-3 shapes).

@@ -335,6 +335,8 @@ def assemble_from_requirement(
             }
         if t == "log.message":
             return {"level": "INFO", "message": "processing message"}
+        if t == "splitter.general":
+            return {"maxItems": 100, "encoding": "json"}
         return {}
 
     chain: list[Piece] = []
