@@ -1,0 +1,29 @@
+calibration:
+  packageId: TestOIW
+  artifactId: oiw-tagconv
+  uploadedOk: true
+  deployAccepted: true
+  trackingUuid: null
+  finalStatus: STARTED
+  errorDetail: null
+  messageSent: true
+  httpResponseStatus: 200
+  mplRows:
+  - MessageGuid: AGqaBI16dDBVlcDxI1cS18NJ2FMj
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: oiw-tagconv
+    LogStart: /Date(1788478605087)/
+  startedAt: '2026-09-03T23:36:29.136543+00:00'
+  finishedAt: ''
+reward:
+  overall: 1.0
+  dimensions:
+    structural_validity: 1.0
+    unit_tests: 1.0
+    security_policy: 1.0
+    completion: 1.0
+    corrections_needed: 1.0
+    deployment_success: 1.0
+    runtime_stability: 1.0
+  all_hard_gates_passed: true

@@ -61,4 +61,14 @@ spec:
       artifactId: oiw-map
       calibration: examples/oiw-map-fwd/.oiw/calibration-oiw-map.yaml
       test: smoke
+    - name: oiw-groovy-fwd-smoke
+      project: examples/oiw-groovy-fwd
+      artifactId: oiw-groovy
+      calibration: examples/oiw-groovy-fwd/.oiw/calibration-oiw-groovy.yaml
+      test: smoke
+    - name: oiw-tagconv-fwd-smoke
+      project: examples/oiw-tagconv-fwd
+      artifactId: oiw-tagconv
+      calibration: examples/oiw-tagconv-fwd/.oiw/calibration-oiw-tagconv.yaml
+      test: smoke
 

@@ -1,5 +1,5 @@
 sim_parity:
-  generatedAt: '2026-09-03T22:59:47.373796+00:00'
+  generatedAt: '2026-09-03T23:39:50.395573+00:00'
   corpus: packages/parity-corpus/manifest.yaml
   engine: real
   cases:
@@ -14,7 +14,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 34.43
+    oracleReportAgeHours: 35.1
     verdict: agreed
   - name: oiw-turbo-fwd-smoke
     project: examples/oiw-turbo-fwd
@@ -27,7 +27,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 34.95
+    oracleReportAgeHours: 35.62
     verdict: agreed
   - name: oiw-conv-fwd-smoke
     project: examples/oiw-conv-fwd
@@ -40,7 +40,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 29.67
+    oracleReportAgeHours: 30.33
     verdict: agreed
   - name: order-to-s4-happy-path
     project: examples/order-to-s4
@@ -67,7 +67,7 @@ sim_parity:
       mplRows: 0
       mplCompleted: 0
       success: false
-    oracleReportAgeHours: 4.92
+    oracleReportAgeHours: 5.59
     verdict: agreed
   - name: weather-logger-async-smoke
     project: examples/weather-logger-async
@@ -80,7 +80,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 3.19
+    oracleReportAgeHours: 3.86
     verdict: agreed
   - name: payload-enricher-fwd-smoke
     project: examples/payload-enricher-fwd
@@ -100,7 +100,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 3.04
+    oracleReportAgeHours: 3.7
     verdict: agreed
   - name: status-notifier-async-smoke
     project: examples/status-notifier-async
@@ -113,7 +113,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 2.28
+    oracleReportAgeHours: 2.95
     verdict: agreed
   - name: oiw-map-fwd-smoke
     project: examples/oiw-map-fwd
@@ -126,16 +126,42 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 0.02
+    oracleReportAgeHours: 0.68
+    verdict: agreed
+  - name: oiw-groovy-fwd-smoke
+    project: examples/oiw-groovy-fwd
+    artifactId: oiw-groovy
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 0.09
+    verdict: agreed
+  - name: oiw-tagconv-fwd-smoke
+    project: examples/oiw-tagconv-fwd
+    artifactId: oiw-tagconv
+    localPassed: true
+    localStatus: PASS
+    oracle:
+      finalStatus: STARTED
+      messageSent: true
+      mplRows: 1
+      mplCompleted: 1
+      success: true
+    oracleReportAgeHours: 0.06
     verdict: agreed
   agreement:
-    comparable: 8
-    agreed: 8
+    comparable: 10
+    agreed: 10
     ratio: 1.0
   gate:
     threshold: 0.9
     minComparable: 10
-    passed: false
+    passed: true
   caveats:
   - "Oracle verdicts are POINT-IN-TIME (blood law, p5-p6-plan.md \xA76): a mismatch\
     \ against an old report may reflect tenant drift or the deploy-rate wedge, not\

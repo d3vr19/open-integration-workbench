@@ -1,0 +1,43 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: oiw-groovy-fwd
+  name: oiw-groovy-fwd
+  version: 1
+  labels:
+    archetype: parity-case
+spec:
+  entrypoints:
+  - config:
+      methods:
+      - POST
+      path: /oiw_groovy_fwd
+    fidelity: simulated
+    id: sender-main
+    type: sender.http
+  extensions: {}
+  nodes:
+  - config:
+      resource: flows/oiw-groovy-fwd/resources/scripts/normalize.groovy
+    fidelity: compatible-subset
+    id: step-1-normalize
+    type: script.groovy
+  - config:
+      method: POST
+      timeoutSeconds: 30
+      url: https://httpbin.org/post
+    fidelity: simulated
+    id: rr-post
+    type: receiver.http
+  - config:
+      address: /oiw-groovy-fwd_pd
+    fidelity: simulated
+    id: pd-terminator
+    type: receiver.processdirect
+  edges:
+  - from: sender-main
+    to: step-1-normalize
+  - from: step-1-normalize
+    to: rr-post
+  - from: rr-post
+    to: pd-terminator

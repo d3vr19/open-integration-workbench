@@ -1,14 +1,13 @@
-// normalizeOrder.groovy
-// Spec ref: §26.3 reference scenario.
-//
-// Executed via the OIW JVM Groovy bridge (services/runtime-worker-jvm).
-// The bridge provides: body (String), headers (Map), properties (Map), contentType (String).
+// normalizeOrder.groovy — SAP Message API dialect (tenant ground truth:
+// the 559 Script flows in the corpus all use processData(Message)).
+// Executed by the OIW JVM Groovy bridge (SAP-compat Message shim).
+import com.sap.gateway.ip.core.customdev.util.Message
 
-import groovy.json.JsonSlurper
-
-// Parse the body as JSON and extract the region
-def json = new JsonSlurper().parseText(body)
-properties["region"] = json.region ?: "GLOBAL"
-
-// Add a normalization header
-headers["X-Normalized-By"] = "oiw-groovy-bridge"
+def Message processData(Message message) {
+    def body = message.getBody(java.lang.String) as String
+    def json = new groovy.json.JsonSlurper().parseText(body)
+    message.setProperty("region", json.region ?: "GLOBAL")
+    message.setHeader("X-Normalized-By", "oiw-groovy-bridge")
+    message.setBody(body)
+    return message
+}

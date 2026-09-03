@@ -1,0 +1,29 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  description: Header-tag Enricher -> RR warmup (XML) -> JSON-to-XML converter ->
+    RR forward -> PD.
+  name: smoke
+spec:
+  assertions:
+  - equals: COMPLETED
+    type: exchange.status
+  - node: step-1-tag
+    type: node.executed
+  - node: step-2-convert
+    type: node.executed
+  flow: oiw-tagconv-fwd
+  input:
+    bodyInline: '{"order": "x"}'
+    entrypoint: sender-main
+    headers:
+      Content-Type: application/json
+  mocks:
+  - respond:
+      body: '{"w": 16.4}'
+      status: 200
+    target: rr-warmup
+  - respond:
+      body: ''
+      status: 200
+    target: rr-post

@@ -1,0 +1,29 @@
+calibration:
+  packageId: OIWtest
+  artifactId: oiw-groovy
+  uploadedOk: true
+  deployAccepted: true
+  trackingUuid: null
+  finalStatus: STARTED
+  errorDetail: null
+  messageSent: true
+  httpResponseStatus: 200
+  mplRows:
+  - MessageGuid: AGqaBBngYd3KbKlfVWItwBGdDztB
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: oiw-groovy
+    LogStart: /Date(1788478489688)/
+  startedAt: '2026-09-03T23:34:32.272831+00:00'
+  finishedAt: ''
+reward:
+  overall: 1.0
+  dimensions:
+    structural_validity: 1.0
+    unit_tests: 1.0
+    security_policy: 1.0
+    completion: 1.0
+    corrections_needed: 1.0
+    deployment_success: 1.0
+    runtime_stability: 1.0
+  all_hard_gates_passed: true

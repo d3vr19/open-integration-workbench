@@ -1,0 +1,22 @@
+apiVersion: oiw.dev/v1alpha1
+kind: FlowTest
+metadata:
+  description: Groovy normalize (JVM bridge) -> RR forward -> PD terminator.
+  name: smoke
+spec:
+  assertions:
+  - equals: COMPLETED
+    type: exchange.status
+  - node: step-1-normalize
+    type: node.executed
+  flow: oiw-groovy-fwd
+  input:
+    bodyInline: '{"order": "x"}'
+    entrypoint: sender-main
+    headers:
+      Content-Type: application/json
+  mocks:
+  - respond:
+      body: ''
+      status: 200
+    target: rr-post

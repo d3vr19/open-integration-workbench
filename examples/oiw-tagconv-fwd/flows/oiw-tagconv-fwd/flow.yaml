@@ -1,0 +1,63 @@
+apiVersion: oiw.dev/v1alpha1
+kind: IntegrationFlow
+metadata:
+  id: oiw-tagconv-fwd
+  name: oiw-tagconv-fwd
+  version: 1
+  labels:
+    archetype: parity-case
+spec:
+  entrypoints:
+  - config:
+      methods:
+      - POST
+      path: /oiw_tagconv_fwd
+    fidelity: simulated
+    id: sender-main
+    type: sender.http
+  extensions: {}
+  nodes:
+  - config:
+      headers:
+      - name: X-Correlation-Id
+        value: oiw-tagconv
+      - name: X-Source
+        value: parity-case
+    fidelity: compatible-subset
+    id: step-1-tag
+    type: modifier.content
+  - config:
+      method: GET
+      timeoutSeconds: 30
+      url: https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m
+    fidelity: simulated
+    id: rr-warmup
+    type: receiver.http
+  - config:
+      rootElement: Order
+    fidelity: compatible-subset
+    id: step-2-convert
+    type: converter.json-to-xml
+  - config:
+      method: POST
+      timeoutSeconds: 30
+      url: https://httpbin.org/post
+    fidelity: simulated
+    id: rr-post
+    type: receiver.http
+  - config:
+      address: /oiw-tagconv-fwd_pd
+    fidelity: simulated
+    id: pd-terminator
+    type: receiver.processdirect
+  edges:
+  - from: sender-main
+    to: step-1-tag
+  - from: step-1-tag
+    to: rr-warmup
+  - from: rr-warmup
+    to: step-2-convert
+  - from: step-2-convert
+    to: rr-post
+  - from: rr-post
+    to: pd-terminator

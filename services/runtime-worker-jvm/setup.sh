@@ -78,7 +78,9 @@ echo
 # Step 2: Compile
 echo "Compiling GroovyRunner..."
 mkdir -p "$BUILD_DIR"
-javac -cp "$LIB_DIR/*" -d "$BUILD_DIR" "$SRC_DIR/GroovyRunner.java"
+javac -cp "$LIB_DIR/*" -d "$BUILD_DIR" \
+    "$SCRIPT_DIR/src/main/java/com/sap/gateway/ip/core/customdev/util/Message.java" \
+    "$SRC_DIR/GroovyRunner.java"
 echo "Compiled to $BUILD_DIR"
 
 echo "Compiling XsltRunner (Saxon-HE)..."

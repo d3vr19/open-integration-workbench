@@ -82,7 +82,12 @@ public class GroovyRunner {
         "groovy.json.JsonSlurper",
         "groovy.json.JsonOutput",
         "groovy.xml.XmlSlurper",
-        "groovy.xml.XmlUtil"
+        "groovy.xml.XmlUtil",
+        // SAP CPI scripting API (tenant dialect, 559 corpus scripts):
+        // `import com.sap.gateway.ip.core.customdev.util.Message` +
+        // `def Message processData(Message message)`. Resolved to the OIW
+        // compat shim compiled into this bridge (no SAP jars needed).
+        "com.sap.gateway.ip.core.customdev.util.Message"
     );
 
     // Disallowed receivers (method call targets)
@@ -136,16 +141,28 @@ public class GroovyRunner {
                 return;
             }
 
-            // Build the binding (message context)
+            // Build the binding (message context) — BOTH dialects:
+            //  - OIW binding dialect: body/bodyBytes/headers/properties
+            //  - SAP Message API (tenant corpus dialect): a `message`
+            //    binding of the compat shim class; scripts call
+            //    processData(message) or use it directly.
             Binding binding = new Binding();
+            com.sap.gateway.ip.core.customdev.util.Message sapMessage = null;
             if (message != null) {
                 String bodyB64 = (String) message.get("body");
                 byte[] bodyBytes = bodyB64 != null ? Base64.getDecoder().decode(bodyB64) : new byte[0];
-                binding.setProperty("body", new String(bodyBytes, StandardCharsets.UTF_8));
+                String bodyStr = new String(bodyBytes, StandardCharsets.UTF_8);
+                binding.setProperty("body", bodyStr);
                 binding.setProperty("bodyBytes", bodyBytes);
-                binding.setProperty("headers", message.getOrDefault("headers", new HashMap<>()));
-                binding.setProperty("properties", message.getOrDefault("properties", new HashMap<>()));
+                @SuppressWarnings("unchecked")
+                Map<String, Object> inHeaders = (Map<String, Object>) message.getOrDefault("headers", new HashMap<>());
+                @SuppressWarnings("unchecked")
+                Map<String, Object> inProps = (Map<String, Object>) message.getOrDefault("properties", new HashMap<>());
+                binding.setProperty("headers", inHeaders);
+                binding.setProperty("properties", inProps);
                 binding.setProperty("contentType", message.getOrDefault("contentType", "application/octet-stream"));
+                sapMessage = new com.sap.gateway.ip.core.customdev.util.Message(bodyStr, inHeaders, inProps);
+                binding.setProperty("message", sapMessage);
             }
 
             // Create sandboxed Groovy shell
@@ -153,10 +170,37 @@ public class GroovyRunner {
             GroovyClassLoader classLoader = new GroovyClassLoader(GroovyRunner.class.getClassLoader(), config);
             GroovyShell shell = new GroovyShell(classLoader, binding, config);
 
-            // Execute with timeout
+            // Execute with timeout. Both dialects share ONE set of maps:
+            // the binding's headers/properties maps are the SAME objects as
+            // the message shim's, so bare map mutation and the SAP API
+            // mutate the same state.
+            // SAP CALLING CONVENTION (tenant ground truth): scripts define
+            // `def Message processData(Message message)` and the runtime
+            // CALLS it — they never self-invoke. When the raw evaluation
+            // returns a non-Message and a processData method exists on the
+            // script's meta class, call it with the message shim.
             long timeout = timeoutMs != null ? timeoutMs.longValue() : 30000L;
             ExecutorService executor = Executors.newSingleThreadExecutor();
-            Future<Object> future = executor.submit(() -> shell.evaluate(script));
+            final com.sap.gateway.ip.core.customdev.util.Message sapMsg = sapMessage;
+            Future<Object> future = executor.submit(() -> {
+                // Parse as a Script so processData (if defined) is callable
+                // on the script instance — SAP's calling convention.
+                groovy.lang.Script parsed = shell.parse(script);
+                Object raw = parsed.run();
+                if (raw instanceof com.sap.gateway.ip.core.customdev.util.Message) {
+                    return raw;
+                }
+                if (sapMsg != null && !parsed.getMetaClass().respondsTo(
+                        parsed, "processData",
+                        new Class[]{com.sap.gateway.ip.core.customdev.util.Message.class}).isEmpty()) {
+                    Object invoked = parsed.getMetaClass().invokeMethod(
+                        parsed, "processData", new Object[]{sapMsg});
+                    if (invoked instanceof com.sap.gateway.ip.core.customdev.util.Message) {
+                        return invoked;
+                    }
+                }
+                return raw;
+            });
 
             Object result;
             try {
@@ -176,7 +220,40 @@ public class GroovyRunner {
 
             // Build output message from the binding (the script may have modified headers/properties/body)
             Map<String, Object> outputMessage = new HashMap<>();
-            String bodyStr = (String) binding.getProperty("body");
+            // SAP-dialect read-back, in precedence order:
+            //   1. the script's RETURN VALUE when it is the Message shim
+            //      (`def Message processData(...)` + `return message` — the
+            //      local param shadows the binding, so the RESULT object is
+            //      the one carrying the state);
+            //   2. the binding's message shim (scripts that mutate without
+            //      returning — same object as passed in);
+            //   3. plain binding maps (raw binding-dialect scripts).
+            com.sap.gateway.ip.core.customdev.util.Message outSap = null;
+            if (result instanceof com.sap.gateway.ip.core.customdev.util.Message rm) {
+                outSap = rm;
+            } else {
+                Object mv = binding.getVariables().get("message");
+                if (mv instanceof com.sap.gateway.ip.core.customdev.util.Message bm) {
+                    outSap = bm;
+                }
+            }
+            String bodyStr;
+            Map<String, Object> outHeaders;
+            Map<String, Object> outProperties;
+            if (outSap != null) {
+                Object b = outSap.getBody();
+                bodyStr = b != null ? String.valueOf(b) : null;
+                outHeaders = outSap.getHeaders();
+                outProperties = outSap.getProperties();
+            } else {
+                bodyStr = (String) binding.getProperty("body");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> h = (Map<String, Object>) binding.getVariable("headers");
+                @SuppressWarnings("unchecked")
+                Map<String, Object> p = (Map<String, Object>) binding.getVariable("properties");
+                outHeaders = h;
+                outProperties = p;
+            }
             if (bodyStr != null) {
                 outputMessage.put("body", Base64.getEncoder().encodeToString(bodyStr.getBytes(StandardCharsets.UTF_8)));
             } else {
@@ -185,11 +262,6 @@ public class GroovyRunner {
                     outputMessage.put("body", Base64.getEncoder().encodeToString(bodyB));
                 }
             }
-            // Extract headers and properties from the binding variables (not binding.getProperty which returns all)
-            @SuppressWarnings("unchecked")
-            Map<String, Object> outHeaders = (Map<String, Object>) binding.getVariable("headers");
-            @SuppressWarnings("unchecked")
-            Map<String, Object> outProperties = (Map<String, Object>) binding.getVariable("properties");
             outputMessage.put("headers", outHeaders != null ? outHeaders : new HashMap<>());
             outputMessage.put("properties", outProperties != null ? outProperties : new HashMap<>());
             outputMessage.put("contentType", binding.getVariable("contentType"));

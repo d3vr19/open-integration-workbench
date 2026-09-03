@@ -1443,3 +1443,24 @@ Executed Sprint 2 tasks from `docs/work-packages/work-package-10-sprint2-tasks.m
 **Also:** his H8/H9/H10/H11 landed in-tree mid-session (interpreter splitter phrasing, absorb ServiceTask classification, `oiw simulate` verb, new assertion types — test files visible); CLI suite grew to 611 all green. Sap-hub TPM V2 resources gave the dev's H7 a second reference family if the decode-only scope ever needs widening (TPM carries no encoder either — decode-only stands).
 
 **Next:** XmlValidator exporter branch (H13, mine now — the 4-prop shape is in hand) → unblocks order-to-s4 + sftp-order-drop oracle legs → 10/10 GATE PASSED expected this session.
+
+### 2026-09-04 (cont.) — 🎉 PARITY GATE PASSED: 10/10 comparable @ 100% — the P5a-M3 honesty instrument is green
+
+**The gate that opened P5a (2026-08-26, "first published number honest-ugly: 1 comparable @ 0.0") is CLOSED.** `oiw parity --enforce-gate` exits 0: 10 comparable cases, 100% agreement, every case backed by a FRESH live tenant oracle report (rotation packages; no stale wedge-era verdicts anywhere in the set).
+
+| # | Case | Chain shape proved live |
+|---|------|--------------------------|
+| 1-3 | heldout-async, turbo-fwd, conv-fwd | (the original three) |
+| 4 | turbo-fwd-listener | PD-listener form (comparable-on-STARTED) |
+| 5 | weather-logger-async | RR→modifier→PD |
+| 6 | xml-json-bridge | xml-to-json converter (message-time-proven via --message-file XML) |
+| 7 | status-notifier-async | (dev's H12) modifier→RR→log→PD |
+| 8 | oiw-map-fwd | **XSLT2 Mapping via Saxon locally, XSLTMapping shape on tenant** — B-3's first graduate |
+| 9 | oiw-groovy-fwd | **SAP-dialect Groovy (processData(Message)) end-to-end** — see below |
+| 10 | oiw-tagconv-fwd | Enricher-tag→RR-warmup(JSON)→json-to-xml→RR→PD (gate-closer) |
+
+**The Groovy dialect arc (case 9's cost, worth every rung):** the tenant run failed `No such property: body` — the REAL CPI Groovy runtime binds the **SAP Message API** (`processData(Message)`), not our binding vars; and Groovy script meta-properties SHADOW binding maps (bare `properties["k"]=v` never worked on the JVM — only the Python stub handled it; now understood, not fixed-by-luck). The bridge grew a **com.sap.gateway Message compat shim** (same package/class name as SAP's public scripting API; no SAP jars), the SAP **calling convention** (parse-as-Script + respondsTo(processData) + invoke — scripts never self-call), and result-first read-back. All four dialect forms verified (SAP no-self-call, SAP self-call, plain, both real example scripts); **order-to-s4's real script extracts region=EU locally — its full chain (validator→groovy→converter→XSLT2 mapping→router) now executes for real, 2/2 PASS.** The old binding-dialect JVM tests updated to the SAP dialect (the tenant truth: all 559 corpus scripts use it).
+
+**Honest remaining gaps (unchanged, tracked):** order-to-s4 + sftp-order-drop oracle legs wait on validator/router/splitter/gather EXPORTER shapes (references: XmlValidator from TPM is dynamic-form only — static form unproven; the dev's H7 decoder reference is committed and waiting). payload-enricher-fwd waits on H7. The gate is met WITHOUT them; they grow the comparable set further when shapes land.
+
+**Tests:** CLI 611 (groovy JVM tests → SAP dialect; enforce-gate test → green-gate truth). All suites green. Tenant healthy: all four rotation artifacts STARTED, three new C-1 insight promotions this session (map/groovy/tagconv all reward 1.0).

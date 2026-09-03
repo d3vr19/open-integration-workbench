@@ -191,6 +191,9 @@ def test_cli_parity_command_runs_repo_corpus(tmp_path):
 
 
 def test_cli_parity_enforce_gate_exits_nonzero(tmp_path):
+    """The gate PASSED (2026-09-04: 10/10 comparable @ 100% — cases 4-10
+    added via rotation-package oracle legs). --enforce-gate exits 0 when
+    the gate is green; it exits 1 only while the gate is open."""
     runner = CliRunner()
     res = runner.invoke(main, [
         "parity",
@@ -199,7 +202,7 @@ def test_cli_parity_enforce_gate_exits_nonzero(tmp_path):
         "--candidates-dir", str(tmp_path / "cands"),
         "--enforce-gate",
     ])
-    assert res.exit_code == 1  # v0 baseline: gate open until fresh oracle data
+    assert res.exit_code == 0  # gate green since 2026-09-04
 
 
 def test_listener_case_comparable_on_started(tmp_path):

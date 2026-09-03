@@ -71,7 +71,17 @@ def _make_ctx(body: bytes = b"{}", headers: dict | None = None) -> MessageContex
 
 # Test 1: Header set
 def test_groovy_sets_header(plugin) -> None:
-    script = 'headers["X-Test"] = "hello from groovy"'
+    # SAP Message API dialect (tenant corpus ground truth; the JVM bridge's
+    # canonical dialect — bare `headers["k"]=v` never reached the binding,
+    # a live finding 2026-09-04: Groovy script meta-properties shadow
+    # binding vars).
+    script = (
+        "import com.sap.gateway.ip.core.customdev.util.Message\n"
+        "def Message processData(Message message) {\n"
+        '    message.setHeader("X-Test", "hello from groovy")\n'
+        "    return message\n"
+        "}"
+    )
     node = _make_node(script)
     ctx = _make_ctx()
     result = plugin.execute(node, ctx, mocks={})
@@ -83,12 +93,17 @@ def test_groovy_sets_header(plugin) -> None:
 # Test 2: Body transform
 def test_groovy_transforms_body(plugin) -> None:
     script = """
+import com.sap.gateway.ip.core.customdev.util.Message
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
-def json = new JsonSlurper().parseText(body)
-json.processed = true
-body = JsonOutput.toJson(json)
+def Message processData(Message message) {
+    def body = message.getBody(java.lang.String) as String
+    def json = new JsonSlurper().parseText(body)
+    json.processed = true
+    message.setBody(JsonOutput.toJson(json))
+    return message
+}
 """
     node = _make_node(script)
     ctx = _make_ctx(b'{"orderId":"ORD-001"}')
