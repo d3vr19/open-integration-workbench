@@ -62,7 +62,7 @@ Phases 0–3 are substantially complete. WP-08 (Productize the Learning Loop) is
 
 **Phase 2 — Visual Workbench** (SUBSTANTIALLY COMPLETE):
 - REST API (FastAPI prototype, OpenAPI 3.1 spec)
-- React 19 + React Flow 12 SPA with dark theme
+- React 19 + React Flow 11 SPA with dark theme
 - Drag-and-drop node creation from palette
 - Editable properties panel (inline config editing)
 - Monaco editor for Groovy/XSLT/JSON Schema resources
@@ -78,7 +78,7 @@ Phases 0–3 are substantially complete. WP-08 (Productize the Learning Loop) is
 - POST `/agents:plan` and POST `/agents:implement` endpoints
 - **WP-04 complete**: LLM-driven agent pipeline (Tasks 1-7), trajectory recorder (Task 4), baseRevision enforcement (Task 6), agent evaluation harness (Task 8), co-pilot UI panel (Task 9)
 
-**WP-08 — Productize the Learning Loop** (IN PROGRESS — PR-1 through PR-8 done; **Track D GATE PASSED → UI authorized**):
+**WP-08 — Productize the Learning Loop** (IN PROGRESS — PR-1 through PR-8, PR-10 done; **Track D GATE PASSED → UI authorized**):
 - **Durable EMG substrate (PR-1/A-001)**: `JsonlEmgStore` persists insights + task nodes + edges + manifest to `.oiw/emg/{manifest.yaml, insights.jsonl, tasks.jsonl, edges.jsonl}` with atomic writes. Manifest stamps `{backend, model, dim}`. Dim-mismatch protection (vectors from a different backend/dim are skipped, never mixed). Survives process restart.
 - **CLI + server wiring (PR-3/A-003)**: `oiw emg status` (with `--json`) + `oiw emg reindex` (idempotent). FastAPI server loads persisted store on startup; all 3 EMG routes read from the durable store, fall back to in-memory test dict when not available. `/emg/stats` surfaces `embeddingBackend`/`embeddingModel`/`embeddingDim`/`storePath`/`compatible`.
 - **Promotion persists (PR-3/A-004)**: `promote_seed_corpus(durable_store=..., persist=True)` writes PROJECT_APPROVED insights + their task nodes to the durable store. Backward-compatible.
@@ -87,18 +87,17 @@ Phases 0–3 are substantially complete. WP-08 (Productize the Learning Loop) is
 - **CodeJam corpus (PR-6/B-001+B-002+B-003)**: `scripts/ingest_codejam.py` walks the cloned SAP-samples CodeJam repo, finds ZIPs containing iFlows, parses each with the fixed parser, redacts, persists to `packages/seed-corpus/artifacts/codejam-*` + durable EMG store. 7 distinct iFlows ingested. Retrieval proof at `docs/emg/wp08-codejam-retrieval.yaml` — paraphrase retrieves at 0.61 similarity; unrelated SFTP requirement correctly retrieves nothing.
 - **EmbeddingGemma-300m backend (PR-2/A-002)**: `GemmaEmbedder` (sentence-transformers + google/embeddinggemma-300m with Matryoshka dim truncation). Falls back to a deterministic hash-based pseudo-embedding when `sentence-transformers` is not installed — never crashes the caller. `create_embedder("auto"|"gemma"|"fastembed"|"openai"|"tfidf")` factory with auto-select chain. Install with `pip install 'oiw[embeddings]'`. CI stays on TF-IDF per WP-08 §10.
 - **Tenant read-only adapter (Track 0)**: real `SapCiTenantAdapter` (~280 lines) replacing the NotImplementedError stub. HTTP Basic auth against `/api/v1`. `connect`, `list_packages`, `list_artifacts`, `download_artifact`, `get_artifact_version`, `get_artifact_digest`. Write ops stay NotImplementedError per WP-08 §C-004. `oiw tenant ping|list|artifacts|pull` CLI commands work end-to-end against a live BTP tenant.
-- **Held-out proof PASSED (PR-8/Track D — THE GATE)**: Created `examples/held-out-order-async/` (NOT in CodeJam/tenant corpus). Ran the agent `--no-emg` (baseline: 0 plan steps, no EMG) vs `--emg` (3 plan steps, mechanics-first hit — EMG retrieved a CodeJam insight at confidence 0.35, LLM NOT needed). All 4 WP-08 D-003 pass criteria met: (1) real provenance (sap-codejam), (2) similarity 0.35 ≥ 0.3 threshold, (3) measurably better (mechanics-first hit + plan steps 0→3), (4) held-out not in store. Proof at `docs/emg/wp08-held-out-proof.yaml`. **UI work (PR-10/Track E) is now authorized.**
+- **Held-out proof PASSED (PR-8/Track D — THE GATE)**: Created `examples/held-out-order-async/` (NOT in CodeJam/tenant corpus). Ran the agent `--no-emg` (baseline: 0 plan steps, no EMG) vs `--emg` (3 plan steps, mechanics-first hit — EMG retrieved a CodeJam insight at confidence 0.35, LLM NOT needed). All 4 WP-08 D-003 pass criteria met: (1) real provenance (sap-codejam), (2) similarity 0.35 ≥ 0.3 threshold, (3) measurably better (mechanics-first hit + plan steps 0→3), (4) held-out not in store. Proof at `docs/emg/wp08-held-out-proof.yaml`.
+- **Truthful EMG UI (PR-10/Track E, OW-032, commit `bde8b85`)**: UI reads persisted store end-to-end; ⚡ badge and honesty chips driven by server truth; Playwright tests in CI (`e2e.yaml`, OW-026) assert UI == API truth.
 
 ### What's not yet implemented
 
 - **WP-08 PR-9 / Track D-004** (OW-031): optional tenant deploy of held-out package. Requires implementing `upload_package`/`deploy` (currently NotImplementedError per WP-08 §C-004).
-- **WP-08 PR-10 / Track E** (OW-032): UI reads persisted store. Infrastructure ready (server loads store on startup, `/emg/stats` surfaces real counts + backend/dim/path); UI components themselves untouched. **Now authorized** — the Track D gate has passed.
 - **WP-08 PR-2 follow-up** (OW-033): install EmbeddingGemma-300m in dev/tenant environments. The pseudo-embedding fallback (DEV-026) must be replaced with real Gemma in any environment doing real learning.
 - **Phase 4 write path**: deployment state machine, drift detection (OW-005 — read-only adapter is done; write path deferred).
 - **Phase 6**: additional adapters (JMS, SuccessFactors, ProcessDirect); SOAP/OData/IDoc/Mail receivers already simulated.
 - Kotlin/Spring Boot migration (currently Python prototypes with documented ADRs)
 - JVM process-isolated runtime worker (security-critical for untrusted Groovy)
-- Playwright E2E in CI (OW-026 — tests pass locally, not yet wired into GitHub Actions)
 - OPA/Rego wired into CLI (runs in CI only)
 
 ## Quick start

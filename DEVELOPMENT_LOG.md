@@ -1062,3 +1062,27 @@ The EMG experience plan (Phases 1–2) executed live:
 **Task scope (honest — nothing new was built):** A-001 docs truth sweep (README stack-table drift: Vite 8 vs "Vite 6", `reactflow ^11` vs "React Flow 12", and the stale "Playwright E2E not yet in CI" claim — `e2e.yaml` runs both specs); A-002 generated TS API client (OW-015); A-003 `App.tsx` decomposition series (OW-029; 569-line god component → layout-only, per-panel states, optimistic single-PATCH save per WP-08 E-002); Track B trace viewer v1.5 (canvas badges → inspector, replay/step-through, MPL comparison — the latter gated on a backend read-only calibration route, `api-request` to be filed); Track C Playwright journey growth toward OW-012's 10 (asserting UI == API truth, never hardcoded counts). Track D (experiment-engine views) explicitly GATED on B2 landing.
 
 **No code, no schema, no CI changes.** All existing suites untouched and unaffected.
+
+---
+
+### 2026-09-03 (cont.) — WP-09 PR-1 / Task A-001: Documentation truth sweep
+
+**Branch:** `feature/wp09-a-001`  
+**Scope:** `apps/web/README.md`, `README.md` (zero code changes).
+
+**Delivered:**
+- **Stack table alignment (`apps/web/README.md`)**:
+  - Vite: 6 → 8 (`vite ^8.2.0`).
+  - Graph canvas: aligned to code truth `React Flow 11` (`reactflow ^11.11.4`).
+  - State management: clarified `React hooks, no Zustand (Zustand planned for A-003)`.
+  - Implemented / Not yet implemented: moved OW-026 Playwright E2E in CI out of "not yet implemented" into implemented (wired via `.github/workflows/e2e.yaml`). Added note for truthful EMG panel (OW-032 / WP-08 PR-10).
+- **Root README alignment (`README.md`)**:
+  - Aligned Phase 2 visual workbench line to React Flow 11.
+  - Recorded PR-10 completion (commit `bde8b85`, OW-032 truthful EMG UI) under WP-08.
+  - Removed stale items from "What's not yet implemented": OW-032 (persisted store UI) and OW-026 (Playwright E2E in CI).
+- **Verification:**
+  - Bootstrap completed with fixture copy in `/tmp/oiw-ui-workspace/order-to-s4`.
+  - `npx tsc -p tsconfig.app.json --noEmit` clean.
+  - `npm run lint` clean (oxlint).
+  - `npm run build` clean (vite build).
+  - `npx playwright test` 4/4 passing (copilot + emg-insights).
