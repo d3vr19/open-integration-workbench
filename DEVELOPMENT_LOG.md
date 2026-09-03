@@ -1225,3 +1225,22 @@ The EMG experience plan (Phases 1–2) executed live:
 **Tests:** CLI 563 (+9: predicates 2, law-check consumers 5, assembler-registry union 2). All suites green. Ruff clean. No tenant touched; no CI changes.
 
 **Next:** first LIVE campaign on a scratch artifact (operator + cool-down budget) to emit a law end-to-end from a real tenant; then parity cases toward the ≥10 gate — each campaign's green baseline adds a case.
+
+---
+
+### 2026-09-03 — B2 LIVE CAMPAIGN #1: the flywheel's first autonomous turn (laws learned end-to-end)
+
+**The B2 engine ran its first live campaign and closed its loop alone:** clone → ladder → 7 paced oracle deploys (baseline + 6 single-variable rungs) → verdicts → law derivation → operator ratify → enforced in `oiw validate`. The conv1–conv10 law that cost a manual 10-rung bisection in September's Phase 3 was **re-derived live by the machine** (r4: converter@pos0 RED, r5/r6: converter@pos2/3 GREEN → predicate `requires-position-after` red=[0] green=[2,3]), plus a NEW law the hand-era never isolated: the **RR-warmup must sit immediately before the converter** (warmup@pos1 GREEN, @pos2/3 RED — message 500 when the converter is un-fed). Campaign record: `docs/emg/experiments/exp-48bbffff92.yaml`; registry: `packages/law-registry/tenant-laws.yaml` (both laws RATIFIED, evidence-attached; the warmup law operator-refined to pair-scope — its measured red/green was about the warmup-converter relation, not receiver.http generally).
+
+**The campaign cost 4 attempts — each a live lesson banked as code:**
+
+1. **Package-nav wedge (gateway law):** after bursts of keyed reads, `/IntegrationPackages('X')*` (keyed + nav) 404s for a cooldown window while set-level reads stay 200; other packages unaffected. `list_artifacts` now sends `$format=json` + nav via the `__metadata`-style URL; the write path gained `_resolve_target_with_fallback` (probes the pinned artifact's `(Id,Version)` directly — a healthy namespace; $value downloads kept working all along); calibrate's collision preflight degrades LOUDLY (report note) instead of aborting.
+2. **Entrypoint-collision caught mid-campaign (baseline RED):** attempt-2's baseline deployed ERROR — the clone carried `/oiw_turbo_fwd`, colliding with the RUNNING oiw_turbo_fwd artifact (the preflight had been skipped by the wedge). Two hardenings: runner now ABORTS on a red baseline (never deploys rungs onto a broken chain — attempt 2 spared the tenant 6 pointless deploys), and per-rung record persistence (`on_rung` hook — a killed/interrupted run leaves a complete partial record; attempt-2's record lagged reality and cost a debugging session).
+3. **PD-pair addressing:** the clone also inherited `/oiw-conv-fwd_pd` while the live listener consumes `/turbo-conv_pd` ('No consumers available on endpoint' at message time). Baseline cloning must mirror the live pair's entrypoint path AND PD address.
+4. **CSRF-token expiry across cool-downs (the big one):** attempt-3/4 rungs all "RED" — actually 403 `x-csrf-token missing`: tokens+`__Host-csrf-client-id` cookie expire during 420s sleeps; AND the first retry replayed the STALE headers (refetch fired, replay still 403'd). Fixes: `_write_with_csrf_retry` (refetch + REBUILD headers via `_fresh_headers` — never replay a baked token) on upload+deploy; and the runner now treats transport/policy failures as ABORT-not-RED (a 403 is not a verdict — counting them RED would poison law derivation with fake flips; regression-tested).
+
+**Also:** rung evidence now stamps `targetType` (laws scope on component types, not node ids); `oiw tenant calibrate --project .` update-mode verified green twice during the session (reward 1.0, STARTED, message 200, MPL COMPLETED; two C-1 insight promotions). Tenant left healthy: oiw-conv-main STARTED running the canonical chain (last restore = the campaign's final green state, identical to its original content).
+
+**Tests:** CLI 563 → 567 (+4: red-baseline abort, per-rung persistence, transport-abort-not-verdict, CSRF retry-with-fresh-headers). All suites green; ruff clean. No CI changes.
+
+**Next:** the wedge + CSRF laws make long campaigns viable — a Mapping-breadth campaign (script-resource bundling first) is the natural next turn; each future campaign's green baseline adds a parity case toward the ≥10 gate.

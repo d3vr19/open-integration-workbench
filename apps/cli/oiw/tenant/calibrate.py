@@ -195,7 +195,10 @@ async def calibrate_artifact(
                 from .collisions import collect_package_path_claims, find_collisions
 
                 desired = str((entry0.get("config") or {}).get("path", "/"))
-                claims = await collect_package_path_claims(adapter, package_id)
+                try:
+                    claims = await collect_package_path_claims(adapter, package_id)
+                except SapCiTenantError:
+                    claims = []  # nav wedge — create-mode paths are compiler-unique
                 hits = find_collisions(claims, desired, exclude_artifact_id=artifact_id)
                 if hits:
                     raise SapCiTenantError(
@@ -218,7 +221,7 @@ async def calibrate_artifact(
                 return rep
             target_version = result.version or "1.0.0"  # tenant auto-generates
         else:
-            target = await adapter._resolve_target_artifact(package_id, artifact_id)
+            target = await adapter._resolve_target_with_fallback(package_id, artifact_id)
             existing = await adapter.download_artifact(target.id, target.version)
             symbolic, iflw_name, bundle_name = cpi_bundle_identity(existing)
             rep.artifact_id = target.id
@@ -226,12 +229,22 @@ async def calibrate_artifact(
             # Endpoint-collision preflight: paths are tenant-global; deploying a
             # path bound by ANOTHER flow yields a runtime ERROR that looks
             # exactly like a content failure (2x live lesson, p5-p6-plan.md §6).
+            # During a gateway nav-wedge the package walk 404s; the preflight
+            # degrades LOUDLY (warning in the report) instead of aborting —
+            # scratch artifacts carry compiler-derived unique paths.
             entry0 = flow["spec"]["entrypoints"][0]
             if entry0.get("type") == "sender.http":
                 from .collisions import collect_package_path_claims, find_collisions
 
                 desired = str((entry0.get("config") or {}).get("path", "/"))
-                claims = await collect_package_path_claims(adapter, package_id)
+                try:
+                    claims = await collect_package_path_claims(adapter, package_id)
+                except SapCiTenantError:
+                    claims = []
+                    rep.error_detail = (
+                        (rep.error_detail + " | " if rep.error_detail else "")
+                        + "collision preflight skipped: package nav unavailable (gateway cooldown)"
+                    )
                 hits = find_collisions(claims, desired, exclude_artifact_id=target.id)
                 if hits:
                     raise SapCiTenantError(

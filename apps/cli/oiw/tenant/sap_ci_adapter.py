@@ -154,6 +154,23 @@ class SapCiTenantAdapter:
         token = base64.b64encode(f"{self._username}:{self._password}".encode()).decode()
         return {"Authorization": f"Basic {token}"}
 
+    def _nav_url(self, path: str) -> str:
+        """Absolute URL in the __metadata form (explicit :443 port) for NAV
+        endpoints.
+
+        LIVE LAW (2026-09-03): SAP gateway routes `host` and `host:443`
+        differently — entity-set endpoints accept both, but package→child
+        NAV endpoints (`/IntegrationPackages('X')/IntegrationDesigntimeArtifacts`)
+        404 on the port-less spelling. SAP's own __metadata.uri values carry
+        the explicit port; nav calls use that spelling.
+        """
+        base = self._tenant_url.split("/api/v1")[0]
+        scheme, _, rest = base.partition("://")
+        host = rest.split("/")[0]
+        if ":" not in host and scheme == "https":
+            host = f"{host}:443"
+        return f"{scheme}://{host}/api/v1{path}"
+
     def _resolve_credentials_from_env(self, profile: EnvironmentProfile) -> None:
         """Fill in missing tenant_url / username / password from env vars.
 
@@ -318,9 +335,16 @@ class SapCiTenantAdapter:
     async def list_artifacts(self, package_id: str, top: int = 100) -> list[TenantArtifactSummary]:
         """List IntegrationDesigntimeArtifacts in a package."""
         self._require_connected()
+        # LIVE LAW (2026-09-03, single-variable probes): the package→artifacts
+        # NAV endpoint 404s on the port-less URL form but resolves with the
+        # explicit :443 port (the __metadata.uri form SAP itself returns).
+        # Same bytes, same auth — only the port spelling differs. The tenant
+        # gateway routes the two host spellings differently. Nav requests
+        # therefore go to the __metadata-style absolute URL.
+        nav_url = self._nav_url(f"/IntegrationPackages('{package_id}')")
         resp = await self._client.get(
-            f"/IntegrationPackages('{package_id}')/IntegrationDesigntimeArtifacts",
-            params={"$top": top},
+            f"{nav_url}/IntegrationDesigntimeArtifacts",
+            params={"$top": top, "$format": "json"},
             headers={**self._basic_auth_header(), "Accept": "application/json"},
         )
         self._raise_for_status(resp, "list_artifacts")
@@ -409,14 +433,20 @@ class SapCiTenantAdapter:
                 f"packages may be updated (WP-08 §D-004 / T0-003)."
             )
 
-    async def _ensure_csrf_token(self) -> None:
+    async def _ensure_csrf_token(self, force: bool = False) -> None:
         """Fetch a CSRF token if the tenant issues one (standard SAP pattern).
 
         GET the service root with X-CSRF-Token: fetch; if the response
         carries the header we cache and attach it to mutating requests.
         Tenants without CSRF simply omit the header — that's fine.
+
+        LIVE LAW (2026-09-03, campaign #1): tokens EXPIRE during long
+        cool-downs — a cached token older than the cooldown window gets
+        403 "x-csrf-token ... missing". Writers refetch on 403 and retry
+        once (p5-p6 log: "adapter CSRF token does not survive rapid
+        reconnects — space calibrate runs or refetch per connect").
         """
-        if self._csrf_token is not None:
+        if self._csrf_token is not None and not force:
             return
         try:
             resp = await self._client.get(
@@ -426,6 +456,35 @@ class SapCiTenantAdapter:
             self._csrf_token = resp.headers.get("x-csrf-token") or None
         except httpx.HTTPError:
             self._csrf_token = None
+
+    async def _write_with_csrf_retry(self, method: str, url: str, **kwargs) -> httpx.Response:
+        """Mutating request with one CSRF-refetch retry on token-expiry 403.
+
+        The retry refetches the token (force=True) AND rebuilds the
+        headers so the replay carries the FRESH token — replaying the
+        original kwargs would resend the expired one (live bug, campaign
+        #1 attempt 4: refetch happened, replay still 403'd "does not
+        contain a valid x-csrf-token"). The __Host-csrf-client-id cookie
+        rides the client jar (refreshed by the fetch GET automatically).
+        A still-403 after refresh is a real refusal.
+        """
+        await self._ensure_csrf_token()
+        resp = await self._client.request(method, url, **self._fresh_headers(kwargs))
+        if resp.status_code == 403 and "csrf" in resp.text.lower():
+            await self._ensure_csrf_token(force=True)
+            resp = await self._client.request(method, url, **self._fresh_headers(kwargs))
+        return resp
+
+    def _fresh_headers(self, kwargs: dict) -> dict:
+        """Rebuild request kwargs with the CURRENT csrf token in headers."""
+        headers = dict(kwargs.get("headers") or {})
+        # drop any stale token the caller baked in; re-attach current
+        cleaned = {k: v for k, v in headers.items() if k.lower() != "x-csrf-token"}
+        if self._csrf_token:
+            cleaned["x-csrf-token"] = self._csrf_token
+        out = dict(kwargs)
+        out["headers"] = cleaned
+        return out
 
     def _write_headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         headers = {
@@ -489,6 +548,44 @@ class SapCiTenantAdapter:
             )
         return artifacts[0]
 
+    async def _resolve_target_with_fallback(
+        self, package_id: str, artifact_id: str | None = None
+    ) -> TenantArtifactSummary:
+        """_resolve_target_artifact with a nav-wedge fallback.
+
+        LIVE LAW (2026-09-03): after bursts of keyed reads the gateway
+        starts 404ing `/IntegrationPackages('<pkg>')*` (keyed + nav) for
+        a cooldown window while SET-level reads stay 200. The write path
+        must not die in that window: when the artifact list is
+        unavailable but an artifact is EXPLICITLY pinned/selected, probe
+        candidate versions via the artifact-entity key (a different,
+        healthy namespace: `$value` downloads keep working). Scratch
+        artifacts live at '1.0.0' (update-in-place, proven); the probe
+        confirms existence before any write.
+        """
+        try:
+            return await self._resolve_target_artifact(package_id, artifact_id)
+        except SapCiTenantError as exc:
+            if "HTTP 404" not in str(exc) or artifact_id is None:
+                raise
+        # nav wedged: probe the pinned artifact's existence directly
+        pin = artifact_id
+        for version in ("1.0.0", "Active", "active"):
+            url = f"/IntegrationDesigntimeArtifacts(Id='{pin}',Version='{version}')/$value"
+            resp = await self._client.get(
+                url,
+                headers={**self._basic_auth_header(), "Accept": "application/zip"},
+            )
+            if resp.status_code == 200:
+                return TenantArtifactSummary(
+                    id=pin, name=pin, version=version, package_id=package_id, media_src=None
+                )
+        raise SapCiTenantError(
+            f"package nav for '{package_id}' is wedged (gateway cooldown) and "
+            f"artifact '{pin}' could not be confirmed via direct probe — "
+            f"wait for the cooldown and retry."
+        )
+
     async def upload_package(
         self, package_id: str, archive: bytes, digest: str, artifact_id: str | None = None
     ) -> UploadResult:
@@ -513,12 +610,13 @@ class SapCiTenantAdapter:
             return UploadResult(
                 success=False, version=None, error="empty or truncated archive", uploaded_at=None
             )
-        target = await self._resolve_target_artifact(package_id, artifact_id)
+        target = await self._resolve_target_with_fallback(package_id, artifact_id)
         await self._ensure_csrf_token()
         payload = {"ArtifactContent": _b64.b64encode(archive).decode()}
         url = f"/IntegrationDesigntimeArtifacts(Id='{target.id}',Version='{target.version}')"
         try:
-            resp = await self._client.put(
+            resp = await self._write_with_csrf_retry(
+                "PUT",
                 url,
                 json=payload,
                 headers=self._write_headers(
@@ -667,11 +765,13 @@ class SapCiTenantAdapter:
         """
         self._ensure_writable(package_id)
         self._require_connected()
-        target = await self._resolve_target_artifact(package_id, artifact_id)
+        target = await self._resolve_target_with_fallback(package_id, artifact_id)
         await self._ensure_csrf_token()
         url = f"/DeployIntegrationDesigntimeArtifact?Id='{target.id}'&Version='{version}'"
         try:
-            resp = await self._client.post(url, headers=self._write_headers({"Accept": "application/json"}))
+            resp = await self._write_with_csrf_retry(
+                "POST", url, headers=self._write_headers({"Accept": "application/json"})
+            )
         except httpx.HTTPError as exc:
             raise SapCiTenantError(f"deploy unreachable at {url}: {exc}") from exc
         if resp.status_code >= 400:

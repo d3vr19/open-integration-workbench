@@ -1019,6 +1019,13 @@ def experiment_run(
         project = Project.load(project_path)
         baseline = project.get_flow(record.baseline_flow_id)
         record.status = "running"
+
+        def _persist(_record) -> None:
+            # per-rung persistence: an aborted/interrupted campaign leaves a
+            # complete partial record (live lesson 2026-09-03: a killed run
+            # left 'draft/SKIPPED' while deploys had actually happened)
+            save_record(record, record_path.parent)
+
         runner = ExperimentRunner(
             _oracle,
             ExperimentBudget(
@@ -1029,6 +1036,7 @@ def experiment_run(
             ),
             project_path=project_path,
             artifact_id=artifact_id,
+            on_rung=_persist,
         )
         await runner.run(record, baseline)
 

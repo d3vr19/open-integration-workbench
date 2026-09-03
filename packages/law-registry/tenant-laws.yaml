@@ -1,0 +1,42 @@
+laws:
+- lawId: law-r2-move-rr-fetch-to2
+  statement: "RR-warmup placement (chain with converter.json-to-xml): the warmup RR\
+    \ must sit immediately before the converter (pos 1 GREEN when converter at pos\
+    \ 2); downstream positions (2/3) leave the converter un-fed \u2014 message 500.\
+    \ Scope is the WARMUP-CONVERTER pair, not receiver.http generally."
+  scope: receiver.http#warmup-before-converter
+  kind: move
+  origin: exp-48bbffff92
+  evidence:
+    greenRungs:
+    - r1-move-rr-fetch-to1
+    redRungs:
+    - r2-move-rr-fetch-to2
+    - r3-move-rr-fetch-to3
+  confidence: 1.0
+  status: ratified
+  recordedAt: '2026-09-03T15:59:15.561642+00:00'
+  source: engine
+  predicate: null
+- lawId: law-r4-move-step-1-converter-json-to-xml-to0
+  statement: position of step-1-converter-json-to-xml is load-bearing (moved to 0)
+  scope: converter.json-to-xml
+  kind: move
+  origin: exp-48bbffff92
+  evidence:
+    greenRungs:
+    - r5-move-step-1-converter-json-to-xml-to2
+    redRungs:
+    - r4-move-step-1-converter-json-to-xml-to0
+  confidence: 1.0
+  status: ratified
+  recordedAt: '2026-09-03T15:59:15.561667+00:00'
+  source: engine
+  predicate:
+    type: requires-position-after
+    node: converter.json-to-xml
+    redPositions:
+    - 0
+    greenPositions:
+    - 2
+    - 3

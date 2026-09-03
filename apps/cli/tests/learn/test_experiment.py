@@ -656,3 +656,183 @@ class TestAssemblerRegistryConsumption:
 
         monkeypatch.setenv("OIW_WORKSPACE", str(tmp_path))
         assert registry_placement_laws() == set()
+
+
+class TestRunnerHardening:
+    """Live-lesson regressions (campaign #1, 2026-09-03)."""
+
+    def _base(self) -> IntegrationFlow:
+        return _load_flow(
+            CONV_EXAMPLE / "flows" / "oiw-conv-fwd",
+            CONV_EXAMPLE / "flows" / "oiw-conv-fwd" / "flow.yaml",
+        )
+
+    def test_red_baseline_aborts_without_rung_deploys(self) -> None:
+        """Baseline ERROR → campaign aborts; rungs never deploy (the
+        entrypoint-collision lesson: deploying onto a broken baseline
+        wastes tenant budget and yields no laws)."""
+        import asyncio
+
+        from oiw.experiment.engine import generate_ladder
+
+        calls: list[str] = []
+
+        async def oracle(path, flow, *, artifact_id=None):
+            calls.append(flow.id)
+            return _red_cal_start()  # baseline ERROR
+
+        async def fast_sleep(_s):
+            return None
+
+        record = generate_ladder(self._base(), hypothesis="h", kinds=("drop",), max_rungs=3)
+        runner = ExperimentRunner(
+            oracle,
+            ExperimentBudget(max_rungs=3, cooldown_s=0, unattended=True),
+            project_path=CONV_EXAMPLE,
+            sleep=fast_sleep,
+        )
+        record = asyncio.run(runner.run(record, self._base()))
+        assert record.baseline_verdict == VERDICT_RED
+        assert record.status == "aborted"
+        assert len(calls) == 1, "no rung deploys after a red baseline"
+        assert all(r.verdict == VERDICT_SKIPPED for r in record.rungs)
+
+    def test_on_rung_persists_per_rung(self) -> None:
+        """Every verdict change invokes on_rung (per-rung persistence —
+        the killed-run lesson: record must never lag reality)."""
+        import asyncio
+
+        from oiw.experiment.engine import generate_ladder
+
+        persisted: list[int] = []
+
+        async def oracle(path, flow, *, artifact_id=None):
+            return _green_cal()
+
+        async def fast_sleep(_s):
+            return None
+
+        def on_rung(_record):
+            persisted.append(sum(1 for r in _record.rungs if r.verdict != VERDICT_SKIPPED))
+
+        record = generate_ladder(self._base(), hypothesis="h", kinds=("drop",), max_rungs=2)
+        runner = ExperimentRunner(
+            oracle,
+            ExperimentBudget(max_rungs=2, cooldown_s=0, unattended=True),
+            project_path=CONV_EXAMPLE,
+            sleep=fast_sleep,
+            on_rung=on_rung,
+        )
+        asyncio.run(runner.run(record, self._base()))
+        # baseline call + 2 rung calls = 3 on_rung invocations
+        assert len(persisted) == 3
+        assert persisted == [0, 1, 2]
+
+
+class TestTransportFailureIsNotAVerdict:
+    """Campaign #1 live lesson (2026-09-03): CSRF-expiry 403s were counted
+    as RED verdicts — six fake flips, zero real laws. Transport failures
+    now ABORT the campaign; rungs stay SKIPPED."""
+
+    def _base(self) -> IntegrationFlow:
+        return _load_flow(
+            CONV_EXAMPLE / "flows" / "oiw-conv-fwd",
+            CONV_EXAMPLE / "flows" / "oiw-conv-fwd" / "flow.yaml",
+        )
+
+    def test_rung_transport_error_aborts_campaign(self) -> None:
+        import asyncio
+
+        from oiw.experiment.engine import generate_ladder
+        from oiw.tenant.sap_ci_adapter import SapCiTenantError
+
+        calls: list[int] = []
+
+        async def oracle(path, flow, *, artifact_id=None):
+            calls.append(1)
+            if len(calls) == 1:
+                return _green_cal()  # baseline green
+            raise SapCiTenantError("tenant returned HTTP 403 for upload_package: csrf missing")
+
+        async def fast_sleep(_s):
+            return None
+
+        record = generate_ladder(self._base(), hypothesis="h", kinds=("drop",), max_rungs=3)
+        runner = ExperimentRunner(
+            oracle,
+            ExperimentBudget(max_rungs=3, cooldown_s=0, unattended=True),
+            project_path=CONV_EXAMPLE,
+            sleep=fast_sleep,
+        )
+        record = asyncio.run(runner.run(record, self._base()))
+        assert record.status == "aborted"
+        assert record.baseline_verdict == VERDICT_GREEN
+        assert record.rungs[0].verdict == VERDICT_SKIPPED
+        assert "aborted" in record.rungs[0].rationale
+        assert len(calls) == 2  # baseline + the failed rung, no more
+
+
+class TestCsrfRetry:
+    """Adapter CSRF refetch-retry on token-expiry 403 (campaign #1 lesson)."""
+
+    def test_upload_retries_once_on_csrf_403(self) -> None:
+        import asyncio
+
+        import httpx
+
+        from oiw.tenant.sap_ci_adapter import SapCiTenantAdapter
+
+        attempts = {"n": 0, "csrf_fetches": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET" and request.headers.get("x-csrf-token") == "fetch":
+                attempts["csrf_fetches"] += 1
+                return httpx.Response(200, headers={"x-csrf-token": f"tok{attempts['csrf_fetches']}"})
+            if request.method == "PUT":
+                attempts["n"] += 1
+                if attempts["csrf_fetches"] == 1 and "csrf" not in str(request.headers.get("x-csrf-token", "")):
+                    pass
+                # first PUT carries tok1 -> simulate EXPIRY 403 once
+                if attempts["n"] == 1:
+                    return httpx.Response(
+                        403,
+                        json={"error": {"message": {"value": "The x-csrf-token or __Host cookie is missing"}}},
+                    )
+                return httpx.Response(200, json={})
+            if "IntegrationPackages" in request.url.path:
+                # nav listing: serve the pinned artifact
+                return httpx.Response(
+                    200,
+                    json={"d": {"results": [{"Id": "art", "Name": "art", "Version": "1.0.0"}]}},
+                )
+            if "IntegrationDesigntimeArtifacts(Id=" in request.url.path:
+                return httpx.Response(200, content=b"ZIP")  # fallback probe
+            return httpx.Response(200, json={"d": {"results": []}})
+
+        async def main() -> None:
+            from oiw.environments import AuthConfig
+            from oiw.environments import EnvironmentProfile as EnvProfile
+
+            transport = httpx.MockTransport(handler)
+            adapter = SapCiTenantAdapter(
+                "https://t.example.com/api/v1",
+                "u",
+                "p",
+                client=httpx.AsyncClient(transport=transport, base_url="https://t.example.com/api/v1"),
+                writable_packages=["pkg/art"],
+            )
+            prof = EnvProfile(
+                name="t",
+                target="sap-cloud-integration-2026-07",
+                tenant_url="https://t.example.com/api/v1",
+                auth=AuthConfig(method="basic", credential_ref="x"),
+            )
+            await adapter.connect(prof)
+            result = await adapter.upload_package("pkg", b"ZIPBYTES-1234", "sha256:x", artifact_id="art")
+            await adapter.disconnect()
+            return result
+
+        result = asyncio.run(main())
+        assert result.success, "upload must succeed after one CSRF refetch retry"
+        assert attempts["n"] == 2, "exactly one retry"
+        assert attempts["csrf_fetches"] == 2, "token refetched once"

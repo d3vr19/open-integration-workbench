@@ -1,0 +1,86 @@
+experimentId: exp-48bbffff92
+baselineFlowId: oiw-conv-fwd
+hypothesis: "LIVE CAMPAIGN #1 (2026-09-03): converter placement re-derivation on oiw-conv-main\
+  \ \u2014 corroboration of the conv1-conv10 law against fresh gateway conditions"
+createdAt: '2026-09-03T12:57:59.145045+00:00'
+baselineVerdict: GREEN
+status: complete
+rungs:
+- rungId: r1-move-rr-fetch-to1
+  kind: move
+  target: rr-fetch
+  detail:
+    toPosition: 1
+  rationale: "move node to position 1 \u2014 does placement matter?"
+  verdict: GREEN
+  evidence:
+    finalStatus: STARTED
+    httpResponseStatus: 200
+    mplStatuses:
+    - COMPLETED
+    targetType: receiver.http
+- rungId: r2-move-rr-fetch-to2
+  kind: move
+  target: rr-fetch
+  detail:
+    toPosition: 2
+  rationale: "move node to position 2 \u2014 does placement matter?"
+  verdict: RED
+  evidence:
+    finalStatus: STARTED
+    httpResponseStatus: 500
+    mplStatuses:
+    - FAILED
+    targetType: receiver.http
+- rungId: r3-move-rr-fetch-to3
+  kind: move
+  target: rr-fetch
+  detail:
+    toPosition: 3
+  rationale: "move node to position 3 \u2014 does placement matter?"
+  verdict: RED
+  evidence:
+    finalStatus: STARTED
+    httpResponseStatus: 500
+    mplStatuses:
+    - FAILED
+    targetType: receiver.http
+- rungId: r4-move-step-1-converter-json-to-xml-to0
+  kind: move
+  target: step-1-converter-json-to-xml
+  detail:
+    toPosition: 0
+  rationale: "move node to position 0 \u2014 does placement matter?"
+  verdict: RED
+  evidence:
+    finalStatus: STARTED
+    httpResponseStatus: 500
+    mplStatuses:
+    - FAILED
+    targetType: converter.json-to-xml
+- rungId: r5-move-step-1-converter-json-to-xml-to2
+  kind: move
+  target: step-1-converter-json-to-xml
+  detail:
+    toPosition: 2
+  rationale: "move node to position 2 \u2014 does placement matter?"
+  verdict: GREEN
+  evidence:
+    finalStatus: STARTED
+    httpResponseStatus: 200
+    mplStatuses:
+    - COMPLETED
+    targetType: converter.json-to-xml
+- rungId: r6-move-step-1-converter-json-to-xml-to3
+  kind: move
+  target: step-1-converter-json-to-xml
+  detail:
+    toPosition: 3
+  rationale: "move node to position 3 \u2014 does placement matter?"
+  verdict: GREEN
+  evidence:
+    finalStatus: STARTED
+    httpResponseStatus: 200
+    mplStatuses:
+    - COMPLETED
+    targetType: converter.json-to-xml

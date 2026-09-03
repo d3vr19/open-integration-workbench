@@ -118,6 +118,7 @@ class ExperimentRunner:
         artifact_id: str | None = None,
         piece_provider: dict[str, dict[str, Any]] | None = None,
         sleep: Any = None,
+        on_rung: Any = None,
     ):
         self.oracle = oracle
         self.budget = budget
@@ -126,6 +127,10 @@ class ExperimentRunner:
         self.piece_provider = piece_provider
         self._sleep = sleep or asyncio.sleep  # test seam: instant cool-down
         self._last_deploy_ts: float | None = None
+        # on_rung(record) is called after EVERY state change (baseline + each
+        # rung verdict) so the CLI can persist per-rung — an aborted campaign
+        # leaves a complete partial record, never a silent gap.
+        self.on_rung = on_rung
 
     async def _paced_oracle_call(self, flow: IntegrationFlow) -> dict[str, Any]:
         """One oracle call, honoring the cool-down governor."""
@@ -156,13 +161,25 @@ class ExperimentRunner:
         run = 0
 
         # Baseline first — laws are only derived from a green baseline.
+        # A RED baseline ABORTS the campaign: deploying rungs onto a broken
+        # chain wastes tenant budget and yields no laws (live lesson
+        # 2026-09-03: entrypoint-collision made the baseline ERROR mid-run).
         try:
             cal = await self._paced_oracle_call(baseline_flow)
         except SapCiTenantError:
             record.baseline_verdict = VERDICT_RED
             record.status = "aborted"
+            if self.on_rung:
+                self.on_rung(record)
             return record
         record.baseline_verdict = verdict_from_calibration(cal)
+        if record.baseline_verdict != VERDICT_GREEN:
+            record.status = "aborted"
+            if self.on_rung:
+                self.on_rung(record)
+            return record
+        if self.on_rung:
+            self.on_rung(record)
 
         for rung in record.rungs:
             if run >= self.budget.max_rungs:
@@ -184,13 +201,28 @@ class ExperimentRunner:
             try:
                 cal = await self._paced_oracle_call(variant)
             except SapCiTenantError as exc:
-                rung.verdict = VERDICT_RED
-                rung.evidence = {"error": str(exc)}
-                run += 1
-                continue
+                # LIVE LESSON (campaign #1, 2026-09-03): a transport/policy
+                # failure (CSRF expiry, gateway wedge, allowlist refusal) is
+                # NOT a verdict — counting it RED poisons law derivation with
+                # fake flips. Campaign aborts; rungs stay SKIPPED.
+                rung.verdict = VERDICT_SKIPPED
+                rung.rationale += f" [aborted: {exc}]"
+                record.status = "aborted"
+                if self.on_rung:
+                    self.on_rung(record)
+                return record
             rung.verdict = verdict_from_calibration(cal)
-            rung.evidence = _digest(cal)
+            ev = _digest(cal)
+            # stamp the target's node TYPE: law scoping keys on component
+            # types, not node ids (a law must apply to every converter, not
+            # just this campaign's particular node id)
+            tgt = next((n for n in baseline_flow.nodes if n.id == rung.target), None)
+            if tgt is not None:
+                ev["targetType"] = tgt.type
+            rung.evidence = ev
             run += 1
+            if self.on_rung:
+                self.on_rung(record)
 
         record.status = "complete"
         return record
