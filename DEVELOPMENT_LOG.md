@@ -1326,3 +1326,13 @@ The EMG experience plan (Phases 1–2) executed live:
 **Banked while waiting (wedge-tolerance for the create verb):** `create_artifact`'s id-collision preflight AND version read-back both fell back to artifact-key namespace probes (`(Id,Version)/$value` — healthy during cooldowns) when the package listing 404s; 3 new tenant tests (probe-fallback create, refuse-existing-via-probe, read-back-fallback). CLI 575 → 577.
 
 **Next session opens with:** the two create+calibrate legs for weather-logger-async + xml-json-bridge (wedge should clear overnight; cool-down pacing before), then sftp-order-drop's oracle leg (SFTP-bearing), then parity recount — the gate math: 4 comparable now; +2 lands 6; +sftp lands 7; order-to-s4 stays blocked on XSLT2 (B-2); the last honest miles are H4/H5-unlocked cases + new shapes from Mapping breadth (B-3).
+
+---
+
+### 2026-09-03 (cont. 2) — Sprint-2 task board issued (H7–H12); operator adds 2 scratch packages for throttle rotation
+
+**Operator action:** two fresh scratch packages created on the tenant — **TestOIW** ("Test-OIW") and **OIWtest**, both EDIT_ALLOWED, keyed+nav reads 200 while AdequareGST keyed-routes remain wedged → confirms the throttle is **per-package keyed-route family**. Oracle deployments now rotate across the three scratch packages to circumvent per-package cooldowns. Writable allowlist extended accordingly (env-only).
+
+**Sprint-2 board issued** to the frontend engineer: `docs/work-packages/work-package-10-sprint2-tasks.md` — H7 encoder.base64 exporter shape (START HERE; gated on backend's reference harvest landing in packages/pattern-book/shapes/Encoder-*.yaml — if absent, H8 first), H8 interpreter splitter-phrasing, H9 absorb ExternalCall classification, H10 `oiw simulate` CLI verb, H11 FlowTest assertions (outbound.header.equals + property.contains), H12 rolling parity examples (proven shapes only; NO splitter/gather/xslt/encoder in examples until B-3/H7 merge). Declared partition: H7's sap_export.py changes are ISOLATED (map entry + one elif branch); backend's B-3 Mapping work proceeds in parallel in the same file without touching those lines.
+
+**Backend execution plan locked with operator:** (1) multi-package oracle legs for weather-logger-async → TestOIW, xml-json-bridge → OIWtest → 6/6 comparable; (2) sftp-order-drop leg with the REAL etssftp target + AxisBnk_dev credential (operator-approved, env-externalized) → 7/7; (3) Encoder reference harvest (read-only tenant pull from the corpus's Encoder-bearing flow); (4) B-3 Mapping breadth. Expected: 7/10 comparable @ 100% before B-3's first shape lands.
