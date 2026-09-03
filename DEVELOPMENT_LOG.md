@@ -1050,3 +1050,15 @@ The EMG experience plan (Phases 1–2) executed live:
 **Tests:** CLI 528, Server 91, MCP 20, Gateway 43, Seed corpus 132 — all green. Ruff clean. SPA build + tsc clean.
 
 **Next session opens with**: roadmap handoff block (top of the log), then B2 — the Experiment Engine is the existential deliverable: it converts "smart harness + LLM" into "system that learns", mechanically, with evidence-attached laws.
+
+---
+
+### 2026-09-03 — WP-09 cut: frontend engineering track for the onboarding engineer
+
+**Context:** a frontend engineer is onboarding. Their scope is `apps/web` only; the backend/agent track (B2 Experiment Engine, Phase B piece breadth, parity gate growth) continues in parallel unchanged.
+
+**Shipped:** `docs/work-packages/work-package-9.md` — the full package: ownership matrix (frontend owns `apps/web/**`; server/CLI/compiler/tenant/CI are backend-only; `packages/api-spec/openapi.yaml` is a shared contract edited via `api-request` issues), the collaboration protocol (branch from `origin/main` always — the 2026-08-25 stale-main incident is cited; per-PR check block tsc/oxlint/build/playwright; append-only log law), and the hard safety rules (never point `OIW_WORKSPACE` at repo state near the 602-insight store; never run tenant/emg/agent/deploy verbs; EMG badge + honesty chips are a truthfulness contract protected by the e2e specs; no global-error-banner regressions).
+
+**Task scope (honest — nothing new was built):** A-001 docs truth sweep (README stack-table drift: Vite 8 vs "Vite 6", `reactflow ^11` vs "React Flow 12", and the stale "Playwright E2E not yet in CI" claim — `e2e.yaml` runs both specs); A-002 generated TS API client (OW-015); A-003 `App.tsx` decomposition series (OW-029; 569-line god component → layout-only, per-panel states, optimistic single-PATCH save per WP-08 E-002); Track B trace viewer v1.5 (canvas badges → inspector, replay/step-through, MPL comparison — the latter gated on a backend read-only calibration route, `api-request` to be filed); Track C Playwright journey growth toward OW-012's 10 (asserting UI == API truth, never hardcoded counts). Track D (experiment-engine views) explicitly GATED on B2 landing.
+
+**No code, no schema, no CI changes.** All existing suites untouched and unaffected.
