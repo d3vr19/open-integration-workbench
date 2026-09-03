@@ -1244,3 +1244,20 @@ The EMG experience plan (Phases 1–2) executed live:
 **Tests:** CLI 563 → 567 (+4: red-baseline abort, per-rung persistence, transport-abort-not-verdict, CSRF retry-with-fresh-headers). All suites green; ruff clean. No CI changes.
 
 **Next:** the wedge + CSRF laws make long campaigns viable — a Mapping-breadth campaign (script-resource bundling first) is the natural next turn; each future campaign's green baseline adds a parity case toward the ≥10 gate.
+
+---
+
+### 2026-09-03 — WP-10: parallel collaboration sprint cut — Track D unlocked, contract-first API live, task board issued
+
+**Context:** frontend engineer has capacity beyond `apps/web` (operator: "jack of all trades — give verifiable work"). The serial api-request loop was the bottleneck. B2 landing opened WP-09's Track D gate. All 3 B2 commits pushed to origin (his pull surface).
+
+**Shipped (backend, this entry):**
+
+- **Contract-first API, spec BEFORE routes** (the protocol that replaces api-request round-trips): `packages/api-spec/openapi.yaml` grows Experiments/Laws/Calibrations tags, 5 paths, 6 schemas (Rung, ExperimentSummary, ExperimentRecord, LawRecord, CalibrationSummary, CalibrationReport).
+- **Routes live + tested** (10 tests, server 91 → 101): `GET /experiments` (summaries with verdict tallies), `GET /experiments/{id}` (full rungs incl. evidence.targetType), `GET /laws` (status/scope filters; workspace registry first, **committed `packages/law-registry/` fallback** — a fresh workspace still sees the ratified laws; verified serving campaign #1's two laws), `GET /projects/{id}/calibrations` + `/{artifactId}` (cached oracle reports, MPL rows + reward; epoch honesty via startedAt; refuse-not-guess on ambiguous artifacts).
+- **Frontend unblock verified**: `npm run api:gen` regenerates from the new spec (86ms, all 3 operationIds present); tsc + vite build green on his tree.
+- **`docs/work-packages/work-package-10.md`**: amended ownership (task-scoped shared files, acceptance-criteria-governed, backend-reviewed), the H1–H6 frontend task board (Experiments&Laws panel; B-003 MPL comparison; journeys 8–10; **splitter+gather real-engine implementations DELEGATED to him** — they unlock the sftp-order-drop parity case; 2–3 parity example projects), B1–B3 backend track (parity ≥10 push first per operator), file-family exclusivity table, policy lines (ratify stays CLI-only; tenant creds never travel; WP-09 §2.4 verbatim).
+
+**Division of labor this sprint:** frontend H1–H6 ‖ backend B-1 (parity gate: fresh calibrations for new cases + campaign baselines → ≥10 comparable), B-2 (order-to-s4 XSLT2 — stays backend, architectural), B-3 (Mapping breadth — after the gate). Backend hands off `runtime/steps/splitter.py` + `gather.py` until H4/H5 merge.
+
+**Tests:** server 101 (+10). All suites green: CLI 567, MCP 20, Gateway 43, Seed corpus 132. SPA tsc/lint/build green post-spec-regen.

@@ -60,6 +60,13 @@ def create_app() -> FastAPI:
     app.include_router(git.router)
     app.include_router(archive.router)
     app.include_router(emg.router)
+    # WP-10 Track D + B-003: B2 experiment records, law registry, cached
+    # calibration reports — read-only surfaces (spec-first: the OpenAPI
+    # additions landed before these routes).
+    from .routes import calibrations, experiments
+
+    app.include_router(experiments.router)
+    app.include_router(calibrations.router)
 
     # WP-08 PR-3 / Track A-003: load the persisted EMG store at startup so
     # the EMG routes (`/api/v1/emg/stats`, `/api/v1/projects/{id}/emg/insights`)

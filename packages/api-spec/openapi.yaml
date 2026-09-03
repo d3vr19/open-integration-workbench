@@ -42,6 +42,20 @@ tags:
     description: Git status and commit proposals
   - name: Archive
     description: Safe archive inspection
+  - name: Experiments
+    description: |
+      B2 Experiment Engine campaign records (variant ladders over the tenant
+      oracle). Read-only; campaigns are launched via `oiw experiment run` (CLI,
+      operator-gated) and records persist under `.oiw/experiments/`.
+  - name: Laws
+    description: |
+      Tenant-law registry (B2). Evidence-attached laws derived from experiment
+      campaigns + manual blood laws. Read-only; ratification stays a CLI
+      operator action (`oiw experiment ratify`) — never a UI write.
+  - name: Calibrations
+    description: |
+      Cached tenant-oracle calibration reports (read-only). Powers the
+      local-trace vs tenant-MPL comparison view.
 
 paths:
   /api/v1/projects:
@@ -464,6 +478,139 @@ paths:
                 $ref: "#/components/schemas/ArchiveManifest"
         "400":
           description: Archive failed safety check.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/experiments:
+    get:
+      tags: [Experiments]
+      summary: List experiment campaign records
+      description: |
+        B2 Experiment Engine campaigns (variant ladders over the tenant
+        oracle). Each record carries its rungs with verdicts and compact
+        evidence. Records resolve from `<workspace>/.oiw/experiments/`.
+      operationId: listExperiments
+      responses:
+        "200":
+          description: Experiment campaign records.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExperimentSummary"
+
+  /api/v1/experiments/{experimentId}:
+    get:
+      tags: [Experiments]
+      summary: Get one experiment campaign record (full rung detail)
+      operationId: getExperiment
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Campaign record with rungs, verdicts, evidence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentRecord"
+        "404":
+          description: Experiment record not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/laws:
+    get:
+      tags: [Laws]
+      summary: List the tenant-law registry
+      description: |
+        Evidence-attached laws: engine-derived (from experiment campaigns)
+        and manual blood laws. Status is `candidate | ratified | retired`;
+        only RATIFIED laws are enforced (`oiw validate` OIW-W013 + the
+        turbo assembler placement union). Ratification is a CLI operator
+        action — this API is read-only.
+      operationId: listLaws
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [candidate, ratified, retired]
+          description: Filter by law status.
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by component-type scope (e.g. converter.json-to-xml).
+      responses:
+        "200":
+          description: Law registry contents.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LawRecord"
+
+  /api/v1/projects/{projectId}/calibrations:
+    get:
+      tags: [Calibrations]
+      summary: List cached tenant-oracle calibration reports for a project
+      description: |
+        Read-only listing of `<project>/.oiw/calibration-*.yaml` (cached
+        oracle verdicts). Powers the local-trace vs tenant-MPL comparison.
+        Reports are point-in-time (blood law): `startedAt` bounds the
+        MPL epoch that is meaningful.
+      operationId: listCalibrations
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+      responses:
+        "200":
+          description: Calibration report summaries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CalibrationSummary"
+        "404":
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/projects/{projectId}/calibrations/{artifactId}:
+    get:
+      tags: [Calibrations]
+      summary: Get one cached calibration report (full MPL rows)
+      operationId: getCalibration
+      parameters:
+        - $ref: "#/components/parameters/ProjectId"
+        - name: artifactId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Calibration report with MPL rows and reward vector.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalibrationReport"
+        "404":
+          description: No calibration report for that artifact.
           content:
             application/json:
               schema:
@@ -994,3 +1141,228 @@ components:
                 type: integer
               isDir:
                 type: boolean
+
+    Rung:
+      type: object
+      properties:
+        rungId:
+          type: string
+          description: Unique rung id (encodes kind + target + position).
+        kind:
+          type: string
+          enum: [drop, move, swap, insert]
+          description: The single-variable mutation applied vs the baseline.
+        target:
+          type: string
+          description: Node id the mutation centers on.
+        detail:
+          type: object
+          additionalProperties: true
+          description: Kind-specific payload (e.g. toPosition, newType, after).
+        rationale:
+          type: string
+        verdict:
+          type: string
+          enum: [GREEN, RED, SKIPPED]
+          description: |
+            Oracle verdict. GREEN = STARTED + message 200 + all-epoch MPL
+            COMPLETED; RED = content failure; SKIPPED = not run (budget,
+            cool-down, invalid variant, or campaign abort).
+        evidence:
+          type: object
+          additionalProperties: true
+          description: |
+            Compact oracle digest (finalStatus, httpStatus, mplStatuses)
+            plus `targetType` — the target's component type (laws scope on
+            types, not node ids).
+
+    ExperimentSummary:
+      type: object
+      properties:
+        experimentId:
+          type: string
+        baselineFlowId:
+          type: string
+        hypothesis:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        baselineVerdict:
+          type: string
+          enum: [GREEN, RED, SKIPPED]
+        status:
+          type: string
+          enum: [draft, running, complete, aborted]
+        rungCount:
+          type: integer
+        greenCount:
+          type: integer
+        redCount:
+          type: integer
+        skippedCount:
+          type: integer
+
+    ExperimentRecord:
+      type: object
+      properties:
+        experimentId:
+          type: string
+        baselineFlowId:
+          type: string
+        hypothesis:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        baselineVerdict:
+          type: string
+          enum: [GREEN, RED, SKIPPED]
+        status:
+          type: string
+          enum: [draft, running, complete, aborted]
+        rungs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Rung"
+
+    LawRecord:
+      type: object
+      properties:
+        lawId:
+          type: string
+        statement:
+          type: string
+          description: Human/LLM-readable law statement.
+        scope:
+          type: string
+          description: |
+            Component-type scope (e.g. converter.json-to-xml), a
+            pair-scoped refinement (receiver.http#warmup-before-converter),
+            or flow.topology.
+        kind:
+          type: string
+        origin:
+          type: string
+          description: Experiment id, or "manual" for blood laws.
+        evidence:
+          type: object
+          properties:
+            greenRungs:
+              type: array
+              items:
+                type: string
+            redRungs:
+              type: array
+              items:
+                type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        status:
+          type: string
+          enum: [candidate, ratified, retired]
+        recordedAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [engine, manual]
+        predicate:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: |
+            Machine-checkable form (e.g. requires-position-after with
+            redPositions/greenPositions). Laws without a predicate are
+            advisory-only.
+
+    CalibrationSummary:
+      type: object
+      properties:
+        artifactId:
+          type: string
+        packageId:
+          type: string
+        finalStatus:
+          type: string
+          description: Tenant runtime status (STARTED | ERROR | TIMEOUT...).
+        messageSent:
+          type: boolean
+        httpResponseStatus:
+          type: integer
+          nullable: true
+        mplCompleted:
+          type: integer
+          description: MPL rows with Status=COMPLETED (this run's epoch).
+        mplFailed:
+          type: integer
+        rewardOverall:
+          type: number
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          description: |
+            Epoch boundary — only MPL rows at/after this instant belong to
+            this run (stale-row poison law).
+        reportPath:
+          type: string
+          description: File name of the cached YAML report.
+
+    CalibrationReport:
+      type: object
+      description: Full cached calibration report (calibration + reward).
+      properties:
+        calibration:
+          type: object
+          properties:
+            packageId:
+              type: string
+            artifactId:
+              type: string
+            uploadedOk:
+              type: boolean
+            deployAccepted:
+              type: boolean
+            finalStatus:
+              type: string
+            errorDetail:
+              type: string
+              nullable: true
+            messageSent:
+              type: boolean
+            httpResponseStatus:
+              type: integer
+              nullable: true
+            mplRows:
+              type: array
+              items:
+                type: object
+                properties:
+                  MessageGuid:
+                    type: string
+                  Status:
+                    type: string
+                  CustomStatus:
+                    type: string
+                  IntegrationFlowName:
+                    type: string
+                  LogStart:
+                    type: string
+            startedAt:
+              type: string
+              format: date-time
+        reward:
+          type: object
+          nullable: true
+          properties:
+            overall:
+              type: number
+            dimensions:
+              type: object
+              additionalProperties:
+                type: number
+            allHardGatesPassed:
+              type: boolean
