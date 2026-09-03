@@ -39,15 +39,38 @@ def _real_engine_pieces() -> set[str]:
     return pieces
 
 
+def _exporter_renderable() -> set[str]:
+    """Node types the sap_export compiler can emit as CPI bundles.
+
+    B-2 live lesson (2026-09-03): the Saxon bridge made transform.xslt
+    RUNTIME-real, but the exporter has no Mapping activityType yet — a
+    piece that runs locally but cannot SHIP is not a piece. The piece
+    library is the intersection: real-engine AND exporter-renderable.
+
+    Endpoints (sender./receiver.) are always renderable — the exporter
+    emits them via dedicated messageFlow shapes, not the activity map.
+    """
+    from ..compiler.sap_export import _OIW_TO_ACTIVITY
+
+    endpoint_types = {t for t in all_plugins() if t.startswith(("sender.", "receiver."))}
+    return set(_OIW_TO_ACTIVITY.keys()) | endpoint_types
+
+
+def _shippable_pieces() -> set[str]:
+    return _real_engine_pieces() & _exporter_renderable()
+
+
 def proven_pieces() -> dict[str, dict[str, Any]]:
-    """The grammar piece library: node types the real engine can run.
+    """The grammar piece library: node types the real engine can run AND
+    the exporter can emit (shippable intersection — B-2 lesson: runtime-real
+    without exporter-renderable is not an autonomous piece).
 
     Keyed by node type; value carries the plugin descriptor + fidelity
     so the assembler can reason about what it composes. This set is the
     honest floor — anything absent is a teacher-summons, not a guess.
     """
     out: dict[str, dict[str, Any]] = {}
-    for ntype in sorted(_real_engine_pieces()):
+    for ntype in sorted(_shippable_pieces()):
         plugin = get_plugin(ntype)
         if plugin is None:
             continue

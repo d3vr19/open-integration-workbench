@@ -148,9 +148,16 @@ class TestPieceAssembly:
         assert "converter.json-to-xml" in pieces
         assert "modifier.content" in pieces
         assert "log.message" in pieces
-        assert "splitter.general" in pieces
-        assert "gather" in pieces
-        # Simulated stubs are NOT pieces (honesty floor).
+        assert "script.groovy" in pieces
+        # B-2 (2026-09-03): pieces must be BOTH runtime-real AND
+        # exporter-renderable (the shippable intersection). splitter/gather
+        # run for real (H4/H5) but have NO exporter mapping yet — they
+        # teacher-escalate until the Hub-harvested shapes land (B-3).
+        assert "splitter.general" not in pieces
+        assert "gather" not in pieces
+        assert "filter" not in pieces
+        # transform.xslt: Saxon bridge makes it RUNTIME-real, but the
+        # exporter has no Mapping activityType — not a piece until B-3.
         assert "transform.xslt" not in pieces
 
     def test_assemble_happy_path(self) -> None:

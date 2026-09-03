@@ -286,6 +286,11 @@ class TestSplitterPhrasing:
             splitter_piece = next(p for p in res.pieces if p.node_type == "splitter.general")
             assert splitter_piece.config.get("maxItems") or splitter_piece.config.get("maxIterations")
         else:
-            assert res.assembled is False
+            # Splitter runs for real (H4) but has no exporter shape yet
+            # (B-2 shippable-intersection lesson, 2026-09-03): assembly
+            # proceeds for the coverable pieces and escalates splitter
+            # honestly via unmatched_components — the teacher-request
+            # signal (never a silent drop).
+            assert "splitter.general" in res.unmatched_components
             assert "splitter.general" in res.unmatched_components
 

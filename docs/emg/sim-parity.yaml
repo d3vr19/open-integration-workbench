@@ -1,5 +1,5 @@
 sim_parity:
-  generatedAt: '2026-09-03T20:43:40.005264+00:00'
+  generatedAt: '2026-09-03T22:00:22.657976+00:00'
   corpus: packages/parity-corpus/manifest.yaml
   engine: real
   cases:
@@ -14,7 +14,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 32.16
+    oracleReportAgeHours: 33.44
     verdict: agreed
   - name: oiw-turbo-fwd-smoke
     project: examples/oiw-turbo-fwd
@@ -27,7 +27,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 32.68
+    oracleReportAgeHours: 33.96
     verdict: agreed
   - name: oiw-conv-fwd-smoke
     project: examples/oiw-conv-fwd
@@ -40,16 +40,15 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 27.4
+    oracleReportAgeHours: 28.68
     verdict: agreed
   - name: order-to-s4-happy-path
     project: examples/order-to-s4
     artifactId: null
-    localPassed: false
-    localStatus: UNSUPPORTED
-    verdict: unsupported
-    details: 'OIW-REAL-UNSUPPORTED: real engine refuses simulated-fidelity step(s):
-      transform (transform.xslt). Implement true logic or run with --engine simulated.'
+    localPassed: true
+    localStatus: PASS
+    verdict: pending-oracle
+    details: no cached calibration report for this case
   - name: sftp-order-drop-happy-path
     project: examples/sftp-order-drop
     artifactId: null
@@ -68,7 +67,7 @@ sim_parity:
       mplRows: 0
       mplCompleted: 0
       success: false
-    oracleReportAgeHours: 2.65
+    oracleReportAgeHours: 3.93
     verdict: agreed
   - name: weather-logger-async-smoke
     project: examples/weather-logger-async
@@ -81,7 +80,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 0.93
+    oracleReportAgeHours: 2.2
     verdict: agreed
   - name: payload-enricher-fwd-smoke
     project: examples/payload-enricher-fwd
@@ -101,7 +100,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 0.77
+    oracleReportAgeHours: 2.05
     verdict: agreed
   - name: status-notifier-async-smoke
     project: examples/status-notifier-async
@@ -114,7 +113,7 @@ sim_parity:
       mplRows: 1
       mplCompleted: 1
       success: true
-    oracleReportAgeHours: 0.01
+    oracleReportAgeHours: 1.29
     verdict: agreed
   agreement:
     comparable: 7
