@@ -62,7 +62,7 @@ def test_message_content_type_inference() -> None:
     from oiw.tenant.calibrate import message_content_type
 
     assert message_content_type("<Order><id>1</id></Order>") == "application/xml"
-    assert message_content_type('  \n<root/>') == "application/xml"
+    assert message_content_type("  \n<root/>") == "application/xml"
     assert message_content_type('{"a": 1}') == "application/json"
     assert message_content_type("{}") == "application/json"
     assert message_content_type("") == "application/json"

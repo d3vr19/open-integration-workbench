@@ -41,16 +41,27 @@ def _flow(resource: str) -> dict:
         "kind": "IntegrationFlow",
         "metadata": {"id": "map-test", "name": "map-test", "version": 1, "labels": {}},
         "spec": {
-            "entrypoints": [{
-                "id": "sender-main", "type": "sender.http",
-                "config": {"path": "/map_test", "methods": ["POST"]},
-                "fidelity": "simulated",
-            }],
+            "entrypoints": [
+                {
+                    "id": "sender-main",
+                    "type": "sender.http",
+                    "config": {"path": "/map_test", "methods": ["POST"]},
+                    "fidelity": "simulated",
+                }
+            ],
             "nodes": [
-                {"id": "transform", "type": "transform.xslt",
-                 "config": {"resource": resource}, "fidelity": "compatible-subset"},
-                {"id": "pd-terminator", "type": "receiver.processdirect",
-                 "config": {"address": "/map_test_pd"}, "fidelity": "simulated"},
+                {
+                    "id": "transform",
+                    "type": "transform.xslt",
+                    "config": {"resource": resource},
+                    "fidelity": "compatible-subset",
+                },
+                {
+                    "id": "pd-terminator",
+                    "type": "receiver.processdirect",
+                    "config": {"address": "/map_test_pd"},
+                    "fidelity": "simulated",
+                },
             ],
             "edges": [
                 {"from": "sender-main", "to": "transform"},
@@ -77,7 +88,8 @@ class TestMappingShape:
         xml = _iflw_of(bundle)
         # static dialect, verbatim
         assert re.search(
-            r"<key>mappinguri</key>\s*<value>dir://mapping/xslt/src/main/resources/mapping/order\.xsl</value>", xml
+            r"<key>mappinguri</key>\s*<value>dir://mapping/xslt/src/main/resources/mapping/order\.xsl</value>",
+            xml,
         )
         assert re.search(r"<key>mappingname</key>\s*<value>order</value>", xml)
         assert re.search(r"<key>mappingpath</key>\s*<value>src/main/resources/mapping/order</value>", xml)
@@ -85,7 +97,8 @@ class TestMappingShape:
         assert re.search(r"<key>subActivityType</key>\s*<value>XSLTMapping</value>", xml)
         assert re.search(r"<key>componentVersion</key>\s*<value>1\.2</value>", xml)
         assert re.search(
-            r"<key>cmdVariantUri</key>\s*<value>ctype::FlowstepVariant/cname::XSLTMapping/version::1\.2\.0</value>", xml
+            r"<key>cmdVariantUri</key>\s*<value>ctype::FlowstepVariant/cname::XSLTMapping/version::1\.2\.0</value>",
+            xml,
         )
         assert re.search(r"<key>activityType</key>\s*<value>Mapping</value>", xml)
 

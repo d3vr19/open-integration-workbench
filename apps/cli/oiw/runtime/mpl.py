@@ -81,10 +81,7 @@ def _step_rows_from_trace(ctx: MessageContext) -> list[dict[str, Any]]:
             order.append(entry.node_id)
         if entry.direction == "error":
             errored.add(entry.node_id)
-    return [
-        {"StepId": node_id, "Status": FAILED if node_id in errored else COMPLETED}
-        for node_id in order
-    ]
+    return [{"StepId": node_id, "Status": FAILED if node_id in errored else COMPLETED} for node_id in order]
 
 
 __all__ = ["COMPLETED", "FAILED", "mpl_records_from_context"]

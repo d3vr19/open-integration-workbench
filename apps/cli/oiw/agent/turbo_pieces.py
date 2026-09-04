@@ -163,6 +163,7 @@ def registry_placement_laws() -> set[str]:
     except Exception:
         return set()  # registry problems never break assembly
 
+
 _COMPONENT_TO_PIECE: dict[str, str] = {
     "sender.http": "sender.http",
     "sender.https": "sender.http",
@@ -382,9 +383,7 @@ def assemble_from_requirement(
     # converts the INBOUND body, the assembler inserts an RR warmup
     # (harmless GET) before the converter so the converter runs on an
     # RR-generated exchange.
-    has_converter = any(
-        p.node_type in (_NO_DIRECT_HTTP_NEIGHBOR | registry_placement_laws()) for p in chain
-    )
+    has_converter = any(p.node_type in (_NO_DIRECT_HTTP_NEIGHBOR | registry_placement_laws()) for p in chain)
     has_preceding_rr = any(p.node_type == "receiver.http" for p in chain)
     if has_converter and not has_preceding_rr and recv_type == "receiver.http":
         chain.insert(

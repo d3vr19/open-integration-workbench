@@ -362,7 +362,9 @@ class TestServiceTaskClassification:
 
         # 2. Chain with non-ExternalCall -> stays ServiceTask
         zip_non_ext = tmp_path / "non_ext.zip"
-        zip_non_ext.write_bytes(_fake_iflw_servicetask_zip(activity_type="UnknownServiceTask", task_name="op"))
+        zip_non_ext.write_bytes(
+            _fake_iflw_servicetask_zip(activity_type="UnknownServiceTask", task_name="op")
+        )
         ir_non_ext = _ir_from_zip(zip_non_ext, "non-ext-flow")
         shape_non_ext = flow_shape_from_ir(ir_non_ext)
 
@@ -379,4 +381,3 @@ class TestServiceTaskClassification:
         assert assembly_non_ext is not None
         # Contains unclassified ServiceTask -> NOT shippable -> trips OIW-I002 fallback
         assert _injection_is_shippable(assembly_non_ext) is False
-

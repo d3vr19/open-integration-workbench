@@ -290,16 +290,30 @@ def parse_bpmn2_iflw(content: bytes | str) -> dict[str, Any]:
                 )
             elif name and ("groovy" in name.lower() or "script" in name.lower()):
                 result["steps"].append(
-                    {"id": elem.get("id", ""), "type": "Script", "config": {"Language": "Groovy", "properties": props}}
+                    {
+                        "id": elem.get("id", ""),
+                        "type": "Script",
+                        "config": {"Language": "Groovy", "properties": props},
+                    }
                 )
-            elif name and ("mapping" in name.lower() or "xslt" in name.lower() or "transform" in name.lower()):
+            elif name and (
+                "mapping" in name.lower() or "xslt" in name.lower() or "transform" in name.lower()
+            ):
                 result["steps"].append(
-                    {"id": elem.get("id", ""), "type": "Mapping", "config": {"MappingType": "XSLT", "properties": props}}
+                    {
+                        "id": elem.get("id", ""),
+                        "type": "Mapping",
+                        "config": {"MappingType": "XSLT", "properties": props},
+                    }
                 )
             elif name and ("filter" in name.lower()):
-                result["steps"].append({"id": elem.get("id", ""), "type": "Filter", "config": {"properties": props}})
+                result["steps"].append(
+                    {"id": elem.get("id", ""), "type": "Filter", "config": {"properties": props}}
+                )
             elif name and ("router" in name.lower() or "route" in name.lower()):
-                result["steps"].append({"id": elem.get("id", ""), "type": "Router", "config": {"properties": props}})
+                result["steps"].append(
+                    {"id": elem.get("id", ""), "type": "Router", "config": {"properties": props}}
+                )
             else:
                 # Generic service task — record as a processing step with properties preserved
                 result["steps"].append(

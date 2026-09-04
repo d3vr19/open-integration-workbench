@@ -154,11 +154,7 @@ async def _poll_terminal(
             )
             results = []
             if "json" in r.headers.get("content-type", ""):
-                results = [
-                    a
-                    for a in r.json().get("d", {}).get("results", [])
-                    if a.get("Name") in candidates
-                ]
+                results = [a for a in r.json().get("d", {}).get("results", []) if a.get("Name") in candidates]
         else:
             results = []
             for name in candidates:
@@ -176,9 +172,7 @@ async def _poll_terminal(
                     results.extend(r.json().get("d", {}).get("results", []))
         if results:
             raw = str(results[0].get("Status") or "").upper()
-            last = {"STARTED": "STARTED", "ERROR": "ERROR", "DEPLOYED": "STARTED"}.get(
-                raw, "PENDING"
-            )
+            last = {"STARTED": "STARTED", "ERROR": "ERROR", "DEPLOYED": "STARTED"}.get(raw, "PENDING")
             if last in ("STARTED", "ERROR"):
                 return last, raw
         await asyncio.sleep(interval_s)
@@ -294,9 +288,8 @@ async def calibrate_artifact(
                 except SapCiTenantError:
                     claims = []
                     rep.error_detail = (
-                        (rep.error_detail + " | " if rep.error_detail else "")
-                        + "collision preflight skipped: package nav unavailable (gateway cooldown)"
-                    )
+                        rep.error_detail + " | " if rep.error_detail else ""
+                    ) + "collision preflight skipped: package nav unavailable (gateway cooldown)"
                 hits = find_collisions(claims, desired, exclude_artifact_id=target.id)
                 if hits:
                     raise SapCiTenantError(

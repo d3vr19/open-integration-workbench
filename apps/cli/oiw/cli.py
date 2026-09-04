@@ -1128,9 +1128,7 @@ def experiment_run(
 
     from .project import IntegrationFlow
 
-    async def _oracle(
-        proj: Path, flow: IntegrationFlow, *, artifact_id: str | None
-    ) -> dict:
+    async def _oracle(proj: Path, flow: IntegrationFlow, *, artifact_id: str | None) -> dict:
         # Materialize the variant into a temp project, calibrate it.
         import shutil
         import tempfile
@@ -1276,9 +1274,7 @@ def experiment_laws(
         click.echo(f"  [{law.status}] {law.law_id} ({marker}) scope={law.scope} conf={law.confidence}")
         click.echo(f"          {law.statement}")
         ev = law.evidence or {}
-        click.echo(
-            f"          evidence: green={ev.get('greenRungs', [])} red={ev.get('redRungs', [])}"
-        )
+        click.echo(f"          evidence: green={ev.get('greenRungs', [])} red={ev.get('redRungs', [])}")
     reg_path = reg.path
     click.echo(f"registry: {reg_path} ({len(reg.laws)} laws total)")
     if out_dir:

@@ -34,8 +34,7 @@ CAVEATS = [
     "deploy-rate wedge, not local infidelity.",
     "Comparable set counts only cases with fresh oracle MESSAGE evidence; "
     "pending/stale/unsupported cases are excluded from the ratio but listed.",
-    "Corpus grows from observed mismatches and fresh calibrate runs only — "
-    "never fabricated.",
+    "Corpus grows from observed mismatches and fresh calibrate runs only — " "never fabricated.",
 ]
 
 
@@ -99,9 +98,7 @@ def _oracle_verdict(cal: dict[str, Any]) -> dict[str, Any]:
     status = str(cal.get("finalStatus") or "UNKNOWN").upper()
     rows = cal.get("mplRows") or []
     completed = [r for r in rows if r.get("Status") == "COMPLETED"]
-    message_completed = bool(
-        cal.get("messageSent") and rows and len(completed) == len(rows)
-    )
+    message_completed = bool(cal.get("messageSent") and rows and len(completed) == len(rows))
     success = status == "STARTED" and message_completed
     return {
         "finalStatus": status,
@@ -133,14 +130,18 @@ def evaluate_case(
     try:
         project = Project.load(repo_root / case.project)
     except ProjectError as exc:
-        row.update({"localStatus": "PROJECT-ERROR", "verdict": "no-local-tests",
-                    "details": str(exc)})
+        row.update({"localStatus": "PROJECT-ERROR", "verdict": "no-local-tests", "details": str(exc)})
         return row
 
     results = run_tests(project, test_name=case.test, engine="real")
     if not results:
-        row.update({"localStatus": "NO-LOCAL-TESTS", "verdict": "no-local-tests",
-                    "details": f"no FlowTests matched test={case.test!r}"})
+        row.update(
+            {
+                "localStatus": "NO-LOCAL-TESTS",
+                "verdict": "no-local-tests",
+                "details": f"no FlowTests matched test={case.test!r}",
+            }
+        )
         return row
 
     local_passed = all(r.passed for r in results)
@@ -148,15 +149,18 @@ def evaluate_case(
     row["localPassed"] = local_passed
     row["localStatus"] = "UNSUPPORTED" if blocked else ("PASS" if local_passed else "FAIL")
     if blocked:
-        row.update({"verdict": "unsupported",
-                    "details": next(iter(r.failures[0] for r in results if r.failures), "")})
+        row.update(
+            {
+                "verdict": "unsupported",
+                "details": next(iter(r.failures[0] for r in results if r.failures), ""),
+            }
+        )
         return row
 
     # --- tenant side (cached calibration only) ---
     cal = _load_oracle(case.calibration, repo_root)
     if cal is None:
-        row.update({"verdict": "pending-oracle",
-                    "details": "no cached calibration report for this case"})
+        row.update({"verdict": "pending-oracle", "details": "no cached calibration report for this case"})
         return row
 
     age = _oracle_age_hours(cal, now)
@@ -184,9 +188,8 @@ def evaluate_case(
     agreed = oracle["success"] == local_passed
     row["verdict"] = "agreed" if agreed else "mismatched"
     if not agreed:
-        row["details"] = (
-            f"local={row['localStatus']} vs oracle={oracle['finalStatus']}"
-            + (f" ({oracle['errorDetail']})" if oracle.get("errorDetail") else "")
+        row["details"] = f"local={row['localStatus']} vs oracle={oracle['finalStatus']}" + (
+            f" ({oracle['errorDetail']})" if oracle.get("errorDetail") else ""
         )
     return row
 
@@ -207,15 +210,14 @@ def run_parity(
     repo_root = (repo_root or manifest_path.parent.parent.parent).resolve()
     cases, max_age = load_corpus(manifest_path)
 
-    rows = [
-        evaluate_case(c, repo_root, now=now, max_oracle_age_hours=max_age)
-        for c in cases
-    ]
+    rows = [evaluate_case(c, repo_root, now=now, max_oracle_age_hours=max_age) for c in cases]
     comparable = [r for r in rows if r["verdict"] in ("agreed", "mismatched")]
     agreed = sum(1 for r in comparable if r["verdict"] == "agreed")
     ratio = (agreed / len(comparable)) if comparable else None
-    gate_passed = bool(comparable) and len(comparable) >= GATE_MIN_COMPARABLE and (
-        ratio is not None and ratio >= GATE_THRESHOLD
+    gate_passed = (
+        bool(comparable)
+        and len(comparable) >= GATE_MIN_COMPARABLE
+        and (ratio is not None and ratio >= GATE_THRESHOLD)
     )
 
     report = {

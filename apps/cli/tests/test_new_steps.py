@@ -44,17 +44,21 @@ def test_splitter_validation_rejects_unbounded() -> None:
 def test_splitter_splits_xml_direct_children() -> None:
     plugin = get_plugin("splitter.general")
     node = FlowNode(id="s", type="splitter.general", config={"encoding": "xml", "maxItems": 10})
-    ctx = MessageContext(body=b"<Orders><Order id='1'><item>A</item></Order><Order id='2'><item>B</item></Order></Orders>")
+    ctx = MessageContext(
+        body=b"<Orders><Order id='1'><item>A</item></Order><Order id='2'><item>B</item></Order></Orders>"
+    )
     out = plugin.execute(node, ctx, mocks={})
     assert out.exchange_status == "RUNNING"
     assert out.properties["__splitter_count__"] == 2
     assert len(out.attachments) == 2
-    assert b"id=\"1\"" in out.attachments[0].body or b"id='1'" in out.attachments[0].body
+    assert b'id="1"' in out.attachments[0].body or b"id='1'" in out.attachments[0].body
 
 
 def test_splitter_splits_xml_xpath_expression() -> None:
     plugin = get_plugin("splitter.general")
-    node = FlowNode(id="s", type="splitter.general", config={"encoding": "xml", "expression": "//Order", "maxItems": 10})
+    node = FlowNode(
+        id="s", type="splitter.general", config={"encoding": "xml", "expression": "//Order", "maxItems": 10}
+    )
     ctx = MessageContext(body=b"<Batch><Orders><Order id='100'/><Order id='200'/></Orders></Batch>")
     out = plugin.execute(node, ctx, mocks={})
     assert out.properties["__splitter_count__"] == 2
@@ -131,9 +135,7 @@ def test_gather_merge_json() -> None:
 
 def test_gather_xml_elements() -> None:
     plugin = get_plugin("gather")
-    node = FlowNode(
-        id="g", type="gather", config={"encoding": "xml", "maxItems": 10}
-    )
+    node = FlowNode(id="g", type="gather", config={"encoding": "xml", "maxItems": 10})
     from oiw.runtime.context import Attachment
 
     ctx = MessageContext(body=b"")

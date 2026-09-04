@@ -57,12 +57,9 @@ def _deep_copy_flow(flow: IntegrationFlow) -> IntegrationFlow:
             for e in flow.entrypoints
         ],
         nodes=[
-            FlowNode(id=n.id, type=n.type, config=dict(n.config), fidelity=n.fidelity)
-            for n in flow.nodes
+            FlowNode(id=n.id, type=n.type, config=dict(n.config), fidelity=n.fidelity) for n in flow.nodes
         ],
-        edges=[
-            FlowEdge(from_=e.from_, to=e.to, condition=e.condition) for e in flow.edges
-        ],
+        edges=[FlowEdge(from_=e.from_, to=e.to, condition=e.condition) for e in flow.edges],
         error_handling=flow.error_handling,
         extensions=dict(flow.extensions),
         labels=dict(flow.labels),
@@ -211,9 +208,7 @@ def _relink_positions(flow: IntegrationFlow, order: list[str]) -> IntegrationFlo
     entry_ids = [e.id for e in mutated.entrypoints]
     body = [nid for nid in order if nid not in entry_ids]
     chain = entry_ids + body
-    mutated.edges = [
-        FlowEdge(from_=chain[i], to=chain[i + 1]) for i in range(len(chain) - 1)
-    ]
+    mutated.edges = [FlowEdge(from_=chain[i], to=chain[i + 1]) for i in range(len(chain) - 1)]
     return mutated
 
 
@@ -273,9 +268,7 @@ def materialize_variant(
             nid for nid in order if nid not in {e.id for e in mutated.entrypoints}
         ]
         chain.insert(pos, new_id)
-        mutated.edges = [
-            FlowEdge(from_=chain[i], to=chain[i + 1]) for i in range(len(chain) - 1)
-        ]
+        mutated.edges = [FlowEdge(from_=chain[i], to=chain[i + 1]) for i in range(len(chain) - 1)]
         return mutated
     raise ValueError(f"unknown rung kind {rung.kind!r}")
 
@@ -310,11 +303,7 @@ def generate_ladder(
         baseline_flow_id=baseline.id,
         hypothesis=hypothesis,
     )
-    body_ids = [
-        nid
-        for nid in execution_order(baseline)
-        if nid not in {e.id for e in baseline.entrypoints}
-    ]
+    body_ids = [nid for nid in execution_order(baseline) if nid not in {e.id for e in baseline.entrypoints}]
     n_rungs = 0
 
     if "drop" in kinds:
@@ -365,9 +354,7 @@ def generate_ladder(
                         kind="insert",
                         target=nid,
                         detail={"newType": new_type, "after": nid},
-                        rationale=(
-                            f"insert {new_type} after {nid} — what must precede what?"
-                        ),
+                        rationale=(f"insert {new_type} after {nid} — what must precede what?"),
                     )
                 )
                 n_rungs += 1
@@ -465,24 +452,18 @@ def derive_laws(record: ExperimentRecord) -> list[LawCandidate]:
         if r.kind == "drop":
             statement = f"dropping {r.target} breaks the chain — the step is load-bearing"
         elif r.kind == "move":
-            statement = (
-                f"position of {r.target} is load-bearing "
-                f"(moved to {r.detail.get('toPosition')})"
-            )
+            statement = f"position of {r.target} is load-bearing " f"(moved to {r.detail.get('toPosition')})"
         elif r.kind == "swap":
             statement = f"{r.target} cannot be replaced by {r.detail.get('newType')}"
         elif r.kind == "insert":
             statement = (
-                f"inserting {r.detail.get('newType')} after {r.detail.get('after')} "
-                "breaks the chain"
+                f"inserting {r.detail.get('newType')} after {r.detail.get('after')} " "breaks the chain"
             )
         else:
             statement = f"mutation {r.kind} on {r.target} breaks the chain"
         # Corroboration: same-kind mutations on the same target that stayed
         # green bound the law's scope (it's not "any change is fatal").
-        corroborating_green = [
-            g.rung_id for g in green_rungs if g.kind == r.kind and g.target == r.target
-        ]
+        corroborating_green = [g.rung_id for g in green_rungs if g.kind == r.kind and g.target == r.target]
         candidates.append(
             LawCandidate(
                 law_id=f"law-{r.rung_id}",

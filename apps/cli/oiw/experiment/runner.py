@@ -191,9 +191,7 @@ class ExperimentRunner:
                 rung.rationale += " [skipped: wall clock]"
                 continue
             try:
-                variant = materialize_variant(
-                    baseline_flow, rung, piece_provider=self.piece_provider
-                )
+                variant = materialize_variant(baseline_flow, rung, piece_provider=self.piece_provider)
             except ValueError as exc:
                 rung.verdict = VERDICT_SKIPPED
                 rung.rationale += f" [skipped: {exc}]"
@@ -240,16 +238,12 @@ def _digest(cal: dict[str, Any]) -> dict[str, Any]:
 def save_record(record: ExperimentRecord, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{record.experiment_id}.yaml"
-    path.write_text(
-        yaml.safe_dump(record.to_dict(), sort_keys=False), encoding="utf-8"
-    )
+    path.write_text(yaml.safe_dump(record.to_dict(), sort_keys=False), encoding="utf-8")
     return path
 
 
 def load_record(path: Path) -> ExperimentRecord:
-    return ExperimentRecord.from_dict(
-        yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    )
+    return ExperimentRecord.from_dict(yaml.safe_load(path.read_text(encoding="utf-8")) or {})
 
 
 __all__ = [

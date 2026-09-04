@@ -25,34 +25,43 @@ HELD_OUT = REPO_ROOT / "examples" / "held-out-order-async"
 
 
 def _write_mini_project(
-    root: Path, *, nodes: list[dict] | None = None, body: str = "{}",
+    root: Path,
+    *,
+    nodes: list[dict] | None = None,
+    body: str = "{}",
     expect_status: str = "COMPLETED",
 ) -> Path:
     """Smallest runnable project: sender.http -> log -> [*nodes] -> receiver.http (mocked)."""
     nodes = nodes or []
     flow_nodes = [
-        {"id": "log-in", "type": "log.message", "config": {"message": "in"},
-         "fidelity": "compatible-subset"}
+        {"id": "log-in", "type": "log.message", "config": {"message": "in"}, "fidelity": "compatible-subset"}
     ] + nodes
     chain = ["sender-http"] + [n["id"] for n in flow_nodes] + ["receiver-out"]
     edges = [{"from": a, "to": b} for a, b in zip(chain, chain[1:], strict=False)]
 
     root.mkdir(parents=True, exist_ok=True)
-    (root / "oiw.yaml").write_text(yaml.safe_dump({
-        "apiVersion": "oiw.dev/v1alpha1",
-        "kind": "IntegrationProject",
-        "metadata": {"id": "mini", "name": "mini", "created": "1970-01-01T00:00:00Z"},
-        "spec": {"targetProfiles": ["sap-cloud-integration-2026-07"]},
-    }))
+    (root / "oiw.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "apiVersion": "oiw.dev/v1alpha1",
+                "kind": "IntegrationProject",
+                "metadata": {"id": "mini", "name": "mini", "created": "1970-01-01T00:00:00Z"},
+                "spec": {"targetProfiles": ["sap-cloud-integration-2026-07"]},
+            }
+        )
+    )
     flow = {
         "apiVersion": "oiw.dev/v1alpha1",
         "kind": "IntegrationFlow",
         "metadata": {"id": "mini-flow", "name": "mini", "version": 1},
         "spec": {
-            "entrypoints": [{
-                "id": "sender-http", "type": "sender.http",
-                "config": {"path": "/mini", "methods": ["POST"]},
-            }],
+            "entrypoints": [
+                {
+                    "id": "sender-http",
+                    "type": "sender.http",
+                    "config": {"path": "/mini", "methods": ["POST"]},
+                }
+            ],
             "nodes": flow_nodes,
             "edges": edges,
         },
@@ -60,17 +69,21 @@ def _write_mini_project(
     (root / "flows" / "mini-flow").mkdir(parents=True)
     (root / "flows" / "mini-flow" / "flow.yaml").write_text(yaml.safe_dump(flow))
     (root / "flows" / "mini-flow" / "tests").mkdir()
-    (root / "flows" / "mini-flow" / "tests" / "smoke.yaml").write_text(yaml.safe_dump({
-        "apiVersion": "oiw.dev/v1alpha1",
-        "kind": "FlowTest",
-        "metadata": {"name": "smoke"},
-        "spec": {
-            "flow": "mini-flow",
-            "input": {"entrypoint": "sender-http", "bodyInline": body},
-            "mocks": [{"target": "receiver-out", "respond": {"status": 200, "body": "{}"}}],
-            "assertions": [{"type": "exchange.status", "equals": expect_status}],
-        },
-    }))
+    (root / "flows" / "mini-flow" / "tests" / "smoke.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "apiVersion": "oiw.dev/v1alpha1",
+                "kind": "FlowTest",
+                "metadata": {"name": "smoke"},
+                "spec": {
+                    "flow": "mini-flow",
+                    "input": {"entrypoint": "sender-http", "bodyInline": body},
+                    "mocks": [{"target": "receiver-out", "respond": {"status": 200, "body": "{}"}}],
+                    "assertions": [{"type": "exchange.status", "equals": expect_status}],
+                },
+            }
+        )
+    )
     return root
 
 
@@ -91,9 +104,12 @@ def test_simulated_default_unchanged():
 
 
 def test_real_mode_refuses_stub_fidelity_loudly(tmp_path):
-    proj = _write_mini_project(tmp_path / "stubbed", nodes=[
-        {"id": "write-var", "type": "variables.write", "config": {"name": "v"}, "fidelity": "simulated"},
-    ])
+    proj = _write_mini_project(
+        tmp_path / "stubbed",
+        nodes=[
+            {"id": "write-var", "type": "variables.write", "config": {"name": "v"}, "fidelity": "simulated"},
+        ],
+    )
     results = run_tests(Project.load(proj), engine="real")
     r = results[0]
     assert not r.passed

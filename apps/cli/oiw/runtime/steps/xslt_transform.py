@@ -45,9 +45,7 @@ def _run_saxon(stylesheet_bytes: bytes, body_bytes: bytes, timeout_ms: int = 300
     """Apply the stylesheet via the Saxon-HE JVM bridge. Raises on failure."""
     import tempfile
 
-    with tempfile.NamedTemporaryFile(
-        mode="wb", suffix=".xsl", delete=False, encoding=None
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".xsl", delete=False, encoding=None) as f:
         f.write(stylesheet_bytes)
         style_path = f.name
     try:
@@ -132,9 +130,7 @@ class XsltTransform(StepPlugin):
         try:
             from lxml import etree
 
-            ctx.add_trace(
-                node.id, "note", "Saxon bridge unavailable — lxml XSLT 1.0 fallback"
-            )
+            ctx.add_trace(node.id, "note", "Saxon bridge unavailable — lxml XSLT 1.0 fallback")
             xslt_doc = etree.fromstring(xslt_bytes)
             transform = etree.XSLT(xslt_doc)
             source = etree.fromstring(ctx.body)

@@ -273,9 +273,7 @@ class TestSplitterPhrasing:
     def test_end_to_end_assemble_from_requirement(self) -> None:
         from oiw.agent.turbo_pieces import assemble_from_requirement, proven_pieces
 
-        req = interpret_requirement_fallback(
-            "Split the batch and forward orders to https://httpbin.org/post"
-        )
+        req = interpret_requirement_fallback("Split the batch and forward orders to https://httpbin.org/post")
         assert "splitter.general" in req.components
 
         res = assemble_from_requirement(req, "test-split-fwd")
@@ -293,4 +291,3 @@ class TestSplitterPhrasing:
             # signal (never a silent drop).
             assert "splitter.general" in res.unmatched_components
             assert "splitter.general" in res.unmatched_components
-

@@ -98,9 +98,7 @@ def _run_one(project: Project, test: FlowTest, engine: str = "simulated") -> Tes
     real_engine_blocked = False
     if engine == "real":
         mpl_records = mpl_records_from_context(ctx, flow.id)
-        if isinstance(ctx.exception, ExecutionError) and (
-            REAL_UNSUPPORTED_MARKER in str(ctx.exception)
-        ):
+        if isinstance(ctx.exception, ExecutionError) and (REAL_UNSUPPORTED_MARKER in str(ctx.exception)):
             real_engine_blocked = True
             failures.insert(0, str(ctx.exception))
 

@@ -164,9 +164,7 @@ class TestMaterializeVariant:
         v = materialize_variant(base, rung)
         assert "rr-post" not in {n.id for n in v.nodes}
         # pred (converter) spliced to succ (pd-terminator)
-        assert ("step-1-converter-json-to-xml", "pd-terminator") in {
-            (e.from_, e.to) for e in v.edges
-        }
+        assert ("step-1-converter-json-to-xml", "pd-terminator") in {(e.from_, e.to) for e in v.edges}
         # baseline untouched
         assert "rr-post" in {n.id for n in base.nodes}
 
@@ -175,7 +173,9 @@ class TestMaterializeVariant:
         # move the converter to the FRONT of the body (position 0) —
         # this is exactly the conv1/conv2 mutation: converter before any RR
         rung = Rung(
-            rung_id="t2", kind="move", target="step-1-converter-json-to-xml",
+            rung_id="t2",
+            kind="move",
+            target="step-1-converter-json-to-xml",
             detail={"toPosition": 0},
         )
         v = materialize_variant(base, rung)
@@ -187,7 +187,9 @@ class TestMaterializeVariant:
     def test_insert_requires_proven_piece(self) -> None:
         base = self._baseline()
         rung = Rung(
-            rung_id="t3", kind="insert", target="rr-fetch",
+            rung_id="t3",
+            kind="insert",
+            target="rr-fetch",
             detail={"newType": "not.a.piece"},
         )
         try:
@@ -199,7 +201,9 @@ class TestMaterializeVariant:
     def test_insert_uses_piece_config(self) -> None:
         base = self._baseline()
         rung = Rung(
-            rung_id="t4", kind="insert", target="rr-fetch",
+            rung_id="t4",
+            kind="insert",
+            target="rr-fetch",
             detail={"newType": "converter.xml-to-json", "after": "rr-fetch"},
         )
         pieces = {"converter.xml-to-json": {"someKey": "liveSafe"}}
@@ -211,7 +215,9 @@ class TestMaterializeVariant:
     def test_swap_changes_type_only(self) -> None:
         base = self._baseline()
         rung = Rung(
-            rung_id="t5", kind="swap", target="log-receiver-x",
+            rung_id="t5",
+            kind="swap",
+            target="log-receiver-x",
             detail={"newType": "converter.xml-to-json"},
         )
         # target a real node:
@@ -289,9 +295,7 @@ class TestReDeriveConverterLaw:
 
     def test_law_feeds_the_registry_with_evidence(self) -> None:
         base = self._baseline()
-        record = generate_ladder(
-            base, hypothesis="conv corpus", kinds=("move",)
-        )
+        record = generate_ladder(base, hypothesis="conv corpus", kinds=("move",))
         record.baseline_verdict = VERDICT_GREEN
         record.status = "complete"
         conv_node = "step-1-converter-json-to-xml"
@@ -304,12 +308,18 @@ class TestReDeriveConverterLaw:
         laws = derive_laws(record)
         reg = LawRegistry(Path("/tmp/oiw-test-laws.yaml"))
         recorded = reg.add_many(
-            [LawRecord(
-                law_id=law.law_id, statement=law.statement, scope=law.scope,
-                kind=law.kind, origin=record.experiment_id,
-                evidence={"greenRungs": law.green_rungs, "redRungs": law.red_rungs},
-                confidence=law.confidence,
-            ) for law in laws]
+            [
+                LawRecord(
+                    law_id=law.law_id,
+                    statement=law.statement,
+                    scope=law.scope,
+                    kind=law.kind,
+                    origin=record.experiment_id,
+                    evidence={"greenRungs": law.green_rungs, "redRungs": law.red_rungs},
+                    confidence=law.confidence,
+                )
+                for law in laws
+            ]
         )
         assert any(r.scope == "converter.json-to-xml" for r in recorded)
         conv = next(r for r in recorded if r.scope == "converter.json-to-xml")
@@ -613,9 +623,7 @@ class TestLawValidateConsumer:
 
         base = self._base()
         order = body_order(base)
-        assert position_of(base, "converter.json-to-xml") == order.index(
-            "step-1-converter-json-to-xml"
-        )
+        assert position_of(base, "converter.json-to-xml") == order.index("step-1-converter-json-to-xml")
 
 
 class TestAssemblerRegistryConsumption:
@@ -644,9 +652,7 @@ class TestAssemblerRegistryConsumption:
             "source": "engine",
             "predicate": pred,
         }
-        (reg_dir / "tenant-laws.yaml").write_text(
-            yaml.safe_dump({"laws": [law]}), encoding="utf-8"
-        )
+        (reg_dir / "tenant-laws.yaml").write_text(yaml.safe_dump({"laws": [law]}), encoding="utf-8")
         monkeypatch.setenv("OIW_WORKSPACE", str(tmp_path))
         scopes = registry_placement_laws()
         assert "encoder.base64" in scopes
@@ -790,13 +796,17 @@ class TestCsrfRetry:
                 return httpx.Response(200, headers={"x-csrf-token": f"tok{attempts['csrf_fetches']}"})
             if request.method == "PUT":
                 attempts["n"] += 1
-                if attempts["csrf_fetches"] == 1 and "csrf" not in str(request.headers.get("x-csrf-token", "")):
+                if attempts["csrf_fetches"] == 1 and "csrf" not in str(
+                    request.headers.get("x-csrf-token", "")
+                ):
                     pass
                 # first PUT carries tok1 -> simulate EXPIRY 403 once
                 if attempts["n"] == 1:
                     return httpx.Response(
                         403,
-                        json={"error": {"message": {"value": "The x-csrf-token or __Host cookie is missing"}}},
+                        json={
+                            "error": {"message": {"value": "The x-csrf-token or __Host cookie is missing"}}
+                        },
                     )
                 return httpx.Response(200, json={})
             if "IntegrationPackages" in request.url.path:

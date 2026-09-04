@@ -371,9 +371,8 @@ def _write_transport(artifact_id="MyFlow", artifact_version="1.0.0", *, empty_pa
             seen["csrf_sent"] = request.headers.get("x-csrf-token")
             return httpx.Response(204)
 
-        if (
-            request.method == "POST"
-            and request.url.path.rstrip("/").endswith("/IntegrationDesigntimeArtifacts")
+        if request.method == "POST" and request.url.path.rstrip("/").endswith(
+            "/IntegrationDesigntimeArtifacts"
         ):
             import json as _json
 
@@ -513,9 +512,7 @@ def test_create_artifact_posts_entity_with_full_payload(profile) -> None:
     import base64 as _b64
 
     raw = b"PK\x03\x04newbundle"
-    result = _run(
-        adapter.create_artifact("AdequareGST", "brand_new_flow", "Brand New Flow", raw)
-    )
+    result = _run(adapter.create_artifact("AdequareGST", "brand_new_flow", "Brand New Flow", raw))
     assert result.success is True
     assert result.version == "1.0.0"  # read back from the artifact listing
     payload = seen.get("create_payload")
@@ -547,7 +544,9 @@ def test_create_artifact_refuses_existing_id_locally(profile) -> None:
 def test_create_artifact_refused_outside_allowlist(profile) -> None:
     """Same policy gates as every write: allowlist refusal BEFORE network."""
     adapter = _RealAdapter(
-        tenant_url="https://example.invalid", username="u", password="p",
+        tenant_url="https://example.invalid",
+        username="u",
+        password="p",
         writable_packages=["AdequareGST"],
     )
     with pytest.raises(SapCiTenantError, match="not on the writable allowlist"):
@@ -714,7 +713,9 @@ def test_create_artifact_probe_fallback_on_nav_wedge(monkeypatch, tmp_path):
     async def main():
         transport = httpx.MockTransport(handler)
         adapter = SapCiTenantAdapter(
-            "https://t.example.com/api/v1", "u", "p",
+            "https://t.example.com/api/v1",
+            "u",
+            "p",
             client=httpx.AsyncClient(transport=transport, base_url="https://t.example.com/api/v1"),
             writable_packages=["pkg/new-art"],
         )
@@ -722,7 +723,8 @@ def test_create_artifact_probe_fallback_on_nav_wedge(monkeypatch, tmp_path):
         from oiw.environments import EnvironmentProfile as EnvProfile
 
         prof = EnvProfile(
-            name="t", target="sap-cloud-integration-2026-07",
+            name="t",
+            target="sap-cloud-integration-2026-07",
             tenant_url="https://t.example.com/api/v1",
             auth=AuthConfig(method="basic", credential_ref="x"),
         )
@@ -758,7 +760,9 @@ def test_create_artifact_refuses_existing_via_probe(monkeypatch):
     async def main():
         transport = httpx.MockTransport(handler)
         adapter = SapCiTenantAdapter(
-            "https://t.example.com/api/v1", "u", "p",
+            "https://t.example.com/api/v1",
+            "u",
+            "p",
             client=httpx.AsyncClient(transport=transport, base_url="https://t.example.com/api/v1"),
             writable_packages=["pkg/existing"],
         )
@@ -766,7 +770,8 @@ def test_create_artifact_refuses_existing_via_probe(monkeypatch):
         from oiw.environments import EnvironmentProfile as EnvProfile
 
         prof = EnvProfile(
-            name="t", target="sap-cloud-integration-2026-07",
+            name="t",
+            target="sap-cloud-integration-2026-07",
             tenant_url="https://t.example.com/api/v1",
             auth=AuthConfig(method="basic", credential_ref="x"),
         )

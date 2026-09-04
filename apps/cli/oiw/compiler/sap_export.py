@@ -447,13 +447,10 @@ def collect_flow_mappings(flow: dict, project_root: Path | None) -> dict[str, st
             continue
         resource = str((node.get("config") or {}).get("resource", "")).strip()
         if not resource:
-            raise ValueError(
-                f"transform.xslt node '{node.get('id')}' requires config.resource"
-            )
+            raise ValueError(f"transform.xslt node '{node.get('id')}' requires config.resource")
         if project_root is None:
             raise ValueError(
-                f"transform.xslt node '{node.get('id')}' requires project_root to "
-                "resolve config.resource"
+                f"transform.xslt node '{node.get('id')}' requires project_root to " "resolve config.resource"
             )
         src = (project_root / resource).resolve()
         if not src.is_file():

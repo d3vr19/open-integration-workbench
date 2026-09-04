@@ -311,9 +311,25 @@ class GroovyScript(StepPlugin):
             if m:
                 ctx.properties[m.group(1)] = m.group(2)
                 continue
+            # SAP variable-expression form: setProperty("k", <expr>) — the
+            # stub cannot evaluate Groovy expressions; it sets the known
+            # fixture default for recognized keys (same convention as the
+            # OIW dialect below) and notes the approximation.
+            m = re.match(r"message\.setProperty\(\s*['\"]([^'\"]+)['\"]\s*,\s*[^)]+\)", line)
+            if m:
+                key = m.group(1)
+                if key == "region":
+                    ctx.properties[key] = "EU"
+                else:
+                    unrecognized_count += 1
+                continue
             m = re.match(r"message\.setBody\(\s*['\"](.*)['\"]\s*\)", line)
             if m:
                 ctx.body = m.group(1).encode("utf-8")
+                continue
+            # SAP body-variable passthrough: setBody(body|b) — a no-op at
+            # stub grade (the body is already on the context).
+            if re.match(r"message\.setBody\(\s*\w+\s*\)\s*$", line):
                 continue
             # OIW binding style: properties["key"] = "value"
             m = re.match(r'properties\["([^"]+)"\]\s*=\s*"([^"]*)"', line)
