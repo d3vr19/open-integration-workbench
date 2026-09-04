@@ -1,0 +1,40 @@
+# Synthetic E2E/CI fixture — NOT a real tenant oracle report.
+# The MPL-comparison journey (workbench-journeys.spec.ts track_d) serves
+# this via GET /api/v1/projects/{id}/calibrations to verify the TenantMpl
+# comparison view renders epoch-honest MPL rows. Shape mirrors a genuine
+# reward-1.0 calibration (see examples/oiw-map-fwd/.oiw/calibration-oiw-map.yaml
+# for a real counterpart). Never used as parity-corpus evidence.
+calibration:
+  packageId: E2E-FIXTURE-PKG
+  artifactId: order-to-s4
+  uploadedOk: true
+  deployAccepted: true
+  trackingUuid: null
+  finalStatus: STARTED
+  errorDetail: null
+  messageSent: true
+  httpResponseStatus: 200
+  mplRows:
+  - MessageGuid: E2E-FIXTURE-ROW-1
+    Status: COMPLETED
+    CustomStatus: COMPLETED
+    IntegrationFlowName: order-to-s4
+    LogStart: /Date(1788444100000)/
+  - MessageGuid: E2E-FIXTURE-ROW-STALE
+    Status: FAILED
+    CustomStatus: FAILED
+    IntegrationFlowName: order-to-s4
+    LogStart: /Date(1788000000000)/
+  startedAt: '2026-09-03T14:00:00+00:00'
+  finishedAt: ''
+reward:
+  overall: 1.0
+  dimensions:
+    completion: 1.0
+    deployment_success: 1.0
+    runtime_stability: 1.0
+  allHardGatesPassed: true
+fixtureNote: >-
+  Synthetic E2E fixture (CI journey test data). The stale FAILED row is
+  deliberate: it exercises the epoch-boundary honesty (rows before
+  startedAt must render as stale, never poison the verdict).
