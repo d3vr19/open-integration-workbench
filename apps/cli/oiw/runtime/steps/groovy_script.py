@@ -32,18 +32,36 @@ from .base import StepPlugin, register
 
 
 def _find_jvm_bridge() -> str | None:
-    """Find the oiw-groovy-runner.sh script."""
+    """Find the oiw-groovy-runner.sh — only if the bridge is RUNNABLE.
+
+    CI LIVE LESSON (2026-09-04): the runner script is committed to the
+    repo, so its mere presence fooled the finder on CI machines WITHOUT a
+    JDK: the wrapper ran, `java: command not found` exited 127 with EMPTY
+    stdout, and the step failed instead of falling back to the stub. The
+    finder now verifies the whole chain — java binary + compiled
+    GroovyRunner classes + groovy jars — before declaring the bridge found.
+    """
+    import shutil
+
     oiw_home = os.environ.get("OIW_HOME")
-    if oiw_home:
-        path = Path(oiw_home) / "services" / "runtime-worker-jvm" / "oiw-groovy-runner.sh"
-        if path.exists():
-            return str(path)
-    # This file is at apps/cli/oiw/runtime/steps/groovy_script.py — repo root is 6 levels up
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
-    path = repo_root / "services" / "runtime-worker-jvm" / "oiw-groovy-runner.sh"
-    if path.exists():
-        return str(path)
-    return None
+    root = Path(oiw_home) if oiw_home else None
+    if root and not (root / "services" / "runtime-worker-jvm" / "oiw-groovy-runner.sh").exists():
+        root = None
+    if root is None:
+        # This file is at apps/cli/oiw/runtime/steps/groovy_script.py — repo root is 6 levels up
+        root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+    path = root / "services" / "runtime-worker-jvm" / "oiw-groovy-runner.sh"
+    if not path.exists():
+        return None
+    build = root / "services" / "runtime-worker-jvm" / "build" / "io"
+    libs = root / "services" / "runtime-worker-jvm" / "lib"
+    if not build.is_dir():
+        return None  # not compiled (setup.sh not run)
+    if not any(libs.glob("groovy-*.jar")):
+        return None  # jars not downloaded
+    if shutil.which("java") is None:
+        return None  # no JDK on this machine (CI without setup-java)
+    return str(path)
 
 
 # §9.6 blocked list (static scan before JVM execution)
@@ -187,6 +205,17 @@ class GroovyScript(StepPlugin):
             if result.returncode != 0:
                 # Check if the output is a JSON "bridge unavailable" response
                 stdout = result.stdout.strip() if result.stdout else ""
+                if not stdout:
+                    # no java / wrapper crashed before emitting JSON — the
+                    # bridge is effectively unavailable; fall back to stub
+                    ctx.add_trace(
+                        node.id,
+                        "enter",
+                        "JVM bridge produced no output (java missing?) — stub fallback",
+                    )
+                    self._run_stub_dsl(script_text, ctx)
+                    ctx.add_trace(node.id, "exit", "groovy script executed (stub fallback)")
+                    return ctx
                 if stdout:
                     try:
                         output = json.loads(stdout)

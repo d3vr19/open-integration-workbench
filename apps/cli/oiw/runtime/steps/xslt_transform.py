@@ -25,20 +25,33 @@ from .base import StepPlugin, register
 
 
 def _find_xslt_bridge() -> str | None:
-    """Locate the oiw-xslt-runner.sh wrapper (same resolution as groovy)."""
+    """Locate the oiw-xslt-runner.sh wrapper — only if RUNNABLE.
+
+    Same CI lesson as the groovy finder (2026-09-04): verify java +
+    compiled XsltRunner classes + Saxon jar, else return None so callers
+    use the honest lxml-XSLT1 fallback instead of a broken subprocess.
+    """
     import os
+    import shutil
 
     oiw_home = os.environ.get("OIW_HOME")
-    if oiw_home:
-        path = Path(oiw_home) / "services" / "runtime-worker-jvm" / "oiw-xslt-runner.sh"
-        if path.exists():
-            return str(path)
-    # apps/cli/oiw/runtime/steps/xslt_transform.py -> repo root = 6 up
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
-    path = repo_root / "services" / "runtime-worker-jvm" / "oiw-xslt-runner.sh"
-    if path.exists():
-        return str(path)
-    return None
+    root = Path(oiw_home) if oiw_home else None
+    if root and not (root / "services" / "runtime-worker-jvm" / "oiw-xslt-runner.sh").exists():
+        root = None
+    if root is None:
+        root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+    path = root / "services" / "runtime-worker-jvm" / "oiw-xslt-runner.sh"
+    if not path.exists():
+        return None
+    build = root / "services" / "runtime-worker-jvm" / "build" / "io"
+    libs = root / "services" / "runtime-worker-jvm" / "lib"
+    if not build.is_dir():
+        return None
+    if not any(libs.glob("Saxon-HE-*.jar")):
+        return None
+    if shutil.which("java") is None:
+        return None
+    return str(path)
 
 
 def _run_saxon(stylesheet_bytes: bytes, body_bytes: bytes, timeout_ms: int = 30000) -> bytes:

@@ -12,7 +12,6 @@ client (api:gen) consumes.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import yaml
@@ -225,7 +224,7 @@ def test_laws_fallback_to_committed_registry(tmp_path, monkeypatch) -> None:
     laws = r.json()
     # the committed registry has 2 ratified laws (campaign #1, e6e7a95)
     assert len(laws) >= 2
-    assert any(l["status"] == "ratified" for l in laws)
+    assert any(law["status"] == "ratified" for law in laws)
 
 
 def test_laws_empty_when_no_registry_anywhere(tmp_path, monkeypatch) -> None:
